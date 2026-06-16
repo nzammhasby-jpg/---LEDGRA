@@ -1,0 +1,6 @@
+{
+  "name": "لِدجرا للمحاسبة السحابية - LEDGRA",
+  "description": "منصة محاسبية وإدارة أعمال سحابية متكاملة للمنشآت السعودية متوافقة مع متطلبات هيئة الزكاة والضريبة والجمارك",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
