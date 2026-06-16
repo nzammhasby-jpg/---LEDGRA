@@ -20,12 +20,12 @@ const queryClient = new QueryClient();
 const SupabaseConfigAlert: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-center items-center p-6 font-sans select-none" dir="rtl">
-      <div className="w-full max-w-lg bg-slate-850 border border-slate-750 p-8 rounded-3xl space-y-6 shadow-2xl relative overflow-hidden">
+      <div className="w-full max-w-lg bg-slate-800 border border-slate-700 p-8 rounded-3xl space-y-6 shadow-2xl relative overflow-hidden">
         
         {/* Glow decoration */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-brand-navy/60 rounded-full blur-3xl pointer-events-none -z-10" />
 
-        <div className="flex items-center gap-3 border-b border-slate-750 pb-4">
+        <div className="flex items-center gap-3 border-b border-slate-700 pb-4">
           <div className="bg-red-500/10 p-2.5 rounded-xl shrink-0">
             <ShieldAlert className="w-6 h-6 text-red-400" />
           </div>
@@ -47,13 +47,13 @@ const SupabaseConfigAlert: React.FC = () => {
             </span>
 
             <ul className="space-y-2 text-xs font-mono text-left" style={{ direction: 'ltr' }}>
-              <li className="flex items-center justify-between text-slate-305">
+              <li className="flex items-center justify-between text-slate-300">
                 <span>VITE_SUPABASE_URL</span>
-                <span className="text-red-400 font-sans text-[10px] bg-red-450/10 px-2 py-0.5 rounded-full">Missing</span>
+                <span className="text-red-400 font-sans text-[10px] bg-red-400/10 px-2 py-0.5 rounded-full">Missing</span>
               </li>
-              <li className="flex items-center justify-between text-slate-305">
+              <li className="flex items-center justify-between text-slate-300">
                 <span>VITE_SUPABASE_ANON_KEY</span>
-                <span className="text-red-400 font-sans text-[10px] bg-red-450/10 px-2 py-0.5 rounded-full">Missing</span>
+                <span className="text-red-400 font-sans text-[10px] bg-red-400/10 px-2 py-0.5 rounded-full">Missing</span>
               </li>
             </ul>
           </div>
@@ -115,8 +115,8 @@ const ProtectedRoute: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // If user signed up but hasn't initialized any corporate organization, force them to Onboarding
-  if (!currentOrg) {
+  // If user signed up but hasn't completed onboarding for any organization, force them to Onboarding
+  if (!currentOrg || !currentOrg.onboarding_completed) {
     return <Navigate to="/onboarding" replace />;
   }
 
@@ -138,7 +138,7 @@ const OnboardingRoute: React.FC = () => {
   }
 
   // If already onboarding complete, go to dashboard
-  if (currentOrg) {
+  if (currentOrg && currentOrg.onboarding_completed) {
     return <Navigate to="/" replace />;
   }
 
@@ -152,7 +152,7 @@ const PublicRoute: React.FC = () => {
   if (loading) return <FullScreenLoader />;
 
   if (user) {
-    if (!currentOrg) {
+    if (!currentOrg || !currentOrg.onboarding_completed) {
       return <Navigate to="/onboarding" replace />;
     }
     return <Navigate to="/" replace />;
@@ -176,8 +176,10 @@ export default function App() {
             <Route element={<PublicRoute />}>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
             </Route>
+
+            {/* Independent route for resetting password */}
+            <Route path="/reset-password" element={<ResetPassword />} />
 
             {/* Force Onboarding screens */}
             <Route element={<OnboardingRoute />}>
@@ -187,6 +189,7 @@ export default function App() {
             {/* Protected SaaS Hub screens */}
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Navigate to="/" replace />} />
               <Route path="/settings" element={<Settings />} />
               
               {/* Coming soon locked modules */}

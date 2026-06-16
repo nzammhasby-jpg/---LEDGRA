@@ -36,7 +36,7 @@ export const Settings: React.FC = () => {
     setLoadingBranches(true);
     try {
       const { data, error } = await supabase
-        .from('organization_branches')
+        .from('branches')
         .select('*')
         .eq('organization_id', currentOrg.id)
         .order('is_main', { ascending: false });
@@ -116,7 +116,7 @@ export const Settings: React.FC = () => {
 
     try {
       const { data, error } = await supabase
-        .from('organization_branches')
+        .from('branches')
         .insert({
           organization_id: currentOrg.id,
           name_ar: bName,
@@ -155,7 +155,7 @@ export const Settings: React.FC = () => {
       </div>
 
       {/* Tabs selectors row */}
-      <div className="flex border-b border-slate-205 gap-2 overflow-x-auto pb-px">
+      <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pb-px">
         {[
           { id: 'info', label: t('settings.tab_info'), icon: Building },
           { id: 'users', label: t('settings.tab_users'), icon: Users },
@@ -187,7 +187,7 @@ export const Settings: React.FC = () => {
         {activeTab === 'info' && (
           <div className="space-y-6">
             <div>
-              <h3 className="text-sm font-bold text-slate-805 border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
                 <Building className="w-5 h-5 text-brand-blue" />
                 <span>بيانات الكيان والهوية الضريبية للشركة</span>
               </h3>
@@ -203,7 +203,7 @@ export const Settings: React.FC = () => {
 
               <div>
                 <span className="text-[11px] text-slate-400 block mb-1">اسم المنشأة بالإنجليزية</span>
-                <p className="text-sm font-semibold text-slate-650 bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl font-mono text-left" style={{ direction: 'ltr' }}>
+                <p className="text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl font-mono text-left" style={{ direction: 'ltr' }}>
                   {currentOrg?.name_en || 'None English Name'}
                 </p>
               </div>
@@ -236,8 +236,8 @@ export const Settings: React.FC = () => {
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                 <div>
-                  <span className="text-xs font-bold text-slate-905 block">{t('settings.vat_status')}</span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">حالة الامتثال الضريبي مع هيئة الزكاة والضريبة والجمارك</span>
+                  <span className="text-xs font-bold text-slate-900 block">{t('settings.vat_status')}</span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">نهج ومعلومات الامتثال والربط الضريبي للمنشأة</span>
                 </div>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold leading-none ${
                   currentOrg?.is_vat_registered ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
@@ -250,13 +250,13 @@ export const Settings: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <span className="text-[11px] text-slate-400 block mb-1">الرقم الضريبي الموحد للمنشأة (15 خانة)</span>
-                    <p className="text-sm font-extrabold font-mono text-slate-850 bg-white border border-slate-200 py-2 px-3 rounded-xl tracking-wider">
+                    <p className="text-sm font-extrabold font-mono text-slate-800 bg-white border border-slate-200 py-2 px-3 rounded-xl tracking-wider">
                       {currentOrg?.vat_number || 'غير متوفر'}
                     </p>
                   </div>
                   <div>
                     <span className="text-[11px] text-slate-400 block mb-1">نسبة ضريبة القيمة المضافة الافتراضية باتحاد المملكة</span>
-                    <p className="text-sm font-extrabold font-mono text-slate-850 bg-white border border-slate-200 py-2 px-3 rounded-xl">
+                    <p className="text-sm font-extrabold font-mono text-slate-800 bg-white border border-slate-200 py-2 px-3 rounded-xl">
                       15%
                     </p>
                   </div>
@@ -271,7 +271,7 @@ export const Settings: React.FC = () => {
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
-                <h3 className="text-sm font-bold text-slate-805 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <Users className="w-5 h-5 text-brand-purple" />
                   <span>دليل المستخدمين وصلاحيات الارتباط</span>
                 </h3>
@@ -280,7 +280,7 @@ export const Settings: React.FC = () => {
             </div>
 
             {/* Simulated Add user form - Protected per guidelines */}
-            <div className="bg-slate-50 border border-slate-205 rounded-2xl p-4">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
               <h4 className="text-xs font-bold text-slate-800 mb-2">دعوة الزملاء والانضمام كعضو</h4>
               
               <div className="bg-amber-50 border-r-4 border-amber-500 p-3 rounded-xl flex items-start gap-2 text-amber-900 text-xs leading-relaxed">
@@ -319,12 +319,12 @@ export const Settings: React.FC = () => {
                         <td className="py-3 text-center">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             u.role === 'owner' 
-                              ? 'bg-amber-100 text-amber-850' 
+                              ? 'bg-amber-100 text-amber-800' 
                               : u.role === 'admin'
                               ? 'bg-blue-100 text-blue-800'
                               : u.role === 'accountant'
                               ? 'bg-purple-100 text-brand-purple'
-                              : 'bg-indigo-50 text-indigo-750'
+                              : 'bg-indigo-50 text-indigo-700'
                           }`}>
                             {u.role === 'owner' && 'المالك والمؤسس'}
                             {u.role === 'admin' && 'مدير نظام معتمد'}
@@ -334,7 +334,7 @@ export const Settings: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-3 text-left">
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-15/90 text-emerald-800">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-800">
                             {u.status}
                           </span>
                         </td>
@@ -352,7 +352,7 @@ export const Settings: React.FC = () => {
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
-                <h3 className="text-sm font-bold text-slate-805 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-brand-turquoise" />
                   <span>دليل فروع المنشأة المعتمدة</span>
                 </h3>
@@ -361,8 +361,8 @@ export const Settings: React.FC = () => {
             </div>
 
             {/* Branch Creation Form */}
-            <div className="bg-slate-50 border border-slate-205 rounded-2xl p-4">
-              <h4 className="text-xs font-bold text-slate-850 mb-3">{t('settings.add_branch')}</h4>
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+              <h4 className="text-xs font-bold text-slate-800 mb-3">{t('settings.add_branch')}</h4>
               
               {newBranchSuccess && (
                 <div className="bg-emerald-50 border-r-4 border-emerald-500 p-2.5 rounded-lg text-xs text-emerald-800 mb-3 font-semibold">
@@ -379,17 +379,17 @@ export const Settings: React.FC = () => {
               <form onSubmit={handleAddBranchSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                 <div className="sm:col-span-5">
                   <label className="block text-[10px] font-bold text-slate-500 mb-1">{t('settings.branch_name')}</label>
-                  <input type="text" name="branch_name" required placeholder="فرع المنطقة الشرقية (الخبر)" className="w-full px-3 py-1.5 border border-slate-250 bg-white rounded-xl text-xs focus:outline-none focus:ring-4 focus:ring-brand-turquoise/10" />
+                  <input type="text" name="branch_name" required placeholder="فرع المنطقة الشرقية (الخبر)" className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-xl text-xs focus:outline-none focus:ring-4 focus:ring-brand-turquoise/10" />
                 </div>
                 
                 <div className="sm:col-span-2">
                   <label className="block text-[10px] font-bold text-slate-500 mb-1">{t('settings.branch_code')}</label>
-                  <input type="text" name="branch_code" required placeholder="002" className="w-full px-3 py-1.5 border border-slate-250 bg-white rounded-xl text-xs focus:outline-none font-mono text-center" />
+                  <input type="text" name="branch_code" required placeholder="002" className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-xl text-xs focus:outline-none font-mono text-center" />
                 </div>
 
                 <div className="sm:col-span-3">
                   <label className="block text-[10px] font-bold text-slate-500 mb-1">{t('settings.branch_address')}</label>
-                  <input type="text" name="branch_address" placeholder="الشارع التجاري" className="w-full px-3 py-1.5 border border-slate-250 bg-white rounded-xl text-xs focus:outline-none focus:ring-4 focus:ring-brand-turquoise/10" />
+                  <input type="text" name="branch_address" placeholder="الشارع التجاري" className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-xl text-xs focus:outline-none focus:ring-4 focus:ring-brand-turquoise/10" />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -413,11 +413,11 @@ export const Settings: React.FC = () => {
 
             {/* Branches listing cards list */}
             {loadingBranches ? (
-              <div className="text-center py-6 text-xs text-slate-450">جاري قراءة قائمة الفروع المؤمنة...</div>
+              <div className="text-center py-6 text-xs text-slate-400">جاري قراءة قائمة الفروع المؤمنة...</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                 {branches.map((b) => (
-                  <div key={b.id} className="border border-slate-200 rounded-2xl p-4 hover:border-slate-350 transition flex items-start gap-3.5 relative overflow-hidden bg-slate-50/20">
+                  <div key={b.id} className="border border-slate-200 rounded-2xl p-4 hover:border-slate-300 transition flex items-start gap-3.5 relative overflow-hidden bg-slate-50/20">
                     {b.is_main && (
                       <span className="absolute top-0 left-0 bg-brand-blue text-white text-[9px] font-bold px-2.5 py-0.5 rounded-br-xl">
                         الفرع الرئيسي المعتمد للفوترة

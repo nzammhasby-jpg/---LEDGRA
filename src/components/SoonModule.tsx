@@ -20,7 +20,7 @@ export const SoonModule: React.FC = () => {
       return {
         title: 'برنامج المبيعات والفواتير الضريبية',
         desc: 'مبيعات شاملة، إصدار فواتير ضريبية، وعروض أسعار، والربط مع الدفع الرقمي.',
-        bullets: ['فواتير مبسطة وضريبية موجهة للعملاء', 'إعداد عروض الأسعار والمطالبات وحفظها', 'متوافق مع الهيئة العامة للزكاة والضريبة والجمارك']
+        bullets: ['فواتير مبسطة وضريبية موجهة للعملاء', 'إعداد عروض الأسعار والمطالبات وحفظها', 'مهيأ لاحقًا لدعم متطلبات الفوترة الإلكترونية والضريبة داخل المملكة']
       };
     }
     if (path.includes('purchases')) {
@@ -62,7 +62,7 @@ export const SoonModule: React.FC = () => {
       return {
         title: 'مركز التقارير المالية والإقرارات الضريبية',
         desc: 'مخرجات ذكاء مالي فوري: الأرباح والخسائر، الميزانية العمومية، وكشوفات تسوية ضريبة القيمة المضافة.',
-        bullets: ['استخراج تقرير إقرار ضريبة القيمة المضافة الجاهز للرفع للهيئة', 'ميزانية عمومية عمودية دقيقة وفورية تتماشى مع معايير IFRS الكورية والسعودية', 'مقارنات سنوية وسلوكية ذكية لتقييم السيولة والربحية']
+        bullets: ['تقرير تجريبي لضريبة القيمة المضافة لغايات التخطيط المالي والمبكر', 'تقارير مالية قابلة للتطوير وفق احتياج المنشآت السعودية', 'مقارنات سنوية وسلوكية ذكية لتقييم السيولة والربحية']
       };
     }
 
@@ -89,15 +89,15 @@ export const SoonModule: React.FC = () => {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-xl font-extrabold text-slate-905">{module.title}</h2>
-          <p className="text-xs text-slate-550 leading-relaxed">{module.desc}</p>
+          <h2 className="text-xl font-extrabold text-slate-900">{module.title}</h2>
+          <p className="text-xs text-slate-500 leading-relaxed">{module.desc}</p>
         </div>
 
         {/* Feature roadmap bullet lists */}
         <div className="mt-6 pt-5 border-t border-slate-100 space-y-4">
           <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">ما سنوفره في هذه الوحدة:</span>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-650">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-600">
             {module.bullets.map((b, i) => (
               <div key={i} className="flex items-center gap-2 font-medium">
                 <span className="w-2 h-2 rounded bg-brand-turquoise shrink-0 animate-pulse" />
@@ -116,7 +116,7 @@ export const SoonModule: React.FC = () => {
         
         <div className="space-y-1">
           <strong className="text-xs text-slate-800 font-bold block">مبني بمرونة تامة للتوسع المتكامل</strong>
-          <p className="text-[11px] text-slate-550 leading-relaxed">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
             تأسست قاعدة بيانات LEDGRA لِدجرا على قيد معزول لـ <code className="font-mono bg-white px-1 py-0.5 border border-slate-200 rounded">organization_id</code>. هذا يعني أنه بمجرد فتح هذه الميزات الإضافية لاحقًا، ستنعكس البيانات في جداولك الحقيقية والفرعية فورا دون تكبد تكاليف ترحيل أو تداخل الحسابات.
           </p>
         </div>

@@ -18,7 +18,7 @@ const resetPasswordSchema = z.object({
 type ResetPasswordFields = z.infer<typeof resetPasswordSchema>;
 
 export const ResetPassword: React.FC = () => {
-  const { updateUserPassword } = useAuth();
+  const { updateUserPassword, signOut } = useAuth();
   const [apiError, setApiError] = useState<string | null>(null);
   const [apiSuccess, setApiSuccess] = useState<boolean>(false);
   const navigate = useNavigate();
@@ -40,6 +40,11 @@ export const ResetPassword: React.FC = () => {
         setApiError(response.error);
       } else {
         setApiSuccess(true);
+        try {
+          await signOut();
+        } catch (signOutErr) {
+          console.error("Error signing out after password reset success:", signOutErr);
+        }
         setTimeout(() => {
           navigate('/login');
         }, 2000);
@@ -104,7 +109,7 @@ export const ResetPassword: React.FC = () => {
                 placeholder="••••••••"
                 {...register('password')}
                 className={`w-full pr-9 pl-3 py-2.5 bg-white border ${
-                  errors.password ? 'border-red-400 focus:ring-red-100' : 'border-slate-250 focus:ring-brand-blue/20'
+                  errors.password ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
                 } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                 style={{ direction: 'ltr', textAlign: 'right' }}
               />
@@ -128,7 +133,7 @@ export const ResetPassword: React.FC = () => {
                 placeholder="••••••••"
                 {...register('confirmPassword')}
                 className={`w-full pr-9 pl-3 py-2.5 bg-white border ${
-                  errors.confirmPassword ? 'border-red-400 focus:ring-red-100' : 'border-slate-250 focus:ring-brand-blue/20'
+                  errors.confirmPassword ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
                 } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                 style={{ direction: 'ltr', textAlign: 'right' }}
               />

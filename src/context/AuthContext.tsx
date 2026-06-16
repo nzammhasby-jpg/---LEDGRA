@@ -30,7 +30,10 @@ interface AuthContextType {
     system_start_date: string;
     accounting_mode: string;
     starting_balances_later: boolean;
+    onboarding_completed?: boolean;
+    onboarding_step?: number;
   }) => Promise<{ org: Organization | null, error: string | null }>;
+  updateOrg: (orgId: string, orgData: Partial<Organization>) => Promise<{ org: Organization | null, error: string | null }>;
   selectOrg: (orgId: string) => void;
   refreshUserData: () => Promise<void>;
 }
@@ -118,6 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             currency,
             primary_language,
             onboarding_completed,
+            onboarding_step,
+            setup_completed_at,
             cr_number,
             created_by,
             system_start_date,
@@ -139,7 +144,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (userOrgs.length > 0) {
           const savedOrgId = localStorage.getItem(`ledgra_selected_org_${userId}`);
-          const selected = userOrgs.find(o => o.id === savedOrgId) || userOrgs[0];
+          // Prefer completed organizations over incomplete ones to avoid Onboarding page loops (per Requirement 5)
+          const completedOrgs = userOrgs.filter(o => o.onboarding_completed);
+          const selected = userOrgs.find(o => o.id === savedOrgId) 
+            || completedOrgs.find(o => o.id === savedOrgId)
+            || completedOrgs[0] 
+            || userOrgs[0];
           setCurrentOrg(selected);
 
           const memberInfo = memberData.find((m: any) => m.organization_id === selected.id);
@@ -295,8 +305,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Reset Password email link
   const sendPasswordReset = async (email: string): Promise<{ error: string | null }> => {
     try {
+      const appUrl = (import.meta as any).env?.VITE_APP_URL || window.location.origin;
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/#/reset-password`,
+        redirectTo: `${appUrl}/#/reset-password`,
       });
       if (error) return { error: translateAuthError(error.message) };
       return { error: null };
@@ -338,7 +349,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         p_cr_number: orgData.cr_number || null,
         p_system_start_date: orgData.system_start_date || null,
         p_accounting_mode: orgData.accounting_mode || 'standard',
-        p_starting_balances_later: orgData.starting_balances_later || false
+        p_starting_balances_later: orgData.starting_balances_later || false,
+        p_onboarding_completed: orgData.onboarding_completed !== undefined ? orgData.onboarding_completed : true,
+        p_onboarding_step: orgData.onboarding_step !== undefined ? orgData.onboarding_step : 3
       });
 
       if (rpcErr || !orgIdResult) {
@@ -360,6 +373,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await loadRealUserData(user.id);
 
       return { org: orgDataResult as Organization, error: null };
+
+    } catch (e: any) {
+      setLoading(false);
+      return { org: null, error: translateAuthError(e.message) };
+    }
+  };
+
+  // Update Organization Action
+  const updateOrg = async (orgId: string, orgData: Partial<Organization>): Promise<{ org: Organization | null, error: string | null }> => {
+    if (!user) return { org: null, error: 'غير مصرح لك بإجراء هذه العملية.' };
+
+    try {
+      setLoading(true);
+
+      const { data: updatedData, error: updateErr } = await supabase
+        .from('organizations')
+        .update(orgData)
+        .select('*')
+        .eq('id', orgId)
+        .single();
+
+      if (updateErr || !updatedData) {
+        throw new Error(updateErr?.message || 'فشل تحديث بيانات المنشأة.');
+      }
+
+      // Re-populate and sync profile lists
+      await loadRealUserData(user.id);
+
+      return { org: updatedData as Organization, error: null };
 
     } catch (e: any) {
       setLoading(false);
@@ -392,6 +434,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendPasswordReset,
       updateUserPassword,
       createOrg,
+      updateOrg,
       selectOrg,
       refreshUserData
     }}>

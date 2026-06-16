@@ -51,7 +51,7 @@ export const Dashboard: React.FC = () => {
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">
               أهلاً بك، {profile?.full_name || 'مستخدم لِدجرا'} ⚡
             </h1>
-            <p className="text-slate-350 text-xs">
+            <p className="text-slate-300 text-xs">
               لوحة التحكم المالية لمنشأتك: <span className="text-white font-bold">{currentOrg?.name_ar}</span>
             </p>
           </div>
@@ -92,7 +92,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="space-y-1">
-            <span className="text-xl md:text-2xl font-extrabold text-slate-905 font-mono tracking-tight">0.00</span>
+            <span className="text-xl md:text-2xl font-extrabold text-slate-900 font-mono tracking-tight">0.00</span>
             <span className="text-xs text-slate-500 font-bold block">ر.س</span>
           </div>
           <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1 pt-1 border-t border-slate-100">
@@ -109,7 +109,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="space-y-1">
-            <span className="text-xl md:text-2xl font-extrabold text-slate-905 font-mono tracking-tight">0.00</span>
+            <span className="text-xl md:text-2xl font-extrabold text-slate-900 font-mono tracking-tight">0.00</span>
             <span className="text-xs text-slate-500 font-bold block">ر.س</span>
           </div>
           <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 pt-1 border-t border-slate-100">
@@ -126,7 +126,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="space-y-1">
-            <span className="text-xl md:text-2xl font-extrabold text-slate-905 font-mono tracking-tight">0.00</span>
+            <span className="text-xl md:text-2xl font-extrabold text-slate-900 font-mono tracking-tight">0.00</span>
             <span className="text-xs text-slate-500 font-bold block">ر.س</span>
           </div>
           <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1 pt-1 border-t border-slate-100">
@@ -141,7 +141,7 @@ export const Dashboard: React.FC = () => {
         
         {/* High-End Professional Empty State Panel */}
         <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm flex flex-col justify-center items-center text-center space-y-5 min-h-[350px]">
-          <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-150 flex items-center justify-center text-3xl">
+          <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-3xl">
             📈
           </div>
           
@@ -186,7 +186,7 @@ export const Dashboard: React.FC = () => {
                     className="w-full p-3 border border-slate-200 hover:border-brand-blue/30 rounded-xl flex items-center justify-between hover:bg-slate-50/50 transition cursor-pointer text-right outline-none"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="bg-slate-50 p-1.5 rounded-lg text-slate-505">
+                      <div className="bg-slate-50 p-1.5 rounded-lg text-slate-500">
                         <IconComp className="w-4 h-4 shrink-0" />
                       </div>
                       <span className="text-xs font-semibold text-slate-700">{act.label}</span>

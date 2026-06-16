@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation, Locale } from '../i18n/translations';
 import { Logo } from '../components/Logo';
@@ -88,14 +89,82 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     navigate('/login');
   };
 
-  // Mock Notification content
-  const mockNotifications = [
-    { id: 1, title: 'السجل التجاري', text: 'يرجى مراجعة تاريخ انتهاء السجل', type: 'warning', date: 'منذ ساعة' },
-    { id: 2, title: 'الرقم الضريبي', text: 'تم إعداد الضريبة بنجاح لفرع الرياض الرئيسي', type: 'success', date: 'أمس' }
-  ];
+  interface AppNotification {
+    id: string;
+    title: string;
+    message: string;
+    type: string;
+    is_read: boolean;
+    created_at: string;
+  }
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState<boolean>(false);
+
+  useEffect(() => {
+    let active = true;
+    const fetchNotifications = async () => {
+      if (!currentOrg?.id) {
+        setNotifications([]);
+        return;
+      }
+      setLoadingNotifications(true);
+      try {
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('id, title, message, type, is_read, created_at')
+          .eq('organization_id', currentOrg.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error("Error reading notifications:", error);
+        } else if (data && active) {
+          setNotifications(data as AppNotification[]);
+        }
+      } catch (err) {
+        console.error("Failed fetching notifications:", err);
+      } finally {
+        if (active) setLoadingNotifications(false);
+      }
+    };
+
+    fetchNotifications();
+
+    return () => {
+      active = false;
+    };
+  }, [currentOrg?.id]);
+
+  const handleMarkAllAsRead = async () => {
+    if (!currentOrg?.id || notifications.length === 0) return;
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('organization_id', currentOrg.id)
+        .eq('is_read', false);
+
+      if (!error) {
+        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      }
+    } catch (err) {
+      console.error("Error marking read:", err);
+    }
+  };
+
+  const hasUnread = notifications.some(n => !n.is_read);
+
+  const formatNotificationDate = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
 
   return (
-    <div className="min-h-screen flex bg-brand-bg select-none font-sans text-slate-805" dir="rtl">
+    <div className="min-h-screen flex bg-brand-bg select-none font-sans text-slate-800" dir="rtl">
       
       {/* 1. Backdrop for mobile drawer */}
       {mobileMenuOpen && (
@@ -331,7 +400,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   id="btn-org-switcher"
                   onClick={() => setOrgSwitcherOpen(!orgSwitcherOpen)}
                   onBlur={() => setTimeout(() => setOrgSwitcherOpen(false), 200)}
-                  className="py-1.5 px-3 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-705 flex items-center gap-1.5 cursor-pointer"
+                  className="py-1.5 px-3 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer"
                 >
                   <ArrowRightLeft className="w-3.5 h-3.5 text-slate-500" />
                   <span className="hidden lg:inline">{currentOrg?.name_ar}</span>
@@ -368,27 +437,43 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 onBlur={() => setTimeout(() => setNotificationsOpen(false), 200)}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 transition relative cursor-pointer"
               >
-                <div className="w-1.5 h-1.5 rounded-full bg-brand-amber absolute top-2 right-2 animate-pulse" />
+                {hasUnread && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-brand-amber absolute top-2 right-2 animate-pulse" />
+                )}
                 <Bell className="w-4 h-4" />
               </button>
 
               {notificationsOpen && (
-                <div className="absolute left-0 mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-fadeIn">
+                <div className="absolute left-0 mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden animate-fadeIn text-right">
                   <div className="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-800">التنبيهات المهنية</span>
-                    <span className="text-[10px] text-brand-blue font-semibold cursor-pointer">تحديد كقروء</span>
+                    <button 
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleMarkAllAsRead();
+                      }}
+                      className="text-[10px] text-brand-blue font-semibold hover:underline cursor-pointer bg-transparent border-0 outline-none"
+                    >
+                      تحديد كقروء
+                    </button>
                   </div>
-                  <div className="divide-y divide-slate-100">
-                    {mockNotifications.map((n) => (
-                      <div key={n.id} className="p-3 hover:bg-slate-50 transition cursor-pointer text-right">
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          <span className={`w-1.5 h-1.5 rounded-full ${n.type === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                          <span className="text-xs font-bold text-slate-805">{n.title}</span>
-                          <span className="text-[9px] text-slate-400 mr-auto">{n.date}</span>
+                  <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                    {loadingNotifications ? (
+                      <div className="p-4 text-center text-xs text-slate-400">جاري قراءة التنبيهات...</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-400">لا توجد تنبيهات حاليًا</div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div key={n.id} className={`p-3 transition text-right ${n.is_read ? 'opacity-70 hover:bg-slate-50/50' : 'hover:bg-slate-50 bg-brand-blue/5'}`}>
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${n.type === 'warning' ? 'bg-amber-500' : n.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                            <span className="text-xs font-bold text-slate-800">{n.title}</span>
+                            <span className="text-[9px] text-slate-400 mr-auto">{formatNotificationDate(n.created_at)}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 leading-relaxed">{n.message}</p>
                         </div>
-                        <p className="text-[11px] text-slate-550 leading-relaxed">{n.text}</p>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               )}

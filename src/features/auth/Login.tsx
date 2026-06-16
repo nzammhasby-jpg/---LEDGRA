@@ -113,7 +113,7 @@ export const Login: React.FC = () => {
             </h1>
             
             <p className="text-slate-300 text-sm leading-relaxed">
-              منصة محاسبية سعودية متوافقة مع متطلبات الزكاة والدخل، تقدم حلولاً مرنة لإدارة المبيعات والمشتريات والتقارير المالية بكفاءة.
+              منصة محاسبية سعودية مهيأة لاحقًا لدعم متطلبات الفوترة الإلكترونية والضريبة داخل المملكة، تقدم حلولاً مرنة ومكينة ماليًا للمنشآت.
             </p>
 
             {/* Feature lists */}
@@ -195,7 +195,7 @@ export const Login: React.FC = () => {
               {/* Interactive login form using React Hook Form */}
               <form id="login-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-755 mb-1.5">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                     {t('auth.email')}
                   </label>
                   <div className="relative">
@@ -208,7 +208,7 @@ export const Login: React.FC = () => {
                       placeholder="name@company.com"
                       {...register('email')}
                       className={`w-full pr-10 pl-4 py-2.5 bg-white border ${
-                        errors.email ? 'border-red-400 focus:ring-red-200' : 'border-slate-250 focus:ring-brand-blue/20'
+                        errors.email ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-brand-blue/20'
                       } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                       style={{ direction: 'ltr', textAlign: 'right' }}
                     />
@@ -220,7 +220,7 @@ export const Login: React.FC = () => {
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm font-semibold text-slate-755">
+                    <label className="block text-sm font-semibold text-slate-700">
                       {t('auth.password')}
                     </label>
                     <button
@@ -245,7 +245,7 @@ export const Login: React.FC = () => {
                       placeholder="••••••••"
                       {...register('password')}
                       className={`w-full pr-10 pl-4 py-2.5 bg-white border ${
-                        errors.password ? 'border-red-400 focus:ring-red-200' : 'border-slate-250 focus:ring-brand-blue/20'
+                        errors.password ? 'border-red-400 focus:ring-red-200' : 'border-slate-200 focus:ring-brand-blue/20'
                       } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                       style={{ direction: 'ltr', textAlign: 'right' }}
                     />
@@ -325,7 +325,7 @@ export const Login: React.FC = () => {
 
               <form onSubmit={handlePasswordResetRequest} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-755 mb-1.5">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                     {t('auth.email')}
                   </label>
                   <div className="relative">
@@ -338,7 +338,7 @@ export const Login: React.FC = () => {
                       placeholder="name@company.com"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      className="w-full pr-10 pl-4 py-2.5 bg-white border border-slate-250 focus:ring-brand-blue/20 rounded-xl text-sm focus:outline-none focus:ring-4 transition"
+                      className="w-full pr-10 pl-4 py-2.5 bg-white border border-slate-200 focus:ring-brand-blue/20 rounded-xl text-sm focus:outline-none focus:ring-4 transition"
                       style={{ direction: 'ltr', textAlign: 'right' }}
                     />
                   </div>

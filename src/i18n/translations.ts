@@ -7,7 +7,7 @@ export const translations = {
       name: 'LEDGRA',
       name_native: 'لِدجرا',
       tagline: 'نظام إدارة الأعمال والمحاسبة السحابية',
-      description: 'منصة محاسبية مخصصة للمنشآت السعودية متماشية مع متطلبات الزكاة والضريبة والجمارك.'
+      description: 'منصة محاسبية مخصصة للمنشآت السعودية، مهيأة لاحقًا للامتثال والربط مع متطلبات الفوترة الإلكترونية والضريبة.'
     },
     common: {
       save: 'حفظ',
@@ -24,8 +24,6 @@ export const translations = {
       logout: 'تسجيل الخروج',
       sar: 'ر.س',
       saudi_arabia: 'المملكة العربية السعودية',
-      demo_mode: 'وضع العرض التجريبي نشط',
-      demo_banner_desc: 'أنت تتصفح الواجهة ببيانات تجريبية. لربط بياناتك الحقيقية، قم بتهيئة متغيرات بيئة Supabase.',
       setup_supabase: 'خطوات ربط Supabase',
       required: 'حقل مطلوب',
       email_invalid: 'البريد الإلكتروني غير صالح',
@@ -181,8 +179,6 @@ export const translations = {
       logout: 'Log Out',
       sar: 'SAR',
       saudi_arabia: 'Saudi Arabia',
-      demo_mode: 'Demo Mode Active',
-      demo_banner_desc: 'You are browsing mock data. To link actual data, configure the Supabase secrets.',
       setup_supabase: 'Connect Supabase',
       required: 'Required field',
       email_invalid: 'Invalid email address',

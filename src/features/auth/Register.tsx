@@ -198,7 +198,7 @@ export const Register: React.FC = () => {
                     placeholder="محمد أحمد"
                     {...register('fullName')}
                     className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.fullName ? 'border-red-400 focus:ring-red-100' : 'border-slate-250 focus:ring-brand-blue/20'
+                      errors.fullName ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
                     } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                   />
                 </div>
@@ -222,7 +222,7 @@ export const Register: React.FC = () => {
                     placeholder="name@company.com"
                     {...register('email')}
                     className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.email ? 'border-red-400 focus:ring-red-100' : 'border-slate-250 focus:ring-brand-blue/20'
+                      errors.email ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
                     } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                     style={{ direction: 'ltr', textAlign: 'right' }}
                   />
@@ -247,7 +247,7 @@ export const Register: React.FC = () => {
                     placeholder="05XXXXXXXX"
                     {...register('phone')}
                     className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.phone ? 'border-red-400 focus:ring-red-100' : 'border-slate-250 focus:ring-brand-blue/20'
+                      errors.phone ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
                     } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                     style={{ direction: 'ltr', textAlign: 'right' }}
                   />
@@ -272,7 +272,7 @@ export const Register: React.FC = () => {
                     placeholder="••••••••"
                     {...register('password')}
                     className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.password ? 'border-red-400 focus:ring-red-100' : 'border-slate-250 focus:ring-brand-blue/20'
+                      errors.password ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
                     } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                     style={{ direction: 'ltr', textAlign: 'right' }}
                   />
@@ -297,7 +297,7 @@ export const Register: React.FC = () => {
                     placeholder="••••••••"
                     {...register('confirmPassword')}
                     className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.confirmPassword ? 'border-red-450 focus:ring-red-100' : 'border-slate-250 focus:ring-brand-blue/20'
+                      errors.confirmPassword ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
                     } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
                     style={{ direction: 'ltr', textAlign: 'right' }}
                   />

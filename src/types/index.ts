@@ -25,6 +25,8 @@ export interface Organization {
   currency: string;
   primary_language: string;
   onboarding_completed: boolean;
+  onboarding_step?: number;
+  setup_completed_at?: string | null;
   cr_number: string | null;
   created_by: string | null;
   system_start_date: string | null;
@@ -80,6 +82,5 @@ export interface Notification {
 export interface AppState {
   currentOrganization: Organization | null;
   organizationsList: Organization[];
-  isDemoMode: boolean;
   userInfo: Profile | null;
 }

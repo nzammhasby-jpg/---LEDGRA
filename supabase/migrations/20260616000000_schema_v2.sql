@@ -5,6 +5,8 @@ ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS system_start_date DATE
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS accounting_mode TEXT;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS starting_balances_later BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS setup_completed_at TIMESTAMPTZ;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS onboarding_step INTEGER DEFAULT 1 NOT NULL;
 
 -- Alter fiscal_year_start to DATE type safely
 ALTER TABLE public.organizations DROP COLUMN IF EXISTS fiscal_year_start;
@@ -46,7 +48,9 @@ CREATE OR REPLACE FUNCTION public.create_organization_with_owner(
     p_cr_number TEXT,
     p_system_start_date DATE,
     p_accounting_mode TEXT,
-    p_starting_balances_later BOOLEAN
+    p_starting_balances_later BOOLEAN,
+    p_onboarding_completed BOOLEAN DEFAULT true,
+    p_onboarding_step INTEGER DEFAULT 3
 )
 RETURNS UUID
 AS $$
@@ -76,6 +80,8 @@ BEGIN
         currency,
         primary_language,
         onboarding_completed,
+        onboarding_step,
+        setup_completed_at,
         cr_number,
         created_by,
         system_start_date,
@@ -97,7 +103,9 @@ BEGIN
         p_fiscal_year_start,
         'SAR', -- Standard SAR code inside DB instead of 'ر.س'
         'ar',
-        true,
+        p_onboarding_completed,
+        p_onboarding_step,
+        CASE WHEN p_onboarding_completed THEN NOW() ELSE NULL END,
         p_cr_number,
         v_user_id,
         p_system_start_date,

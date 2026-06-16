@@ -54,7 +54,7 @@ const onboardingSchema = z.object({
 
 type OnboardingFields = z.infer<typeof onboardingSchema>;
 
-const mockActivityTypes = [
+const activityTypeOptions = [
   'التجارة بالتجزئة والجملة',
   'الخدمات التقنية وتقنية المعلومات',
   'المقاولات والإنشاءات والتشغيل',
@@ -65,10 +65,10 @@ const mockActivityTypes = [
   'أخرى'
 ];
 
-const mockCities = ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'بريدة', 'أبها', 'تبوك'];
+const cityOptions = ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'بريدة', 'أبها', 'تبوك'];
 
 export const Onboarding: React.FC = () => {
-  const { createOrg, profile, signOut } = useAuth();
+  const { createOrg, updateOrg, currentOrg, profile, signOut } = useAuth();
   const { t } = useTranslation('ar');
   const navigate = useNavigate();
   const [step, setStep] = useState<number>(1);
@@ -102,7 +102,35 @@ export const Onboarding: React.FC = () => {
 
   const currentValues = watch();
 
-  // Validate step before advancing
+  // Load initial draft state of organization if it already exists (Requirement 6)
+  React.useEffect(() => {
+    if (currentOrg && !currentOrg.onboarding_completed) {
+      methods.reset({
+        name_ar: currentOrg.name_ar || '',
+        name_en: currentOrg.name_en || '',
+        activity_type: currentOrg.activity_type || 'الخدمات التقنية وتقنية المعلومات',
+        country: currentOrg.country || 'السعودية',
+        city: currentOrg.city || 'الرياض',
+        phone: currentOrg.phone || profile?.phone || '',
+        email: currentOrg.email || '',
+        legal_type: currentOrg.legal_type || 'individual',
+        cr_number: currentOrg.cr_number || '',
+        vat_number: currentOrg.vat_number || '',
+        is_vat_registered: currentOrg.is_vat_registered || false,
+        fiscal_year_start: currentOrg.fiscal_year_start || '2026-01-01',
+        currency: currentOrg.currency || 'ر.س',
+        primary_language: currentOrg.primary_language || 'ar',
+        accounting_mode: (currentOrg.accounting_mode as any) || 'pro',
+        use_system_start: currentOrg.system_start_date || new Date().toISOString().split('T')[0],
+        starting_balances_later: currentOrg.starting_balances_later || true
+      });
+      if (currentOrg.onboarding_step) {
+        setStep(currentOrg.onboarding_step);
+      }
+    }
+  }, [currentOrg, profile, methods]);
+
+  // Validate step before advancing and save progress to Supabase (Requirement 6)
   const handleNext = async () => {
     let fieldsToValidate: Array<keyof OnboardingFields> = [];
     if (step === 1) {
@@ -113,12 +141,100 @@ export const Onboarding: React.FC = () => {
 
     const isStepValid = await trigger(fieldsToValidate);
     if (isStepValid) {
+      // Save progress to database on step transition so state is not lost
+      const vals = methods.getValues();
+      try {
+        setApiError(null);
+        if (step === 1) {
+          if (!currentOrg) {
+            // Create draft organization
+            const response = await createOrg({
+              name_ar: vals.name_ar,
+              name_en: vals.name_en || '',
+              activity_type: vals.activity_type,
+              city: vals.city,
+              phone: vals.phone,
+              email: vals.email,
+              legal_type: vals.legal_type || 'individual',
+              vat_number: vals.vat_number || '',
+              is_vat_registered: vals.is_vat_registered || false,
+              fiscal_year_start: vals.fiscal_year_start || '2026-01-01',
+              cr_number: vals.cr_number || '',
+              system_start_date: vals.use_system_start || new Date().toISOString().split('T')[0],
+              accounting_mode: vals.accounting_mode || 'pro',
+              starting_balances_later: vals.starting_balances_later || true,
+              onboarding_completed: false,
+              onboarding_step: 1
+            });
+            if (response.error) {
+              setApiError(response.error);
+              return;
+            }
+          } else {
+            // Update draft organization
+            const response = await updateOrg(currentOrg.id, {
+              name_ar: vals.name_ar,
+              name_en: vals.name_en || '',
+              activity_type: vals.activity_type,
+              city: vals.city,
+              phone: vals.phone,
+              email: vals.email,
+              onboarding_step: 1
+            });
+            if (response.error) {
+              setApiError(response.error);
+              return;
+            }
+          }
+        } else if (step === 2 && currentOrg) {
+          // Update draft with step 2 values
+          const response = await updateOrg(currentOrg.id, {
+            legal_type: vals.legal_type,
+            cr_number: vals.cr_number,
+            vat_number: vals.vat_number || '',
+            is_vat_registered: vals.is_vat_registered,
+            fiscal_year_start: vals.fiscal_year_start,
+            onboarding_step: 2
+          });
+          if (response.error) {
+            setApiError(response.error);
+            return;
+          }
+        }
+      } catch (err: any) {
+        setApiError(err.message || 'فشل حفظ المسودة التلقائي.');
+        return;
+      }
+
       setStep((prev) => prev + 1);
       setApiError(null);
     }
   };
 
-  const handlePrev = () => {
+  // Save progress and go back
+  const handlePrev = async () => {
+    if (currentOrg) {
+      const vals = methods.getValues();
+      try {
+        const prevStep = step - 1;
+        await updateOrg(currentOrg.id, {
+          name_ar: vals.name_ar,
+          name_en: vals.name_en || '',
+          activity_type: vals.activity_type,
+          city: vals.city,
+          phone: vals.phone,
+          email: vals.email,
+          legal_type: vals.legal_type,
+          cr_number: vals.cr_number,
+          vat_number: vals.vat_number || '',
+          is_vat_registered: vals.is_vat_registered,
+          fiscal_year_start: vals.fiscal_year_start,
+          onboarding_step: prevStep
+        });
+      } catch (e) {
+        console.warn('Silent draft save error on back:', e);
+      }
+    }
     setStep((prev) => prev - 1);
     setApiError(null);
   };
@@ -126,28 +242,59 @@ export const Onboarding: React.FC = () => {
   const onWizardFinish = async (data: OnboardingFields) => {
     setApiError(null);
     try {
-      const response = await createOrg({
-        name_ar: data.name_ar,
-        name_en: data.name_en || '',
-        activity_type: data.activity_type,
-        city: data.city,
-        phone: data.phone,
-        email: data.email,
-        legal_type: data.legal_type,
-        vat_number: data.vat_number || '',
-        is_vat_registered: data.is_vat_registered,
-        fiscal_year_start: data.fiscal_year_start,
-        cr_number: data.cr_number,
-        system_start_date: data.use_system_start,
-        accounting_mode: data.accounting_mode,
-        starting_balances_later: data.starting_balances_later
-      });
+      // Save onboarding completion (Requirement 2 & 3)
+      let response;
+      if (currentOrg) {
+        // Update existing org to final status
+        response = await updateOrg(currentOrg.id, {
+          name_ar: data.name_ar,
+          name_en: data.name_en || '',
+          activity_type: data.activity_type,
+          city: data.city,
+          phone: data.phone,
+          email: data.email,
+          legal_type: data.legal_type,
+          cr_number: data.cr_number,
+          vat_number: data.vat_number || '',
+          is_vat_registered: data.is_vat_registered,
+          fiscal_year_start: data.fiscal_year_start,
+          system_start_date: data.use_system_start,
+          accounting_mode: data.accounting_mode,
+          starting_balances_later: data.starting_balances_later,
+          onboarding_completed: true,
+          onboarding_step: 3,
+          setup_completed_at: new Date().toISOString()
+        });
+      } else {
+        // Create new directly as completed
+        response = await createOrg({
+          name_ar: data.name_ar,
+          name_en: data.name_en || '',
+          activity_type: data.activity_type,
+          city: data.city,
+          phone: data.phone,
+          email: data.email,
+          legal_type: data.legal_type,
+          cr_number: data.cr_number,
+          vat_number: data.vat_number || '',
+          is_vat_registered: data.is_vat_registered,
+          fiscal_year_start: data.fiscal_year_start,
+          system_start_date: data.use_system_start,
+          accounting_mode: data.accounting_mode,
+          starting_balances_later: data.starting_balances_later,
+          onboarding_completed: true,
+          onboarding_step: 3
+        });
+      }
 
-      if (response.error) {
+      if (response && response.error) {
         setApiError(response.error);
       } else {
-        // Success redirect
-        navigate('/');
+        if (response && response.org) {
+          localStorage.setItem(`ledgra_selected_org_${profile?.id || 'user'}`, response.org.id);
+        }
+        // Redirect directly to dashboard using replace (Requirement 2)
+        navigate('/dashboard', { replace: true });
       }
     } catch (e: any) {
       setApiError(e.message || 'حدث خطأ غير متوقع أثناء إعداد المنشأة.');
@@ -186,7 +333,7 @@ export const Onboarding: React.FC = () => {
               </span>
               <h3 className="text-lg font-bold mt-4 leading-tight">تهيئة منشأتك على لِدجرا</h3>
               <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                نقوم بتضبيط شجرة القيود وهدف الفواتير بما يتوافق مع نشاطك ومعايير المحاسبة والزكاة والضريبة.
+                نقوم بتضبيط شجرة القيود والتهيئة المحاسبية الفورية بما يسهل نشاطك التجاري والمالي تمهيداً للامتثال لاحقاً.
               </p>
             </div>
 
@@ -228,7 +375,7 @@ export const Onboarding: React.FC = () => {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-right">
               <span className="text-[10px] font-bold text-brand-turquoise uppercase block">الأمن والامتثال</span>
               <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
-                مبني طبقا لمتطلبات هيئة الزكاة والضريبة والجمارك ولائحة الفوترة الإلكترونية بالمملكة العربية السعودية.
+                مهيأ لاحقًا لتطوير ودعم متطلبات هيئة الزكاة والضريبة والجمارك ولائحة الفوترة الإلكترونية بالمملكة العربية السعودية.
               </p>
             </div>
           </div>
@@ -271,7 +418,7 @@ export const Onboarding: React.FC = () => {
                               type="text"
                               placeholder="مثال: شركة لِدجرا المحدودة"
                               {...register('name_ar')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                             />
                             {methods.formState.errors.name_ar && (
                               <p className="text-xs text-red-600 mt-1">{methods.formState.errors.name_ar.message}</p>
@@ -285,7 +432,7 @@ export const Onboarding: React.FC = () => {
                               type="text"
                               placeholder="e.g. LEDGRA Ltd."
                               {...register('name_en')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                               style={{ direction: 'ltr', textAlign: 'right' }}
                             />
                           </div>
@@ -297,9 +444,9 @@ export const Onboarding: React.FC = () => {
                             <select
                               id="select-activity-type"
                               {...register('activity_type')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                             >
-                              {mockActivityTypes.map((act) => (
+                              {activityTypeOptions.map((act) => (
                                 <option key={act} value={act}>{act}</option>
                               ))}
                             </select>
@@ -312,11 +459,11 @@ export const Onboarding: React.FC = () => {
                               type="text"
                               placeholder="مثال: الرياض"
                               {...register('city')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                               list="cities-list"
                             />
                             <datalist id="cities-list">
-                              {mockCities.map((c) => <option key={c} value={c} />)}
+                              {cityOptions.map((c) => <option key={c} value={c} />)}
                             </datalist>
                             {methods.formState.errors.city && (
                               <p className="text-xs text-red-600 mt-1">{methods.formState.errors.city.message}</p>
@@ -327,7 +474,7 @@ export const Onboarding: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1.5">الدولة</label>
-                            <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-xl text-sm text-slate-650 font-semibold flex items-center justify-between">
+                            <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-xl text-sm text-slate-600 font-semibold flex items-center justify-between">
                               <span>المملكة العربية السعودية</span>
                               <Globe2 className="w-4 h-4 text-emerald-600" />
                             </div>
@@ -340,7 +487,7 @@ export const Onboarding: React.FC = () => {
                               type="tel"
                               placeholder="05xxxxxxxx"
                               {...register('phone')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                               style={{ direction: 'ltr', textAlign: 'right' }}
                             />
                             {methods.formState.errors.phone && (
@@ -356,7 +503,7 @@ export const Onboarding: React.FC = () => {
                             type="email"
                             placeholder="finance@yourcompany.com"
                             {...register('email')}
-                            className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                            className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                             style={{ direction: 'ltr', textAlign: 'right' }}
                           />
                           {methods.formState.errors.email && (
@@ -371,7 +518,7 @@ export const Onboarding: React.FC = () => {
                       <div className="space-y-4">
                         <div>
                           <h4 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">الكيان القانوني والتسجيل الضريبي</h4>
-                          <p className="text-xs text-slate-500 mt-1">تحديد الهيكل القانوني ورقم السجل التجاري للامتثال لمتطلبات الزكاة والضريبة.</p>
+                          <p className="text-xs text-slate-500 mt-1">تحديد الهيكل القانوني ورقم السجل التجاري لغايات مطابقة شروط التسجيل وضوابط ممارسة الأعمال بسلاسة.</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -380,7 +527,7 @@ export const Onboarding: React.FC = () => {
                             <select
                               id="select-legal-type"
                               {...register('legal_type')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                             >
                               <option value="individual">مؤسسة فردية</option>
                               <option value="llc">شركة ذات مسؤولية محدودة (LLC)</option>
@@ -396,7 +543,7 @@ export const Onboarding: React.FC = () => {
                               type="text"
                               placeholder="مثال: 1010xxxxxx"
                               {...register('cr_number')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                               style={{ direction: 'ltr', textAlign: 'right' }}
                             />
                             {methods.formState.errors.cr_number && (
@@ -406,7 +553,7 @@ export const Onboarding: React.FC = () => {
                         </div>
 
                         {/* Interactive toggle for VAT Registration */}
-                        <div className="bg-slate-55 border border-slate-200 rounded-2xl p-4 space-y-3">
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
                           <label className="flex items-center gap-3 cursor-pointer select-none">
                             <input
                               id="checkbox-vat-registered"
@@ -424,7 +571,7 @@ export const Onboarding: React.FC = () => {
                             <motion.div
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
-                              className="pt-2 border-t border-slate-205/80"
+                              className="pt-2 border-t border-slate-200/80"
                             >
                               <label className="block text-xs font-bold text-slate-700 mb-1.5">الرقم الضريبي المكون من 15 رقم يبدأ بـ 3 *</label>
                               <input
@@ -432,7 +579,7 @@ export const Onboarding: React.FC = () => {
                                 type="text"
                                 placeholder="3xxxxxxxxxxxx3"
                                 {...register('vat_number')}
-                                className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                                className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                                 style={{ direction: 'ltr', textAlign: 'right' }}
                               />
                               {methods.formState.errors.vat_number && (
@@ -449,13 +596,13 @@ export const Onboarding: React.FC = () => {
                               id="input-fiscal-start"
                               type="date"
                               {...register('fiscal_year_start')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                             />
                           </div>
 
                           <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1.5">العملة الأساسية</label>
-                            <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-xl text-sm text-slate-650 font-bold flex items-center justify-between">
+                            <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-xl text-sm text-slate-600 font-bold flex items-center justify-between">
                               <span>الريال السعودي (SAR)</span>
                               <Coins className="w-4 h-4 text-amber-500" />
                             </div>
@@ -522,7 +669,7 @@ export const Onboarding: React.FC = () => {
                               id="input-system-start"
                               type="date"
                               {...register('use_system_start')}
-                              className="w-full px-3 py-2 border border-slate-250 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                             />
                           </div>
                         </div>
@@ -535,7 +682,7 @@ export const Onboarding: React.FC = () => {
                             {...register('starting_balances_later')}
                             className="mt-0.5 rounded border-slate-300 text-brand-blue focus:ring-brand-blue/20 w-4 h-4"
                           />
-                          <label htmlFor="checkbox-opening-balances" className="text-xs text-slate-650 leading-relaxed select-none cursor-pointer">
+                          <label htmlFor="checkbox-opening-balances" className="text-xs text-slate-600 leading-relaxed select-none cursor-pointer">
                             <strong className="text-slate-800">إضافة الأرصدة الافتتاحية في مرحلة لاحقة بشكل مستقل.</strong>
                             <p className="text-[10px] text-slate-500 mt-0.5">يتيح لك بدء استعمال النظام على الفور وإدخال الأصول، والمخزون، والالتزامات لاحقاً عند اكتمال مطابقة السنة المالية السابقة.</p>
                           </label>
@@ -566,7 +713,7 @@ export const Onboarding: React.FC = () => {
                       type="button"
                       id="onboarding-next-btn"
                       onClick={handleNext}
-                      className="px-5 py-2.5 bg-brand-blue hover:bg-blue-655 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow"
+                      className="px-5 py-2.5 bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow"
                     >
                       <span>{t('common.next')}</span>
                       <ArrowLeft className="w-4 h-4" />
@@ -576,7 +723,7 @@ export const Onboarding: React.FC = () => {
                       id="onboarding-submit-btn"
                       type="submit"
                       disabled={isSubmitting}
-                      className="px-6 py-2.5 bg-brand-turquoise hover:bg-teal-655 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-55"
+                      className="px-6 py-2.5 bg-brand-turquoise hover:bg-brand-turquoise/90 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-55"
                     >
                       {isSubmitting ? (
                         <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />

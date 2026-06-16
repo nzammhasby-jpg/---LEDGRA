@@ -12,7 +12,7 @@ export const HelpPanel: React.FC = () => {
       
       {/* Title */}
       <div className="space-y-1">
-        <h2 className="text-xl font-extrabold text-slate-905 flex items-center gap-2">
+        <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
           <HelpCircle className="w-5.5 h-5.5 text-brand-blue" />
           <span>مركز الدعم الفني ودليل إعداد لِدجرا</span>
         </h2>
@@ -25,7 +25,7 @@ export const HelpPanel: React.FC = () => {
           دليل الربط السحابي (Supabase Integration)
         </span>
         
-        <p className="text-xs text-slate-650 leading-relaxed">
+        <p className="text-xs text-slate-600 leading-relaxed">
           تم تصميم لِدجرا LEDGRA ليكون نظاماً مالياً جاهزاً للعمل بالربط الفعلي بقاعدة بيانات <strong>Supabase</strong> السحابية لضمان حفظ كل تدوينة، مستند، ومنشأة بشكل آمن تماماً. اتبع الخطوات التالية لإتمام الربط:
         </p>
 
@@ -38,7 +38,7 @@ export const HelpPanel: React.FC = () => {
             </div>
             <div className="space-y-1">
               <h4 className="text-xs font-bold text-slate-900">إنشاء مشروع Supabase جديد</h4>
-              <p className="text-[11px] text-slate-550 leading-relaxed">
+              <p className="text-[11px] text-slate-500 leading-relaxed">
                 انتقل إلى <a href="https://supabase.com" target="_blank" className="text-brand-blue font-bold hover:underline" rel="noreferrer">Supabase.com</a> وقم بإنشاء مشروع جديد مجاني. اختر المنطقة الأقرب للمملكة العربية السعودية (مثال: EU Central أو AWS Bahrain).
               </p>
             </div>
@@ -49,8 +49,8 @@ export const HelpPanel: React.FC = () => {
               ٢
             </div>
             <div className="space-y-1">
-              <h4 className="text-xs font-bold text-slate-905">تشغيل ملف الهيكل المحاسبي والـ Schema</h4>
-              <p className="text-[11px] text-slate-550 leading-relaxed">
+              <h4 className="text-xs font-bold text-slate-900">تشغيل ملف الهيكل المحاسبي والـ Schema</h4>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
                 افتح مشروعك الجديد، ومن القائمة الجانبية اختر <strong>SQL Editor</strong> ثم اضغط على <strong>New Query</strong>. انسخ كامل محتويات ملف <code className="font-mono px-1 py-0.5 bg-slate-50 border rounded text-[10px]">supabase_schema.sql</code> الموجود في المجلد الرئيسي لهذا المشروع، والصقه هناك ثم اضغط <strong>Run</strong>.
               </p>
             </div>
@@ -61,8 +61,8 @@ export const HelpPanel: React.FC = () => {
               ٣
             </div>
             <div className="space-y-1">
-              <h4 className="text-xs font-bold text-slate-905">تفعيل متغيرات البيئة في AI Studio</h4>
-              <p className="text-[11px] text-slate-550 leading-relaxed">
+              <h4 className="text-xs font-bold text-slate-900">تفعيل متغيرات البيئة في AI Studio</h4>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
                 من إعداد مشروع Supabase (Project Settings ثم API)، انسخ المفتاحين: <strong>Project URL</strong> و <strong>Anon Public Key</strong>. ثم في لوحة تحكم <strong>Google AI Studio Build</strong>، افتح قائمة <strong>Secrets</strong> وأضف:
               </p>
               
@@ -79,8 +79,8 @@ export const HelpPanel: React.FC = () => {
               ✓
             </div>
             <div className="space-y-1">
-              <h4 className="text-xs font-bold text-slate-905">إعادة تشغيل الخادم وتأكيد نجاح التكوين</h4>
-              <p className="text-[11px] text-slate-550 leading-relaxed">
+              <h4 className="text-xs font-bold text-slate-900">إعادة تشغيل الخادم وتأكيد نجاح التكوين</h4>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
                 بمجرد إدراج المتغيرات، سيتم تحديث معالج المنصة وسيرتبط تسجيل الدخول، والمشتركين، والهيكل الفعلي بالمحيط السحابي بشكل كامل وفوري!
               </p>
             </div>
@@ -91,12 +91,12 @@ export const HelpPanel: React.FC = () => {
 
       {/* Platform Security architecture block */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-3.5">
-        <h4 className="text-xs font-bold text-slate-850 flex items-center gap-1.5">
+        <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
           <Database className="w-4.5 h-4.5 text-brand-turquoise" />
           <span>بنية عزل البيانات المتعددة المستأجرين (Multi-Tenant Isolation)</span>
         </h4>
         
-        <p className="text-[11px] text-slate-650 leading-relaxed">
+        <p className="text-[11px] text-slate-600 leading-relaxed">
           تعتمد لِدجرا على حماية صارمة تعزل كل شركة/سجل تجاري بمستأجر مستقل. تم بناء جداول <code className="font-mono bg-white px-1 py-0.5 border rounded text-[10px]">organization_members</code> لتنظيم الصلاحيات. في حال محاولة مستخدم خارجي استدعاء بيانات ومستندات منشأة لم يسجل كعضو فيها، ستقوم برمجية <strong>Row Level Security (RLS)</strong> التي قمنا بتضمينها في SQL بمنع الاتصال في الحال وإرجاع خطأ غير مصرح.
         </p>
       </div>
