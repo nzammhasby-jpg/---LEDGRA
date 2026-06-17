@@ -82,8 +82,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
 
-      if (profileErr || !profileData) {
-        // Safe check or fallback
+      if (profileErr) {
+        if (profileErr.code !== 'PGRST116') {
+          console.error('Failed to load profile due to database error:', profileErr);
+          throw profileErr;
+        }
+      }
+
+      if (!profileData) {
+        // Safe check or fallback only when row is missing (PGRST116)
         const { data: { user: realUser } } = await supabase.auth.getUser();
         if (realUser) {
           const fallbackProfile: Profile = {
@@ -93,7 +100,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             avatar_url: null,
             created_at: new Date().toISOString()
           };
-          await supabase.from('profiles').upsert(fallbackProfile);
+          
+          const { error: insertErr } = await supabase
+            .from('profiles')
+            .insert(fallbackProfile);
+
+          if (insertErr && insertErr.code !== '23505') { // 23505 = duplicate key
+            console.error('Failed to insert fallback profile:', insertErr);
+            throw insertErr;
+          }
+          
           profileData = fallbackProfile;
         }
       }
@@ -136,7 +152,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         `)
         .eq('profile_id', userId);
 
-      if (!memberErr && memberData) {
+      if (memberErr) {
+        console.error('Failed to load organization memberships:', memberErr);
+        throw memberErr;
+      }
+
+      if (memberData) {
         //@ts-ignore
         const userOrgs: Organization[] = memberData
           .map((m: any) => m.organizations)
