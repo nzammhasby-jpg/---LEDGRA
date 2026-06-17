@@ -68,7 +68,7 @@ const activityTypeOptions = [
 const cityOptions = ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'بريدة', 'أبها', 'تبوك'];
 
 export const Onboarding: React.FC = () => {
-  const { createOrg, updateOrg, currentOrg, profile, signOut } = useAuth();
+  const { createOrg, updateOrg, currentOrg, profile, signOut, user, orgsList } = useAuth();
   const { t } = useTranslation('ar');
   const navigate = useNavigate();
   const [step, setStep] = useState<number>(1);
@@ -146,7 +146,11 @@ export const Onboarding: React.FC = () => {
       try {
         setApiError(null);
         if (step === 1) {
-          if (!currentOrg) {
+          const existingDraft = (currentOrg && !currentOrg.onboarding_completed)
+            ? currentOrg
+            : orgsList.find(o => !o.onboarding_completed);
+
+          if (!existingDraft) {
             // Create draft organization
             const response = await createOrg({
               name_ar: vals.name_ar,
@@ -164,7 +168,7 @@ export const Onboarding: React.FC = () => {
               accounting_mode: vals.accounting_mode || 'pro',
               starting_balances_later: vals.starting_balances_later || true,
               onboarding_completed: false,
-              onboarding_step: 1
+              onboarding_step: 2
             });
             if (response.error) {
               setApiError(response.error);
@@ -172,33 +176,39 @@ export const Onboarding: React.FC = () => {
             }
           } else {
             // Update draft organization
-            const response = await updateOrg(currentOrg.id, {
+            const response = await updateOrg(existingDraft.id, {
               name_ar: vals.name_ar,
               name_en: vals.name_en || '',
               activity_type: vals.activity_type,
               city: vals.city,
               phone: vals.phone,
               email: vals.email,
-              onboarding_step: 1
+              onboarding_step: 2
             });
             if (response.error) {
               setApiError(response.error);
               return;
             }
           }
-        } else if (step === 2 && currentOrg) {
-          // Update draft with step 2 values
-          const response = await updateOrg(currentOrg.id, {
-            legal_type: vals.legal_type,
-            cr_number: vals.cr_number,
-            vat_number: vals.vat_number || '',
-            is_vat_registered: vals.is_vat_registered,
-            fiscal_year_start: vals.fiscal_year_start,
-            onboarding_step: 2
-          });
-          if (response.error) {
-            setApiError(response.error);
-            return;
+        } else if (step === 2) {
+          const draftOrg = (currentOrg && !currentOrg.onboarding_completed)
+            ? currentOrg
+            : orgsList.find(o => !o.onboarding_completed);
+
+          if (draftOrg) {
+            // Update draft with step 2 values
+            const response = await updateOrg(draftOrg.id, {
+              legal_type: vals.legal_type,
+              cr_number: vals.cr_number,
+              vat_number: vals.vat_number || '',
+              is_vat_registered: vals.is_vat_registered,
+              fiscal_year_start: vals.fiscal_year_start,
+              onboarding_step: 3
+            });
+            if (response.error) {
+              setApiError(response.error);
+              return;
+            }
           }
         }
       } catch (err: any) {
@@ -212,29 +222,7 @@ export const Onboarding: React.FC = () => {
   };
 
   // Save progress and go back
-  const handlePrev = async () => {
-    if (currentOrg) {
-      const vals = methods.getValues();
-      try {
-        const prevStep = step - 1;
-        await updateOrg(currentOrg.id, {
-          name_ar: vals.name_ar,
-          name_en: vals.name_en || '',
-          activity_type: vals.activity_type,
-          city: vals.city,
-          phone: vals.phone,
-          email: vals.email,
-          legal_type: vals.legal_type,
-          cr_number: vals.cr_number,
-          vat_number: vals.vat_number || '',
-          is_vat_registered: vals.is_vat_registered,
-          fiscal_year_start: vals.fiscal_year_start,
-          onboarding_step: prevStep
-        });
-      } catch (e) {
-        console.warn('Silent draft save error on back:', e);
-      }
-    }
+  const handlePrev = () => {
     setStep((prev) => prev - 1);
     setApiError(null);
   };
@@ -244,9 +232,13 @@ export const Onboarding: React.FC = () => {
     try {
       // Save onboarding completion (Requirement 2 & 3)
       let response;
-      if (currentOrg) {
+      const draftOrg = (currentOrg && !currentOrg.onboarding_completed)
+        ? currentOrg
+        : orgsList.find(o => !o.onboarding_completed);
+
+      if (draftOrg) {
         // Update existing org to final status
-        response = await updateOrg(currentOrg.id, {
+        response = await updateOrg(draftOrg.id, {
           name_ar: data.name_ar,
           name_en: data.name_en || '',
           activity_type: data.activity_type,
@@ -290,11 +282,19 @@ export const Onboarding: React.FC = () => {
       if (response && response.error) {
         setApiError(response.error);
       } else {
-        if (response && response.org) {
-          localStorage.setItem(`ledgra_selected_org_${profile?.id || 'user'}`, response.org.id);
+        if (!response || !response.org || !response.org.onboarding_completed) {
+          throw new Error('لم يتم تثبيت اكتمال إعداد المنشأة في قاعدة البيانات.');
         }
-        // Redirect directly to dashboard using replace (Requirement 2)
-        navigate('/dashboard', { replace: true });
+
+        // Save the correct selected ID using always user.id as requested
+        if (user) {
+          localStorage.setItem(`ledgra_selected_org_${user.id}`, response.org.id);
+        }
+
+        // Redirect directly to base url to trigger guard validation (Requirement 2 & 3)
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 100);
       }
     } catch (e: any) {
       setApiError(e.message || 'حدث خطأ غير متوقع أثناء إعداد المنشأة.');

@@ -68,6 +68,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roleInCurrentOrg, setRoleInCurrentOrg] = useState<OrganizationRole | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const loadedUserIdRef = React.useRef<string | null>(null);
+
   // Load Real Data from Supabase
   const loadRealUserData = async (userId: string) => {
     try {
@@ -144,16 +146,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (userOrgs.length > 0) {
           const savedOrgId = localStorage.getItem(`ledgra_selected_org_${userId}`);
-          // Prefer completed organizations over incomplete ones to avoid Onboarding page loops (per Requirement 5)
-          const completedOrgs = userOrgs.filter(o => o.onboarding_completed);
-          const selected = userOrgs.find(o => o.id === savedOrgId) 
-            || completedOrgs.find(o => o.id === savedOrgId)
-            || completedOrgs[0] 
-            || userOrgs[0];
-          setCurrentOrg(selected);
+          const completedOrgs = userOrgs.filter(o => o.onboarding_completed === true);
+          const savedCompletedOrg = completedOrgs.find(org => org.id === savedOrgId);
 
-          const memberInfo = memberData.find((m: any) => m.organization_id === selected.id);
-          setRoleInCurrentOrg((memberInfo?.role || 'owner') as OrganizationRole);
+          // الأولوية: 1) المحفوظة المكتملة 2) أي مكتملة 3) المحفوظة أياً كانت 4) أول منشأة
+          const selected = savedCompletedOrg ?? completedOrgs[0] ?? userOrgs.find(o => o.id === savedOrgId) ?? userOrgs[0];
+
+          if (selected) {
+            localStorage.setItem(`ledgra_selected_org_${userId}`, selected.id);
+            setCurrentOrg(selected);
+            const memberInfo = memberData.find((m: any) => m.organization_id === selected.id);
+            setRoleInCurrentOrg((memberInfo?.role || 'owner') as OrganizationRole);
+          } else {
+            setCurrentOrg(null);
+            setRoleInCurrentOrg(null);
+          }
+
+          if ((import.meta as any).env?.DEV) {
+            console.log({
+              organizations: userOrgs,
+              completedOrganizations: completedOrgs,
+              savedOrgId,
+              selectedOrganization: selected
+            });
+          }
         } else {
           setCurrentOrg(null);
           setRoleInCurrentOrg(null);
@@ -180,8 +196,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(({ data: { session } }) => {
         if (session) {
           setUser(session.user);
-          loadRealUserData(session.user.id);
+          if (loadedUserIdRef.current !== session.user.id) {
+            loadedUserIdRef.current = session.user.id;
+            loadRealUserData(session.user.id);
+          }
         } else {
+          loadedUserIdRef.current = null;
           setUser(null);
           setProfile(null);
           setCurrentOrg(null);
@@ -196,14 +216,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Guard duplicate requests on token refreshes
       if (session) {
-        const isUserChanged = !user || user.id !== session.user.id;
         setUser(session.user);
-        if (isUserChanged) {
+        if (loadedUserIdRef.current !== session.user.id) {
+          loadedUserIdRef.current = session.user.id;
           loadRealUserData(session.user.id);
         }
       } else {
+        loadedUserIdRef.current = null;
         setUser(null);
         setProfile(null);
         setCurrentOrg(null);
@@ -243,6 +263,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setUser(data.user);
+      loadedUserIdRef.current = data.user!.id;
       await loadRealUserData(data.user!.id);
       return { error: null };
     } catch (e: any) {
@@ -277,6 +298,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { error: null, verificationRequired: true };
         }
         setUser(data.user);
+        loadedUserIdRef.current = data.user.id;
         await loadRealUserData(data.user.id);
       }
       return { error: null, verificationRequired: false };
@@ -305,9 +327,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Reset Password email link
   const sendPasswordReset = async (email: string): Promise<{ error: string | null }> => {
     try {
-      const appUrl = (import.meta as any).env?.VITE_APP_URL || window.location.origin;
+      const appOrigin = window.location.origin.replace(/\/$/, '');
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${appUrl}/#/reset-password`,
+        redirectTo: `${appOrigin}/#/reset-password`,
       });
       if (error) return { error: translateAuthError(error.message) };
       return { error: null };
@@ -369,10 +391,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('فشل استرجاع بيانات المنشأة التي تم جدولتها سحابياً.');
       }
 
-      // Re-populate and sync profile lists
-      await loadRealUserData(user.id);
+      const finalOrg = orgDataResult as Organization;
 
-      return { org: orgDataResult as Organization, error: null };
+      // Update states directly
+      setOrgsList(prev => {
+        const alreadyExists = prev.some(o => o.id === finalOrg.id);
+        if (alreadyExists) return prev.map(o => o.id === finalOrg.id ? finalOrg : o);
+        return [...prev, finalOrg];
+      });
+      setCurrentOrg(finalOrg);
+      setRoleInCurrentOrg('owner');
+      localStorage.setItem(`ledgra_selected_org_${user.id}`, finalOrg.id);
+      loadedUserIdRef.current = user.id; // منع onAuthStateChange من إعادة التحميل
+      setLoading(false);
+
+      return { org: finalOrg, error: null };
 
     } catch (e: any) {
       setLoading(false);
@@ -398,10 +431,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(updateErr?.message || 'فشل تحديث بيانات المنشأة.');
       }
 
-      // Re-populate and sync profile lists
-      await loadRealUserData(user.id);
+      const finalOrg = updatedData as Organization;
 
-      return { org: updatedData as Organization, error: null };
+      // Update states directly
+      setOrgsList(prev => prev.map(org => org.id === finalOrg.id ? finalOrg : org));
+      setCurrentOrg(finalOrg);
+      localStorage.setItem(`ledgra_selected_org_${user.id}`, finalOrg.id);
+      loadedUserIdRef.current = user.id; // منع onAuthStateChange من إعادة التحميل
+      setLoading(false);
+
+      return { org: finalOrg, error: null };
 
     } catch (e: any) {
       setLoading(false);
