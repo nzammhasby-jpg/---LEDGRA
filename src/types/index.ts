@@ -117,3 +117,68 @@ export interface CustomDatabaseError {
   hint?: string;
 }
 
+export interface FiscalYear {
+  id: string;
+  organization_id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: 'draft' | 'open' | 'closed';
+  is_current: boolean;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface FiscalPeriod {
+  id: string;
+  fiscal_year_id: string;
+  organization_id: string;
+  period_num: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: 'open' | 'closed';
+  created_at: string;
+}
+
+export type AccountClassification = 'assets' | 'liabilities' | 'equity' | 'revenue' | 'expenses';
+export type AccountNature = 'debit' | 'credit';
+
+export interface Account {
+  id: string;
+  organization_id: string;
+  code: string;
+  name_ar: string;
+  name_en: string | null;
+  classification: AccountClassification;
+  parent_id: string | null;
+  level: number;
+  nature: AccountNature;
+  allow_direct_posting: boolean;
+  is_active: boolean;
+  is_system: boolean;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  children?: Account[];
+}
+
+export interface AccountingSettings {
+  id: string;
+  organization_id: string;
+  default_receivables_account_id: string | null;
+  default_payables_account_id: string | null;
+  default_cash_account_id: string | null;
+  default_bank_account_id: string | null;
+  default_sales_account_id: string | null;
+  default_service_sales_account_id: string | null;
+  default_tax_output_account_id: string | null;
+  default_tax_input_account_id: string | null;
+  default_cogs_account_id: string | null;
+  default_inventory_account_id: string | null;
+  default_retained_earnings_account_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+

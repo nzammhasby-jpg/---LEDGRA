@@ -79,7 +79,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { name: t('sidebar.items'), path: '/items-soon', icon: FileText, isSoon: true },
     { name: t('sidebar.customers'), path: '/customers-soon', icon: Users, isSoon: true },
     { name: t('sidebar.vendors'), path: '/vendors-soon', icon: Truck, isSoon: true },
-    { name: t('sidebar.accounting'), path: '/accounting-soon', icon: FileSpreadsheet, isSoon: true },
+    { name: t('sidebar.accounting'), path: '/accounting', icon: FileSpreadsheet, isSoon: false },
     { name: t('sidebar.reports'), path: '/reports-soon', icon: SlidersHorizontal, isSoon: true },
     { name: t('sidebar.settings'), path: '/settings', icon: Settings, isSoon: false }
   ];

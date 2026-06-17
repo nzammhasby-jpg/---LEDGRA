@@ -8,6 +8,7 @@ import { ResetPassword } from './features/auth/ResetPassword';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { Settings } from './features/settings/Settings';
+import { AccountingLayout } from './features/accounting/AccountingLayout';
 import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -254,7 +255,7 @@ export default function App() {
             <Route path="/items-soon" element={<SoonModule />} />
             <Route path="/customers-soon" element={<SoonModule />} />
             <Route path="/vendors-soon" element={<SoonModule />} />
-            <Route path="/accounting-soon" element={<SoonModule />} />
+            <Route path="/accounting" element={<AccountingLayout />} />
             <Route path="/reports-soon" element={<SoonModule />} />
             <Route path="/help-panel" element={<HelpPanel />} />
           </Route>

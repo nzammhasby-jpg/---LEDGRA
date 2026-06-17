@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../i18n/translations';
 import { supabase } from '../../lib/supabase';
-import { Branch } from '../../types';
+import { Branch, Account, AccountingSettings as AccountingSettingsType } from '../../types';
+import { accountingService } from '../../lib/accountingService';
 import { 
   Building, 
   Users, 
@@ -12,7 +13,10 @@ import {
   Building2,
   Mail,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  BookOpen,
+  Save,
+  HelpCircle
 } from 'lucide-react';
 
 interface SettingsMember {
@@ -35,7 +39,15 @@ interface RPCMemberResult {
 export const Settings: React.FC = () => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
   const { t } = useTranslation('ar');
-  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting'>('info');
+
+  // Accounting Settings state
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountingSettings, setAccountingSettings] = useState<AccountingSettingsType | null>(null);
+  const [loadingAccounting, setLoadingAccounting] = useState<boolean>(true);
+  const [accountingError, setAccountingError] = useState<string | null>(null);
+  const [accountingSuccess, setAccountingSuccess] = useState<string | null>(null);
+  const [savingAccounting, setSavingAccounting] = useState<boolean>(false);
 
   // Real Database state lists
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -110,12 +122,68 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const loadAccounting = async () => {
+    if (!currentOrg) return;
+    setLoadingAccounting(true);
+    setAccountingError(null);
+    setAccountingSuccess(null);
+    try {
+      const data = await accountingService.getAccountingSettings(currentOrg.id);
+      setAccountingSettings(data);
+      
+      const allAccounts = await accountingService.getAccounts(currentOrg.id);
+      setAccounts(allAccounts.filter(a => a.is_active && a.allow_direct_posting));
+    } catch (e: any) {
+      console.error(e);
+      setAccountingError(e.message || 'حدث خطأ أثناء تحميل إعدادات الحسابات الافتراضية.');
+    } finally {
+      setLoadingAccounting(false);
+    }
+  };
+
+  const handleSaveAccountingSettings = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!currentOrg || !accountingSettings || savingAccounting) return;
+
+    setSavingAccounting(true);
+    setAccountingError(null);
+    setAccountingSuccess(null);
+
+    const formData = new FormData(e.currentTarget);
+    const updates: Partial<AccountingSettingsType> = {
+      default_cash_account_id: (formData.get('default_cash') as string) || null,
+      default_bank_account_id: (formData.get('default_bank') as string) || null,
+      default_receivables_account_id: (formData.get('default_receivables') as string) || null,
+      default_payables_account_id: (formData.get('default_payables') as string) || null,
+      default_sales_account_id: (formData.get('default_sales') as string) || null,
+      default_service_sales_account_id: (formData.get('default_service_sales') as string) || null,
+      default_tax_output_account_id: (formData.get('default_tax_output') as string) || null,
+      default_tax_input_account_id: (formData.get('default_tax_input') as string) || null,
+      default_inventory_account_id: (formData.get('default_inventory') as string) || null,
+      default_cogs_account_id: (formData.get('default_cogs') as string) || null,
+      default_retained_earnings_account_id: (formData.get('default_retained_earnings') as string) || null,
+    };
+
+    try {
+      const updated = await accountingService.updateAccountingSettings(currentOrg.id, updates);
+      setAccountingSettings(updated);
+      setAccountingSuccess('تم حفظ إعدادات وتكميم الروابط المحاسبية الافتراضية بنجاح!');
+    } catch (err: any) {
+      console.error(err);
+      setAccountingError(err.message || 'فشلت معالجة حفظ الاختيارات.');
+    } finally {
+      setSavingAccounting(false);
+    }
+  };
+
   useEffect(() => {
     if (currentOrg) {
       if (activeTab === 'branches') {
         loadBranches();
       } else if (activeTab === 'users' && isPrivileged) {
         loadMembers();
+      } else if (activeTab === 'accounting') {
+        loadAccounting();
       } else {
         // Initial tab or switcher load
         loadBranches();
@@ -214,7 +282,8 @@ export const Settings: React.FC = () => {
         {[
           { id: 'info', label: t('settings.tab_info'), icon: Building },
           { id: 'users', label: t('settings.tab_users'), icon: Users },
-          { id: 'branches', label: t('settings.tab_branches'), icon: MapPin }
+          { id: 'branches', label: t('settings.tab_branches'), icon: MapPin },
+          { id: 'accounting', label: 'الإعدادات المحاسبية والسيرفر', icon: BookOpen }
         ].map((tab) => {
           const TabIcon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -525,6 +594,282 @@ export const Settings: React.FC = () => {
                   </div>
                 ))}
               </div>
+            )}
+
+          </div>
+        )}
+
+        {/* Tab 4: Accounting configuration mappings */}
+        {activeTab === 'accounting' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-brand-blue" />
+                  <span>لوحة الربط المحاسبي التلقائي للقيود والعمليات المالية</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  قم بضبط الحسابات الافتراضية للدفاتر لتفويض منصة لِدجرا بإنشاء ومطابقة قيود اليومية للضربيات والعملاء والنقدية تلقائياً دون تدخل بشري.
+                </p>
+              </div>
+            </div>
+
+            {accountingSuccess && (
+              <div className="bg-emerald-50 border-r-4 border-emerald-500 p-3 rounded-xl text-xs text-emerald-800 font-semibold flex items-center gap-2">
+                <span>✓ {accountingSuccess}</span>
+              </div>
+            )}
+
+            {accountingError && (
+              <div className="bg-red-50 border-r-4 border-red-500 p-3 rounded-lg text-xs text-red-800 font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                <span>خطأ: {accountingError}</span>
+              </div>
+            )}
+
+            {loadingAccounting ? (
+              <div className="text-center py-12 text-xs text-slate-400 space-y-2">
+                <span className="w-6 h-6 border-2 border-brand-blue border-t-transparent rounded-full animate-spin inline-block" />
+                <p>جاري تحميل خريطة الحسابات وتفضيلات الخادم المالي...</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveAccountingSettings} className="space-y-6">
+                
+                {/* Visual guidance box */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex gap-3 text-xs leading-relaxed text-slate-600">
+                  <HelpCircle className="w-5 h-5 text-brand-blue shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="font-bold text-slate-800">نهج الامتثال المالي السحابي:</h5>
+                    <p className="text-[10px] mt-1 text-slate-500">
+                      يتم تصفية قائمة الحسابات أدناه آلياً لعرض الحسابات النشطة القابلة لترحيل المعاملات المباشرة فقط (Allow Direct Posting). إذا لم تجد الحساب المطلوب، يرجى تفعيله أولاً من شجرة الحسابات المحاسبية.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Category 1: Cash & Banks */}
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
+                    <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                      <span>١. حسابات السيولة السريعة والنقدية</span>
+                    </h4>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">الخزينة النقدية الافتراضية (الصندوق)</label>
+                        <select 
+                          name="default_cash" 
+                          defaultValue={accountingSettings?.default_cash_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب الصندوق النقدي --</option>
+                          {accounts.filter(a => a.classification === 'assets').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">الحساب البنكي الافتراضي للمنشأة</label>
+                        <select 
+                          name="default_bank" 
+                          defaultValue={accountingSettings?.default_bank_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر الحساب البنكي الافتراضي --</option>
+                          {accounts.filter(a => a.classification === 'assets').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 2: Receivables & Payables */}
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
+                    <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                      <span>٢. حسابات الشركاء والذمم (العملاء والموردين)</span>
+                    </h4>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب العملاء والذمم المدينة (Customer Receivables)</label>
+                        <select 
+                          name="default_receivables" 
+                          defaultValue={accountingSettings?.default_receivables_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب الذمم المدينة الموحد --</option>
+                          {accounts.filter(a => a.classification === 'assets').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب الموردين والذمم الدائنة (Vendor Payables)</label>
+                        <select 
+                          name="default_payables" 
+                          defaultValue={accountingSettings?.default_payables_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب الذمم الدائنة الموحد --</option>
+                          {accounts.filter(a => a.classification === 'liabilities').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 3: Product & Service Sales */}
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
+                    <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                      <span>٣. حسابات المبيعات وإيرادات النشاط</span>
+                    </h4>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب مبيعات المنتجات والسلع</label>
+                        <select 
+                          name="default_sales" 
+                          defaultValue={accountingSettings?.default_sales_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب إيرادات المبيعات السلعية --</option>
+                          {accounts.filter(a => a.classification === 'revenue').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب مبيعات الخدمات والتشغيل</label>
+                        <select 
+                          name="default_service_sales" 
+                          defaultValue={accountingSettings?.default_service_sales_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب إيرادات مبيعات الخدمات --</option>
+                          {accounts.filter(a => a.classification === 'revenue').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 4: Inventory & Cost */}
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
+                    <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                      <span>٤. حسابات المخازن وتكاليف البضاعة</span>
+                    </h4>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب المخزون السلعي (Inventory Assets)</label>
+                        <select 
+                          name="default_inventory" 
+                          defaultValue={accountingSettings?.default_inventory_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب المخزون العام --</option>
+                          {accounts.filter(a => a.classification === 'assets').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب تكلفة البضاعة المباعة (COGS Expenses)</label>
+                        <select 
+                          name="default_cogs" 
+                          defaultValue={accountingSettings?.default_cogs_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب تكلفة المبيعات --</option>
+                          {accounts.filter(a => a.classification === 'expenses').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 5: Taxes and Retained Earnings */}
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50 md:col-span-2">
+                    <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                      <span>٥. ضريبة القيمة المضافة والأرباح المدورة</span>
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1 font-sans">حساب الضريبة المدخلة (المشتريات)</label>
+                        <select 
+                          name="default_tax_input" 
+                          defaultValue={accountingSettings?.default_tax_input_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب ضريبة المدخلات --</option>
+                          {accounts.filter(a => a.classification === 'assets').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1 font-sans">حساب الضريبة المخرجة (المبيعات)</label>
+                        <select 
+                          name="default_tax_output" 
+                          defaultValue={accountingSettings?.default_tax_output_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب ضريبة المخرجات --</option>
+                          {accounts.filter(a => a.classification === 'liabilities').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1 font-sans">حساب الأرباح المبقاة (Retained Earnings)</label>
+                        <select 
+                          name="default_retained_earnings" 
+                          defaultValue={accountingSettings?.default_retained_earnings_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب الأرباح المدورة --</option>
+                          {accounts.filter(a => a.classification === 'equity').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="flex justify-end pt-4">
+                  <button 
+                    type="submit" 
+                    disabled={savingAccounting}
+                    className="flex items-center gap-1.5 px-6 py-2.5 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer select-none transition disabled:opacity-50 shadow-md shadow-brand-blue/10"
+                  >
+                    {savingAccounting ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>جاري حفظ العلاقات والمطابقات ممارسياً...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>حفظ وثاق الروابط المحاسبية الافتراضية</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+              </form>
             )}
 
           </div>
