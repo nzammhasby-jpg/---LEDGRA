@@ -30,11 +30,12 @@
 ### ١. تشغيل الهيكل والقواعد في Supabase
 1. قم بإنشاء مشروع جديد في منصة [Supabase](https://supabase.com).
 2. اختر من القائمة الجانبية **SQL Editor** ثم اضغط على **New Query**.
-3. انسخ كامل المحتويات من ملف `supabase_schema.sql` وهو الملف الموحد والنهائي والآمن في هذا المشروع.
+3. انسخ كامل المحتويات من ملف `supabase/initial_schema.sql` وهو الملف الموحد والنهائي والآمن في هذا المشروع.
 4. الصق المحتويات بأكملها في المحرر ثم اضغط **Run**.
-   - يتولى هذا السكريبت بناء وتجهيز الجداول الأساسية: `profiles`, `organizations`, `organization_members`, `branches`, `notifications`, `audit_logs` وضبط الصلاحيات والهويات الأساسية.
+   - يتولى هذا السكريبت بناء وتجهيز الجداول الأساسية: `profiles`, `organizations`, `organization_members`, `organization_settings`, `branches`, `notifications`, `audit_logs` وضبط الصلاحيات والوظائف الأساسية.
    - يفعّل قواعد الحماية الصارمة **RLS (Row Level Security)** لعزل بيانات كل منشأة عن المستخدمين الآخرين تماماً.
-   - يدمج `SET search_path = public, pg_temp` في دوال الـ `SECURITY DEFINER` (مثل دالة `is_member_of` ودالة `handle_new_user`) كتدبير أمني متقدم يمنع ثغرات الاختراق وحقن المسار.
+   - يدمج `SET search_path = public, pg_temp` في دوال الـ `SECURITY DEFINER` (مثل دالة `is_org_member` ودالة `handle_new_user`) كتدبير أمني متقدم يمنع ثغرات الاختراق وحقن المسار.
+   - جميع الدوال آمنة وتستخدم `auth.uid()` داخلياً دون السماح للعميل بتمرير معرف مستخدم آخر.
 
 ---
 
@@ -62,23 +63,6 @@ VITE_SUPABASE_ANON_KEY="your-anon-public-jwt-key"
 4. اضغط على **Save** لحفظ التغييرات بنجاح.
 
 ---
-
-## 💾 سكريبتات التحديث الإضافية (Migrations)
-
-إذا كنت تمتلك قاعدة بيانات سابقة وقمت بإنشائها عبر سكريبت `supabase_schema.sql` الأولي، يرجى تشغيل ملفات الهجرة والتعديل الإضافية التالية:
-
-### ١. معالجة حلقة التأسيس (Onboarding Loop)
-1. اذهب إلى **SQL Editor** في لوحة تحكم Supabase.
-2. افتح ملف `supabase/migrations/20260617_fix_onboarding_loop.sql` الموجود في المشروع.
-3. انسخ محتويات السكريبت بالكامل والصقها في نافذة استعلام جديدة في Supabase ثم اضغط **Run**.
-4. يضمن هذا السكريبت ضبط حقول إعدادات المنشأة وتحسين معالج إنشاء المنشأة ليعمل بشكل سليم وثوابت مرجعية دقيقة ومتوافقة كاملة.
-
-### ٢. حل مشكلة التكرار اللانهائي في قواعد الـ RLS وعصيان الدخول (RLS Infinite Recursion Fix)
-1. اذهب إلى **SQL Editor** في لوحة تحكم Supabase.
-2. افتح ملف `supabase/migrations/20260617_fix_rls_infinite_recursion.sql` الموجود في المشروع.
-3. انسخ محتويات السكريبت بالكامل والصقها في نافذة استعلام جديدة في Supabase ثم اضغط **Run**.
-4. يقوم هذا السكريبت بإسقاط السياسات المتعارضة والدائرية على جدول `organization_members` وجدول `profiles` وإعادة كتابتها باستعمال دوال آمنة مُعرّفة بصلاحيات المالك (`SECURITY DEFINER`) ومحمية بإعدادات المسار (`SET search_path = public, pg_temp`) لمنع حدوث التكرار اللانهائي (Infinite Recursion Error 500) وحظر تجاوز الصلاحيات.
-5. أعد تحميل التطبيق وسجل الدخول مجدداً ليتم التوجيه للوحة التحكم مباشرة.
 
 ---
 

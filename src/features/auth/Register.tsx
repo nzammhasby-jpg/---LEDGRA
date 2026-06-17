@@ -14,7 +14,7 @@ const registerSchema = z.object({
   email: z.string().min(1, { message: 'البريد الإلكتروني مطلوب' }).email({ message: 'البريد الإلكتروني غير صحيح' }),
   phone: z.string()
     .min(10, { message: 'رقم الجوال يجب أن لا يقل عن 10 أرقام' })
-    .regex(/^05\d{8}$/, { message: 'رقم الجوال السعودي يجب أن يبدأ بـ 05 ويتكون من 10 أرقام' }),
+    .regex(/^05[0-9]{8}$/, { message: 'رقم الجوال السعودي يجب أن يبدأ بـ 05 ويتكون من 10 أرقام' }),
   password: z.string().min(6, { message: 'كلمة المرور يجب أن لا تقل عن 6 أحرف' }),
   confirmPassword: z.string().min(1, { message: 'تأكيد كلمة المرور مطلوب' }),
   agreeTerms: z.boolean().refine((val) => val === true, {

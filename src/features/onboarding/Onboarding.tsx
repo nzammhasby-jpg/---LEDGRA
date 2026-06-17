@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useForm, FormProvider } from 'react-hook-form';
+import { useForm, FormProvider, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useNavigate } from 'react-router-dom';
@@ -29,27 +29,46 @@ const onboardingSchema = z.object({
   name_ar: z.string().min(3, { message: 'اسم المنشأة بالعربية مطلوب ولا يقل عن 3 أحرف' }),
   name_en: z.string().optional(),
   activity_type: z.string().min(1, { message: 'يرجى اختيار نوع النشاط الرئيسي' }),
-  country: z.string().default('السعودية'),
+  country_code: z.string().default('SA'),
   city: z.string().min(1, { message: 'المدينة مطلوبة' }),
-  phone: z.string().regex(/^05\d{8}$/, { message: 'رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام' }),
+  phone: z.string().regex(/^05[0-9]{8}$/, { message: 'رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام' }),
   email: z.string().min(1, { message: 'البريد الإلكتروني مطلوب' }).email({ message: 'البريد الإلكتروني غير صحيح' }),
   
   // Step 2
   legal_type: z.string().min(1, { message: 'يرجى تحديد الشكل القانوني للمنشأة' }),
-  cr_number: z.string().min(10, { message: 'السجل التجاري يجب أن يتكون من 10 أرقام' }),
-  vat_number: z.string().optional()
-    .refine((val) => !val || (val.length === 15 && val.startsWith('3') && val.endsWith('3')), {
-      message: 'الرقم الضريبي السعودي يتكون من 15 خانة ويبدأ وينتهي بالرقم 3'
-    }),
+  cr_number: z.string().regex(/^[0-9]{10}$/, { message: 'السجل التجاري يجب أن يتكون من 10 خانات رقمية متتالية فقط دون حروف أو فواصل' }),
+  vat_number: z.string().optional(),
   is_vat_registered: z.boolean().default(false),
   fiscal_year_start: z.string().min(1, { message: 'تاريخ بداية السنة المالية مطلوب' }),
-  currency: z.string().default('ر.س'),
+  currency_code: z.string().default('SAR'),
   primary_language: z.string().default('ar'),
 
   // Step 3
   accounting_mode: z.enum(['simple', 'pro']).default('pro'),
   use_system_start: z.string().min(1, { message: 'تاريخ بدء استخدام النظام مطلوب' }),
   starting_balances_later: z.boolean().default(true)
+}).superRefine((data, ctx) => {
+  if (data.is_vat_registered) {
+    if (!data.vat_number || data.vat_number.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'الرقم الضريبي مطلوب لأنك حددت أن المنشأة مسجلة ضريبياً',
+        path: ['vat_number']
+      });
+    } else if (!/^[0-9]{15}$/.test(data.vat_number)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'الرقم الضريبي السعودي يتكون من 15 خانة رقمية متتالية فقط دون حروف',
+        path: ['vat_number']
+      });
+    } else if (!data.vat_number.startsWith('3') || !data.vat_number.endsWith('3')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'الرقم الضريبي السعودي يجب أن يبدأ بالرقم 3 وينتهي بالرقم 3 حسب معايير الهيئة',
+        path: ['vat_number']
+      });
+    }
+  }
 });
 
 type OnboardingFields = z.infer<typeof onboardingSchema>;
@@ -73,6 +92,7 @@ export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState<number>(1);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const methods = useForm<OnboardingFields>({
     resolver: zodResolver(onboardingSchema) as any,
@@ -81,7 +101,7 @@ export const Onboarding: React.FC = () => {
       name_ar: '',
       name_en: '',
       activity_type: 'الخدمات التقنية وتقنية المعلومات',
-      country: 'السعودية',
+      country_code: 'SA',
       city: 'الرياض',
       phone: profile?.phone || '',
       email: '',
@@ -90,7 +110,7 @@ export const Onboarding: React.FC = () => {
       vat_number: '',
       is_vat_registered: false,
       fiscal_year_start: '2026-01-01',
-      currency: 'ر.س',
+      currency_code: 'SAR',
       primary_language: 'ar',
       accounting_mode: 'pro',
       use_system_start: new Date().toISOString().split('T')[0],
@@ -109,7 +129,7 @@ export const Onboarding: React.FC = () => {
         name_ar: currentOrg.name_ar || '',
         name_en: currentOrg.name_en || '',
         activity_type: currentOrg.activity_type || 'الخدمات التقنية وتقنية المعلومات',
-        country: currentOrg.country || 'السعودية',
+        country_code: currentOrg.country_code || 'SA',
         city: currentOrg.city || 'الرياض',
         phone: currentOrg.phone || profile?.phone || '',
         email: currentOrg.email || '',
@@ -118,11 +138,11 @@ export const Onboarding: React.FC = () => {
         vat_number: currentOrg.vat_number || '',
         is_vat_registered: currentOrg.is_vat_registered || false,
         fiscal_year_start: currentOrg.fiscal_year_start || '2026-01-01',
-        currency: currentOrg.currency || 'ر.س',
+        currency_code: currentOrg.currency_code || 'SAR',
         primary_language: currentOrg.primary_language || 'ar',
-        accounting_mode: (currentOrg.accounting_mode as any) || 'pro',
+        accounting_mode: (currentOrg.accounting_mode as 'simple' | 'pro') || 'pro',
         use_system_start: currentOrg.system_start_date || new Date().toISOString().split('T')[0],
-        starting_balances_later: currentOrg.starting_balances_later || true
+        starting_balances_later: currentOrg.starting_balances_later ?? true
       });
       if (currentOrg.onboarding_step) {
         setStep(currentOrg.onboarding_step);
@@ -144,6 +164,7 @@ export const Onboarding: React.FC = () => {
       // Save progress to database on step transition so state is not lost
       const vals = methods.getValues();
       try {
+        setIsSaving(true);
         setApiError(null);
         if (step === 1) {
           const existingDraft = (currentOrg && !currentOrg.onboarding_completed)
@@ -156,6 +177,7 @@ export const Onboarding: React.FC = () => {
               name_ar: vals.name_ar,
               name_en: vals.name_en || '',
               activity_type: vals.activity_type,
+              country_code: vals.country_code || 'SA',
               city: vals.city,
               phone: vals.phone,
               email: vals.email,
@@ -166,7 +188,9 @@ export const Onboarding: React.FC = () => {
               cr_number: vals.cr_number || '',
               system_start_date: vals.use_system_start || new Date().toISOString().split('T')[0],
               accounting_mode: vals.accounting_mode || 'pro',
-              starting_balances_later: vals.starting_balances_later || true,
+              starting_balances_later: vals.starting_balances_later ?? true,
+              currency_code: vals.currency_code || 'SAR',
+              primary_language: vals.primary_language || 'ar',
               onboarding_completed: false,
               onboarding_step: 2
             });
@@ -211,13 +235,15 @@ export const Onboarding: React.FC = () => {
             }
           }
         }
-      } catch (err: any) {
-        setApiError(err.message || 'فشل حفظ المسودة التلقائي.');
-        return;
+        
+        setStep((prev) => prev + 1);
+        setApiError(null);
+      } catch (err: unknown) {
+        const errorObj = err as Error;
+        setApiError(errorObj.message || 'فشل حفظ المسودة التلقائي.');
+      } finally {
+        setIsSaving(false);
       }
-
-      setStep((prev) => prev + 1);
-      setApiError(null);
     }
   };
 
@@ -227,9 +253,10 @@ export const Onboarding: React.FC = () => {
     setApiError(null);
   };
 
-  const onWizardFinish = async (data: OnboardingFields) => {
+  const onWizardFinish: SubmitHandler<OnboardingFields> = async (data) => {
     setApiError(null);
     try {
+      setIsSaving(true);
       // Save onboarding completion (Requirement 2 & 3)
       let response;
       const draftOrg = (currentOrg && !currentOrg.onboarding_completed)
@@ -242,6 +269,7 @@ export const Onboarding: React.FC = () => {
           name_ar: data.name_ar,
           name_en: data.name_en || '',
           activity_type: data.activity_type,
+          country_code: data.country_code || 'SA',
           city: data.city,
           phone: data.phone,
           email: data.email,
@@ -252,7 +280,7 @@ export const Onboarding: React.FC = () => {
           fiscal_year_start: data.fiscal_year_start,
           system_start_date: data.use_system_start,
           accounting_mode: data.accounting_mode,
-          starting_balances_later: data.starting_balances_later,
+          starting_balances_later: data.starting_balances_later ?? true,
           onboarding_completed: true,
           onboarding_step: 3,
           setup_completed_at: new Date().toISOString()
@@ -263,6 +291,7 @@ export const Onboarding: React.FC = () => {
           name_ar: data.name_ar,
           name_en: data.name_en || '',
           activity_type: data.activity_type,
+          country_code: data.country_code || 'SA',
           city: data.city,
           phone: data.phone,
           email: data.email,
@@ -273,7 +302,7 @@ export const Onboarding: React.FC = () => {
           fiscal_year_start: data.fiscal_year_start,
           system_start_date: data.use_system_start,
           accounting_mode: data.accounting_mode,
-          starting_balances_later: data.starting_balances_later,
+          starting_balances_later: data.starting_balances_later ?? true,
           onboarding_completed: true,
           onboarding_step: 3
         });
@@ -296,8 +325,11 @@ export const Onboarding: React.FC = () => {
           navigate('/', { replace: true });
         }, 100);
       }
-    } catch (e: any) {
-      setApiError(e.message || 'حدث خطأ غير متوقع أثناء إعداد المنشأة.');
+    } catch (e: unknown) {
+      const errorObj = e as Error;
+      setApiError(errorObj.message || 'حدث خطأ غير متوقع أثناء إعداد المنشأة.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -698,8 +730,9 @@ export const Onboarding: React.FC = () => {
                   {step > 1 ? (
                     <button
                       type="button"
+                      disabled={isSaving || isSubmitting}
                       onClick={handlePrev}
-                      className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 transition flex items-center gap-1 cursor-pointer"
+                      className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <ArrowRight className="w-4 h-4" />
                       <span>{t('common.prev')}</span>
@@ -712,21 +745,34 @@ export const Onboarding: React.FC = () => {
                     <button
                       type="button"
                       id="onboarding-next-btn"
+                      disabled={isSaving || isSubmitting}
                       onClick={handleNext}
-                      className="px-5 py-2.5 bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow"
+                      className="px-5 py-2.5 bg-brand-blue hover:bg-brand-blue/90 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow disabled:opacity-50"
                     >
-                      <span>{t('common.next')}</span>
-                      <ArrowLeft className="w-4 h-4" />
+                      {isSaving ? (
+                        <>
+                          <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          <span>جاري الحفظ...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>{t('common.next')}</span>
+                          <ArrowLeft className="w-4 h-4" />
+                        </>
+                      )}
                     </button>
                   ) : (
                     <button
                       id="onboarding-submit-btn"
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSaving || isSubmitting}
                       className="px-6 py-2.5 bg-brand-turquoise hover:bg-brand-turquoise/90 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-55"
                     >
-                      {isSubmitting ? (
-                        <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      {isSaving || isSubmitting ? (
+                        <>
+                          <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          <span>جاري الحفظ والإنهاء...</span>
+                        </>
                       ) : (
                         <>
                           <BadgeCheck className="w-4 h-4" />

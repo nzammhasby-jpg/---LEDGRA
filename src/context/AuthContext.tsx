@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { User, Session, Subscription } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Profile, Organization, OrganizationRole } from '../types';
+import { Profile, Organization, OrganizationRole, CreateOrgInput, MembershipJoinData } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -10,29 +10,14 @@ interface AuthContextType {
   orgsList: Organization[];
   roleInCurrentOrg: OrganizationRole | null;
   loading: boolean;
+  dataError: string | null;
+  clearDataError: () => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string, phone: string) => Promise<{ error: string | null, verificationRequired?: boolean }>;
   signOut: () => Promise<void>;
   sendPasswordReset: (email: string) => Promise<{ error: string | null }>;
   updateUserPassword: (password: string) => Promise<{ error: string | null }>;
-  createOrg: (orgData: {
-    name_ar: string;
-    name_en: string;
-    activity_type: string;
-    city: string;
-    phone: string;
-    email: string;
-    legal_type: string;
-    vat_number: string;
-    is_vat_registered: boolean;
-    fiscal_year_start: string;
-    cr_number: string;
-    system_start_date: string;
-    accounting_mode: string;
-    starting_balances_later: boolean;
-    onboarding_completed?: boolean;
-    onboarding_step?: number;
-  }) => Promise<{ org: Organization | null, error: string | null }>;
+  createOrg: (orgData: CreateOrgInput) => Promise<{ org: Organization | null, error: string | null }>;
   updateOrg: (orgId: string, orgData: Partial<Organization>) => Promise<{ org: Organization | null, error: string | null }>;
   selectOrg: (orgId: string) => void;
   refreshUserData: () => Promise<void>;
@@ -67,51 +52,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [orgsList, setOrgsList] = useState<Organization[]>([]);
   const [roleInCurrentOrg, setRoleInCurrentOrg] = useState<OrganizationRole | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const loadedUserIdRef = React.useRef<string | null>(null);
+  const loadingUserRef = React.useRef<string | null>(null);
 
   // Load Real Data from Supabase
   const loadRealUserData = async (userId: string) => {
     try {
       if (!isSupabaseConfigured) return;
+      setLoading(true);
+      setDataError(null);
 
       // Fetch profile
-      let { data: profileData, error: profileErr } = await supabase
+      const { data: profileData, error: profileErr } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (profileErr) {
-        if (profileErr.code !== 'PGRST116') {
-          console.error('Failed to load profile due to database error:', profileErr);
-          throw profileErr;
-        }
+        console.error('Failed to load profile due to database error:', profileErr);
+        throw new Error(profileErr.message);
       }
 
       if (!profileData) {
-        // Safe check or fallback only when row is missing (PGRST116)
-        const { data: { user: realUser } } = await supabase.auth.getUser();
-        if (realUser) {
-          const fallbackProfile: Profile = {
-            id: userId,
-            full_name: realUser.user_metadata.full_name || 'مستخدم لِدجرا',
-            phone: realUser.user_metadata.phone || '',
-            avatar_url: null,
-            created_at: new Date().toISOString()
-          };
-          
-          const { error: insertErr } = await supabase
-            .from('profiles')
-            .insert(fallbackProfile);
-
-          if (insertErr && insertErr.code !== '23505') { // 23505 = duplicate key
-            console.error('Failed to insert fallback profile:', insertErr);
-            throw insertErr;
-          }
-          
-          profileData = fallbackProfile;
-        }
+        throw new Error('لم يتم تفعيل حسابك وإنشاء ملفك الشخصي عبر المشغل التلقائي (Trigger). يرجى التأكد من تشغيل initial_schema.sql بنجاح.');
       }
 
       setProfile(profileData as Profile);
@@ -127,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name_ar,
             name_en,
             activity_type,
-            country,
+            country_code,
             city,
             phone,
             email,
@@ -136,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             vat_number,
             is_vat_registered,
             fiscal_year_start,
-            currency,
+            currency_code,
             primary_language,
             onboarding_completed,
             onboarding_step,
@@ -153,15 +119,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('profile_id', userId);
 
       if (memberErr) {
-        console.error('Failed to load organization memberships:', memberErr);
-        throw memberErr;
+        console.error('Failed to load organization memberships due to database error:', memberErr);
+        throw new Error(memberErr.message);
       }
 
       if (memberData) {
-        //@ts-ignore
-        const userOrgs: Organization[] = memberData
-          .map((m: any) => m.organizations)
-          .filter(Boolean);
+        const memberships = (memberData as unknown as MembershipJoinData[]);
+        const userOrgs: Organization[] = memberships
+          .map(m => m.organizations)
+          .filter((org): org is Organization => !!org);
 
         setOrgsList(userOrgs);
 
@@ -176,31 +142,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (selected) {
             localStorage.setItem(`ledgra_selected_org_${userId}`, selected.id);
             setCurrentOrg(selected);
-            const memberInfo = memberData.find((m: any) => m.organization_id === selected.id);
-            setRoleInCurrentOrg((memberInfo?.role || 'owner') as OrganizationRole);
+            const memberInfo = memberships.find(m => m.organization_id === selected.id);
+            setRoleInCurrentOrg((memberInfo?.role ?? null) as OrganizationRole | null);
           } else {
             setCurrentOrg(null);
             setRoleInCurrentOrg(null);
-          }
-
-          if ((import.meta as any).env?.DEV) {
-            console.log({
-              organizations: userOrgs,
-              completedOrganizations: completedOrgs,
-              savedOrgId,
-              selectedOrganization: selected
-            });
           }
         } else {
           setCurrentOrg(null);
           setRoleInCurrentOrg(null);
         }
       }
-    } catch (e) {
-      console.error('Error loading Supabase data:', e);
+
+      // Mark successful loading
+      loadedUserIdRef.current = userId;
+
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.error('Error loading Supabase data:', err);
+      setDataError(err.message || 'حدث خطأ داخلي أثناء تحميل بيانات النظام المتصل بالسحابة.');
+      loadedUserIdRef.current = null;
     } finally {
+      loadingUserRef.current = null;
       setLoading(false);
     }
+  };
+
+  const clearDataError = () => {
+    setDataError(null);
   };
 
   // Real Supabase Auth Listeners (Unified single source of session sync)
@@ -211,18 +180,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setLoading(true);
-    let subscriptionObj: any = null;
+    let subscriptionObj: Subscription | null = null;
 
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
         if (session) {
           setUser(session.user);
-          if (loadedUserIdRef.current !== session.user.id) {
-            loadedUserIdRef.current = session.user.id;
+          if (loadingUserRef.current !== session.user.id && loadedUserIdRef.current !== session.user.id) {
+            loadingUserRef.current = session.user.id;
             loadRealUserData(session.user.id);
           }
         } else {
           loadedUserIdRef.current = null;
+          loadingUserRef.current = null;
           setUser(null);
           setProfile(null);
           setCurrentOrg(null);
@@ -239,12 +209,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setUser(session.user);
-        if (loadedUserIdRef.current !== session.user.id) {
-          loadedUserIdRef.current = session.user.id;
+        if (loadingUserRef.current !== session.user.id && loadedUserIdRef.current !== session.user.id) {
+          loadingUserRef.current = session.user.id;
           loadRealUserData(session.user.id);
         }
       } else {
         loadedUserIdRef.current = null;
+        loadingUserRef.current = null;
         setUser(null);
         setProfile(null);
         setCurrentOrg(null);
@@ -287,9 +258,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loadedUserIdRef.current = data.user!.id;
       await loadRealUserData(data.user!.id);
       return { error: null };
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       setLoading(false);
-      return { error: translateAuthError(e.message) };
+      return { error: translateAuthError(err.message) };
     }
   };
 
@@ -323,9 +295,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadRealUserData(data.user.id);
       }
       return { error: null, verificationRequired: false };
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const err = e as Error;
       setLoading(false);
-      return { error: translateAuthError(e.message) };
+      return { error: translateAuthError(err.message) };
     }
   };
 
@@ -354,8 +327,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (error) return { error: translateAuthError(error.message) };
       return { error: null };
-    } catch (e: any) {
-      return { error: translateAuthError(e.message) };
+    } catch (e: unknown) {
+      const err = e as Error;
+      return { error: translateAuthError(err.message) };
     }
   };
 
@@ -365,18 +339,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase.auth.updateUser({ password });
       if (error) return { error: translateAuthError(error.message) };
       return { error: null };
-    } catch (e: any) {
-      return { error: translateAuthError(e.message) };
+    } catch (e: unknown) {
+      const err = e as Error;
+      return { error: translateAuthError(err.message) };
     }
   };
 
   // Create Organization Action via secure atomic PostgreSQL RPC
-  const createOrg = async (orgData: any): Promise<{ org: Organization | null, error: string | null }> => {
+  const createOrg = async (orgData: CreateOrgInput): Promise<{ org: Organization | null, error: string | null }> => {
     if (!user) return { org: null, error: 'غير مصرح لك بإجراء هذه العملية.' };
 
     try {
-      setLoading(true);
-
       // Invoke safe secure idempotent transactional database RPC function
       const { data: orgIdResult, error: rpcErr } = await supabase.rpc('create_organization_with_owner', {
         p_name_ar: orgData.name_ar,
@@ -391,8 +364,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         p_fiscal_year_start: orgData.fiscal_year_start || null,
         p_cr_number: orgData.cr_number || null,
         p_system_start_date: orgData.system_start_date || null,
-        p_accounting_mode: orgData.accounting_mode || 'standard',
-        p_starting_balances_later: orgData.starting_balances_later || false,
+        p_accounting_mode: orgData.accounting_mode || 'pro',
+        p_starting_balances_later: orgData.starting_balances_later !== undefined ? orgData.starting_balances_later : true,
         p_onboarding_completed: orgData.onboarding_completed !== undefined ? orgData.onboarding_completed : true,
         p_onboarding_step: orgData.onboarding_step !== undefined ? orgData.onboarding_step : 3
       });
@@ -424,13 +397,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRoleInCurrentOrg('owner');
       localStorage.setItem(`ledgra_selected_org_${user.id}`, finalOrg.id);
       loadedUserIdRef.current = user.id; // منع onAuthStateChange من إعادة التحميل
-      setLoading(false);
 
       return { org: finalOrg, error: null };
 
-    } catch (e: any) {
-      setLoading(false);
-      return { org: null, error: translateAuthError(e.message) };
+    } catch (e: unknown) {
+      const err = e as Error;
+      return { org: null, error: translateAuthError(err.message) };
     }
   };
 
@@ -439,17 +411,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return { org: null, error: 'غير مصرح لك بإجراء هذه العملية.' };
 
     try {
-      setLoading(true);
-
-      const { data: updatedData, error: updateErr } = await supabase
+      // 1. Execute the update, matching the organization by ID
+      const { error: updateErr } = await supabase
         .from('organizations')
         .update(orgData)
+        .eq('id', orgId);
+
+      if (updateErr) {
+        throw new Error(updateErr.message || 'فشلت عملية تحديث بيانات المنشأة.');
+      }
+
+      // 2. Query the updated single row explicitly
+      const { data: updatedData, error: fetchErr } = await supabase
+        .from('organizations')
         .select('*')
         .eq('id', orgId)
         .single();
 
-      if (updateErr || !updatedData) {
-        throw new Error(updateErr?.message || 'فشل تحديث بيانات المنشأة.');
+      if (fetchErr || !updatedData) {
+        throw new Error(fetchErr?.message || 'فشل استرجاع الصف المحدث للمنشأة.');
       }
 
       const finalOrg = updatedData as Organization;
@@ -459,13 +439,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentOrg(finalOrg);
       localStorage.setItem(`ledgra_selected_org_${user.id}`, finalOrg.id);
       loadedUserIdRef.current = user.id; // منع onAuthStateChange من إعادة التحميل
-      setLoading(false);
 
       return { org: finalOrg, error: null };
 
-    } catch (e: any) {
-      setLoading(false);
-      return { org: null, error: translateAuthError(e.message) };
+    } catch (e: unknown) {
+      const err = e as Error;
+      return { org: null, error: translateAuthError(err.message) };
     }
   };
 
@@ -488,6 +467,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       orgsList,
       roleInCurrentOrg,
       loading,
+      dataError,
       signIn,
       signUp,
       signOut,
@@ -496,7 +476,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createOrg,
       updateOrg,
       selectOrg,
-      refreshUserData
+      refreshUserData,
+      clearDataError
     }}>
       {children}
     </AuthContext.Provider>

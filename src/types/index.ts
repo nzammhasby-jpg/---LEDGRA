@@ -13,7 +13,7 @@ export interface Organization {
   name_ar: string;
   name_en: string | null;
   activity_type: string | null;
-  country: string;
+  country_code: string;
   city: string | null;
   phone: string | null;
   email: string | null;
@@ -22,7 +22,7 @@ export interface Organization {
   vat_number: string | null;
   is_vat_registered: boolean;
   fiscal_year_start: string | null;
-  currency: string;
+  currency_code: string;
   primary_language: string;
   onboarding_completed: boolean;
   onboarding_step?: number;
@@ -84,3 +84,36 @@ export interface AppState {
   organizationsList: Organization[];
   userInfo: Profile | null;
 }
+
+export interface CreateOrgInput {
+  name_ar: string;
+  name_en?: string;
+  activity_type?: string;
+  city?: string;
+  phone?: string;
+  email?: string;
+  legal_type?: string;
+  vat_number?: string;
+  is_vat_registered: boolean;
+  fiscal_year_start?: string;
+  cr_number?: string;
+  system_start_date?: string;
+  accounting_mode?: string;
+  starting_balances_later: boolean;
+  onboarding_completed?: boolean;
+  onboarding_step?: number;
+}
+
+export interface MembershipJoinData {
+  organization_id: string;
+  role: OrganizationRole;
+  organizations: Organization | null;
+}
+
+export interface CustomDatabaseError {
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+}
+

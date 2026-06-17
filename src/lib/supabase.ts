@@ -1,31 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Read config safely from environment
-const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // Verify if credentials are provided in the Secrets panel
 export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
 
-// Elegant non-crashing proxy client that returns empty/error results without dummy keys
-const createNullProxy = (): any => {
-  const dummyFn = () => {};
-  return new Proxy(dummyFn, {
-    get(target, prop) {
-      if (prop === 'then') {
-        return (resolve: any) => resolve({ data: null, error: new Error('Supabase is not configured') });
-      }
-      if (prop === 'unsubscribe') {
-        return () => {};
-      }
-      return createNullProxy();
-    },
-    apply(target, thisArg, argumentsList) {
-      return createNullProxy();
-    }
-  });
-};
-
-export const supabase = isSupabaseConfigured
+export const supabase: SupabaseClient = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
-  : createNullProxy();
+  : new Proxy({} as any, {
+      get() {
+        throw new Error('Supabase integration is not configured. Please supply VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY first.');
+      }
+    });

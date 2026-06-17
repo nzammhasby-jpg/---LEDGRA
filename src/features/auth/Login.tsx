@@ -12,7 +12,6 @@ import { Mail, Lock, CheckCircle2, ShieldAlert, Sparkles, Building2 } from 'luci
 const loginSchema = z.object({
   email: z.string().min(1, { message: 'البريد الإلكتروني مطلوب' }).email({ message: 'البريد الإلكتروني غير صحيح' }),
   password: z.string().min(6, { message: 'كلمة المرور يجب أن لا تقل عن 6 أحرف' }),
-  rememberMe: z.boolean().optional(),
 });
 
 type LoginFields = z.infer<typeof loginSchema>;
@@ -33,7 +32,6 @@ export const Login: React.FC = () => {
     defaultValues: {
       email: '',
       password: '',
-      rememberMe: true
     }
   });
 
@@ -253,18 +251,6 @@ export const Login: React.FC = () => {
                   {errors.password && (
                     <p className="text-xs text-red-600 mt-1">{errors.password.message}</p>
                   )}
-                </div>
-
-                {/* Remember Me Toggle */}
-                <div className="flex items-center justify-between pt-1">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      {...register('rememberMe')}
-                      className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue/30 w-4 h-4"
-                    />
-                    <span className="text-xs font-medium text-slate-600">{t('auth.remember_me')}</span>
-                  </label>
                 </div>
 
                 {/* Submit Action */}
