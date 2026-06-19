@@ -70,7 +70,7 @@ const SupabaseConfigAlert: React.FC = () => {
         </div>
 
         <div className="text-center pt-2 text-[10px] text-slate-500">
-          منصة لِدجرا المحاسبية © ٢٠٢٦ — تكنولوجيا السحب المحمية
+          منصة لِدجرا المحاسبية © 2026 — تكنولوجيا السحب المحمية
         </div>
 
       </div>

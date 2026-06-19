@@ -4,6 +4,7 @@ import { useTranslation } from '../../i18n/translations';
 import { supabase } from '../../lib/supabase';
 import { Branch, Account, AccountingSettings as AccountingSettingsType } from '../../types';
 import { accountingService } from '../../lib/accountingService';
+import { normalizeIntegerInput } from '../../lib/formatters';
 import { 
   Building, 
   Users, 
@@ -202,7 +203,7 @@ export const Settings: React.FC = () => {
 
     const formData = new FormData(e.currentTarget);
     const bName = formData.get('branch_name') as string;
-    const bCode = formData.get('branch_code') as string;
+    const bCode = normalizeIntegerInput(formData.get('branch_code') as string);
     const bAddress = formData.get('branch_address') as string;
 
     if (!bName || !bCode) {
@@ -532,7 +533,18 @@ export const Settings: React.FC = () => {
                   
                   <div className="sm:col-span-2">
                     <label className="block text-[10px] font-bold text-slate-500 mb-1">{t('settings.branch_code')}</label>
-                    <input type="text" name="branch_code" required placeholder="002" className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-xl text-xs focus:outline-none font-mono text-center" />
+                    <input 
+                      type="text" 
+                      name="branch_code" 
+                      required 
+                      placeholder="002" 
+                      onChange={(e) => {
+                        e.target.value = normalizeIntegerInput(e.target.value);
+                      }}
+                      className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-xl text-xs focus:outline-none font-mono text-center tabular-nums" 
+                      dir="ltr"
+                      inputMode="numeric"
+                    />
                   </div>
 
                   <div className="sm:col-span-3">

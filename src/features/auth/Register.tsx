@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../i18n/translations';
 import { Logo } from '../../components/Logo';
 import { Mail, Lock, CheckCircle2, ShieldAlert, Sparkles, Building2, Phone, User } from 'lucide-react';
+import { normalizeIntegerInput } from '../../lib/formatters';
 
 const registerSchema = z.object({
   fullName: z.string().min(3, { message: 'الاسم الكامل يجب أن لا يقل عن 3 أحرف' }),
@@ -120,10 +121,10 @@ export const Register: React.FC = () => {
 
         {/* Footer info */}
         <div className="relative z-10 text-xs text-slate-400 flex items-center justify-between">
-          <span>لِدجرا للمحاسبة السحابية © ٢٠٢٦</span>
+          <span>لِدجرا للمحاسبة السحابية © 2026</span>
           <span className="flex items-center gap-1">
             <Building2 className="w-3.5 h-3.5" />
-            <span>رؤية المملكة ٢٠٣٠</span>
+            <span>رؤية المملكة 2030</span>
           </span>
         </div>
       </div>
@@ -245,11 +246,16 @@ export const Register: React.FC = () => {
                     id="reg-phone-field"
                     type="text"
                     placeholder="05XXXXXXXX"
-                    {...register('phone')}
+                    {...register('phone', {
+                      onChange: (e) => {
+                        e.target.value = normalizeIntegerInput(e.target.value);
+                      }
+                    })}
                     className={`w-full pr-9 pl-3 py-2 bg-white border ${
                       errors.phone ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
-                    } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
-                    style={{ direction: 'ltr', textAlign: 'right' }}
+                    } rounded-xl text-sm focus:outline-none focus:ring-4 transition text-left font-mono tabular-nums`}
+                    dir="ltr"
+                    inputMode="numeric"
                   />
                 </div>
                 {errors.phone && (

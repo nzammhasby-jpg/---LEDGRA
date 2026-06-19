@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { ChartOfAccounts } from './ChartOfAccounts';
 import { FiscalYears } from './FiscalYears';
 import { AccountingSettings } from './AccountingSettings';
+import { JournalEntries } from './JournalEntries';
+import { LedgerReport } from './LedgerReport';
+import { TrialBalance } from './TrialBalance';
 import { useTranslation } from '../../i18n/translations';
-import { FolderTree, Calendar, Sparkles, Settings } from 'lucide-react';
+import { FolderTree, Calendar, Sparkles, Settings, FileText, BookOpen, Activity } from 'lucide-react';
 
 export const AccountingLayout: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'chart' | 'fiscal' | 'settings'>('chart');
+  const [activeTab, setActiveTab] = useState<'chart' | 'fiscal' | 'settings' | 'journal' | 'ledger' | 'trial'>('journal');
   const { t } = useTranslation('ar');
 
   return (
@@ -19,17 +22,29 @@ export const AccountingLayout: React.FC = () => {
             <h2 className="text-xl font-extrabold text-slate-900">قسم المحاسبة والدفاتر والشركاء</h2>
             <span className="bg-brand-blue/15 text-brand-blue text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 select-none">
               <Sparkles className="w-3 h-3" />
-              <span>المرحلة 2 مفعلة</span>
+              <span>محرك القيود اليومية نشط</span>
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            أدر الهيئة الهيكلية والسنوات المحاسبية والدليل الشجري الموحد لمبيعات ومشتريات منشأتك.
+            أدر السنوات المالية، شجرة الحسابات والدليل الشجري، أو تصفح القيود اليومية والمزاني الاسترشادية المتوازنة.
           </p>
         </div>
       </div>
 
       {/* Embedded accounting sub-tabs selector list */}
       <div className="flex border-b border-slate-200 p-px gap-2 overflow-x-auto pb-0">
+        <button
+          onClick={() => setActiveTab('journal')}
+          className={`py-3 px-4.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap outline-none ${
+            activeTab === 'journal'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <FileText className="w-4 h-4 shrink-0" />
+          <span>القيود اليومية (Journal Entries)</span>
+        </button>
+
         <button
           onClick={() => setActiveTab('chart')}
           className={`py-3 px-4.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap outline-none ${
@@ -55,6 +70,30 @@ export const AccountingLayout: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('ledger')}
+          className={`py-3 px-4.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap outline-none ${
+            activeTab === 'ledger'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 shrink-0" />
+          <span>دفتر الأستاذ العام (General Ledger)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('trial')}
+          className={`py-3 px-4.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap outline-none ${
+            activeTab === 'trial'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Activity className="w-4 h-4 shrink-0" />
+          <span>ميزان المراجعة الأولي (Trial Balance)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('settings')}
           className={`py-3 px-4.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap outline-none ${
             activeTab === 'settings'
@@ -69,10 +108,16 @@ export const AccountingLayout: React.FC = () => {
 
       {/* Dynamic Content Frame */}
       <div className="min-h-[400px]">
-        {activeTab === 'chart' ? (
+        {activeTab === 'journal' ? (
+          <JournalEntries />
+        ) : activeTab === 'chart' ? (
           <ChartOfAccounts />
         ) : activeTab === 'fiscal' ? (
           <FiscalYears />
+        ) : activeTab === 'ledger' ? (
+          <LedgerReport />
+        ) : activeTab === 'trial' ? (
+          <TrialBalance />
         ) : (
           <AccountingSettings />
         )}
@@ -81,3 +126,4 @@ export const AccountingLayout: React.FC = () => {
     </div>
   );
 };
+

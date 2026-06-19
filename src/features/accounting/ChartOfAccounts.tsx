@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { accountingService } from '../../lib/accountingService';
 import { Account, AccountClassification, AccountNature } from '../../types';
+import { normalizeIntegerInput, normalizeInputDigits } from '../../lib/formatters';
 import { 
   Folder, 
   FolderOpen, 
@@ -457,7 +458,7 @@ export const ChartOfAccounts: React.FC = () => {
             <div className="truncate">
               <div className="flex items-center gap-1.5 flex-wrap">
                 {/* Account Code (English numerals, left-to-right representation) */}
-                <span className="font-mono text-xs font-semibold text-slate-400 select-all" style={{ direction: 'ltr' }}>
+                <span className="font-mono text-xs font-semibold text-slate-400 select-all tabular-nums" dir="ltr">
                   {node.code}
                 </span>
                 
@@ -720,10 +721,11 @@ export const ChartOfAccounts: React.FC = () => {
                     type="text"
                     required
                     value={formCode}
-                    onChange={(e) => setFormCode(e.target.value.replace(/[^0-9]/g, ''))}
+                    onChange={(e) => setFormCode(normalizeIntegerInput(e.target.value))}
                     placeholder="مثل 1111"
-                    className="w-full text-xs font-semibold font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none focus:border-brand-blue"
-                    style={{ direction: 'ltr' }}
+                    className="w-full text-xs font-semibold font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none focus:border-brand-blue tabular-nums"
+                    dir="ltr"
+                    inputMode="numeric"
                   />
                 </div>
 
@@ -860,9 +862,10 @@ export const ChartOfAccounts: React.FC = () => {
                     required
                     disabled={editingAccount.is_system}
                     value={formCode}
-                    onChange={(e) => setFormCode(e.target.value.replace(/[^0-9]/g, ''))}
-                    className="w-full text-xs font-semibold font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none disabled:bg-slate-100 disabled:text-slate-400"
-                    style={{ direction: 'ltr' }}
+                    onChange={(e) => setFormCode(normalizeIntegerInput(e.target.value))}
+                    className="w-full text-xs font-semibold font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none disabled:bg-slate-100 disabled:text-slate-400 tabular-nums"
+                    dir="ltr"
+                    inputMode="numeric"
                   />
                 </div>
 

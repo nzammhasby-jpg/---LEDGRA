@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { accountingService } from '../../lib/accountingService';
 import { FiscalYear, FiscalPeriod } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
-import { formatArabicDateWithLatinDigits } from '../../lib/formatters';
+import { formatArabicDateWithLatinDigits, normalizeInputDigits } from '../../lib/formatters';
 import { 
   Calendar, 
   Plus, 
@@ -455,7 +455,7 @@ export const FiscalYears: React.FC = () => {
                   type="text"
                   required
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
+                  onChange={(e) => setFormName(normalizeInputDigits(e.target.value))}
                   placeholder="مثال: سنة 2026"
                   className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none"
                 />
@@ -468,7 +468,7 @@ export const FiscalYears: React.FC = () => {
                     type="date"
                     required
                     value={formStartDate}
-                    onChange={(e) => setFormStartDate(e.target.value)}
+                    onChange={(e) => setFormStartDate(normalizeInputDigits(e.target.value))}
                     className="w-full text-xs font-semibold font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none"
                   />
                 </div>
@@ -479,7 +479,7 @@ export const FiscalYears: React.FC = () => {
                     type="date"
                     required
                     value={formEndDate}
-                    onChange={(e) => setFormEndDate(e.target.value)}
+                    onChange={(e) => setFormEndDate(normalizeInputDigits(e.target.value))}
                     className="w-full text-xs font-semibold font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none"
                   />
                 </div>

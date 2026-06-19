@@ -181,4 +181,42 @@ export interface AccountingSettings {
   updated_at: string;
 }
 
+export type JournalEntryStatus = 'draft' | 'posted' | 'reversed';
+
+export interface JournalEntry {
+  id: string;
+  organization_id: string;
+  fiscal_year_id: string;
+  fiscal_period_id: string;
+  entry_number: string;
+  entry_date: string;
+  reference: string | null;
+  description: string | null;
+  source_type: 'manual' | 'system';
+  source_id: string | null;
+  status: JournalEntryStatus;
+  posted_at: string | null;
+  posted_by: string | null;
+  reversed_entry_id: string | null;
+  reversed_at: string | null;
+  reversed_by: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  lines?: JournalEntryLine[];
+}
+
+export interface JournalEntryLine {
+  id: string;
+  journal_entry_id: string;
+  organization_id: string;
+  account_id: string;
+  line_number: number;
+  description: string | null;
+  debit: number;
+  credit: number;
+  created_at: string;
+  account?: Account;
+}
+
 

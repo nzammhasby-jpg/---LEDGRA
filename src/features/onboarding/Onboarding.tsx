@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 
 // Unified schema for the entire wizard
+import { normalizeIntegerInput, normalizeInputDigits } from '../../lib/formatters';
+
 const onboardingSchema = z.object({
   // Step 1
   name_ar: z.string().min(3, { message: 'اسم المنشأة بالعربية مطلوب ولا يقل عن 3 أحرف' }),
@@ -31,21 +33,36 @@ const onboardingSchema = z.object({
   activity_type: z.string().min(1, { message: 'يرجى اختيار نوع النشاط الرئيسي' }),
   country_code: z.string().default('SA'),
   city: z.string().min(1, { message: 'المدينة مطلوبة' }),
-  phone: z.string().regex(/^05[0-9]{8}$/, { message: 'رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام' }),
+  phone: z.preprocess((val) => {
+    if (typeof val === 'string') return normalizeIntegerInput(val);
+    return val;
+  }, z.string().regex(/^05[0-9]{8}$/, { message: 'رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام' })),
   email: z.string().min(1, { message: 'البريد الإلكتروني مطلوب' }).email({ message: 'البريد الإلكتروني غير صحيح' }),
   
   // Step 2
   legal_type: z.string().min(1, { message: 'يرجى تحديد الشكل القانوني للمنشأة' }),
-  cr_number: z.string().regex(/^[0-9]{10}$/, { message: 'السجل التجاري يجب أن يتكون من 10 خانات رقمية متتالية فقط دون حروف أو فواصل' }),
-  vat_number: z.string().optional(),
+  cr_number: z.preprocess((val) => {
+    if (typeof val === 'string') return normalizeIntegerInput(val);
+    return val;
+  }, z.string().regex(/^[0-9]{10}$/, { message: 'السجل التجاري يجب أن يتكون من 10 خانات رقمية متتالية فقط دون حروف أو فواصل' })),
+  vat_number: z.preprocess((val) => {
+    if (typeof val === 'string') return normalizeIntegerInput(val);
+    return val;
+  }, z.string().optional()),
   is_vat_registered: z.boolean().default(false),
-  fiscal_year_start: z.string().min(1, { message: 'تاريخ بداية السنة المالية مطلوب' }),
+  fiscal_year_start: z.preprocess((val) => {
+    if (typeof val === 'string') return normalizeInputDigits(val);
+    return val;
+  }, z.string().min(1, { message: 'تاريخ بداية السنة المالية مطلوب' })),
   currency_code: z.string().default('SAR'),
   primary_language: z.string().default('ar'),
 
   // Step 3
   accounting_mode: z.enum(['simple', 'pro']).default('pro'),
-  use_system_start: z.string().min(1, { message: 'تاريخ بدء استخدام النظام مطلوب' }),
+  use_system_start: z.preprocess((val) => {
+    if (typeof val === 'string') return normalizeInputDigits(val);
+    return val;
+  }, z.string().min(1, { message: 'تاريخ بدء استخدام النظام مطلوب' })),
   starting_balances_later: z.boolean().default(true)
 }).superRefine((data, ctx) => {
   if (data.is_vat_registered) {
@@ -518,9 +535,14 @@ export const Onboarding: React.FC = () => {
                               id="input-phone"
                               type="tel"
                               placeholder="05xxxxxxxx"
-                              {...register('phone')}
-                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
-                              style={{ direction: 'ltr', textAlign: 'right' }}
+                              {...register('phone', {
+                                onChange: (e) => {
+                                  e.target.value = normalizeIntegerInput(e.target.value);
+                                }
+                              })}
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition text-left font-mono tabular-nums"
+                              dir="ltr"
+                              inputMode="numeric"
                             />
                             {methods.formState.errors.phone && (
                               <p className="text-xs text-red-600 mt-1">{methods.formState.errors.phone.message}</p>
@@ -574,9 +596,14 @@ export const Onboarding: React.FC = () => {
                               id="input-cr-number"
                               type="text"
                               placeholder="مثال: 1010xxxxxx"
-                              {...register('cr_number')}
-                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
-                              style={{ direction: 'ltr', textAlign: 'right' }}
+                              {...register('cr_number', {
+                                onChange: (e) => {
+                                  e.target.value = normalizeIntegerInput(e.target.value);
+                                }
+                              })}
+                              className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition text-left font-mono tabular-nums"
+                              dir="ltr"
+                              inputMode="numeric"
                             />
                             {methods.formState.errors.cr_number && (
                               <p className="text-xs text-red-600 mt-1">{methods.formState.errors.cr_number.message}</p>
@@ -610,9 +637,14 @@ export const Onboarding: React.FC = () => {
                                 id="input-vat-number"
                                 type="text"
                                 placeholder="3xxxxxxxxxxxx3"
-                                {...register('vat_number')}
-                                className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
-                                style={{ direction: 'ltr', textAlign: 'right' }}
+                                {...register('vat_number', {
+                                  onChange: (e) => {
+                                    e.target.value = normalizeIntegerInput(e.target.value);
+                                  }
+                                })}
+                                className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition text-left font-mono tabular-nums"
+                                dir="ltr"
+                                inputMode="numeric"
                               />
                               {methods.formState.errors.vat_number && (
                                 <p className="text-xs text-red-600 mt-1">{methods.formState.errors.vat_number.message}</p>

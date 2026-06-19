@@ -140,10 +140,10 @@ export const Login: React.FC = () => {
 
         {/* Footer info */}
         <div className="relative z-10 text-xs text-slate-400 flex items-center justify-between">
-          <span>لِدجرا للمحاسبة السحابية © ٢٠٢٦</span>
+          <span>لِدجرا للمحاسبة السحابية © 2026</span>
           <span className="flex items-center gap-1">
             <Building2 className="w-3.5 h-3.5" />
-            <span>رؤية المملكة ٢٠٣٠</span>
+            <span>رؤية المملكة 2030</span>
           </span>
         </div>
       </div>
