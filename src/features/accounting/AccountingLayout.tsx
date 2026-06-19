@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { ChartOfAccounts } from './ChartOfAccounts';
 import { FiscalYears } from './FiscalYears';
+import { AccountingSettings } from './AccountingSettings';
 import { useTranslation } from '../../i18n/translations';
-import { FolderTree, Calendar, Sparkles } from 'lucide-react';
+import { FolderTree, Calendar, Sparkles, Settings } from 'lucide-react';
 
 export const AccountingLayout: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'chart' | 'fiscal'>('chart');
+  const [activeTab, setActiveTab] = useState<'chart' | 'fiscal' | 'settings'>('chart');
   const { t } = useTranslation('ar');
 
   return (
@@ -52,11 +53,29 @@ export const AccountingLayout: React.FC = () => {
           <Calendar className="w-4 h-4 shrink-0" />
           <span>السنوات والفترات المالية (Fiscal Cycles)</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`py-3 px-4.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap outline-none ${
+            activeTab === 'settings'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Settings className="w-4 h-4 shrink-0" />
+          <span>الإعدادات المحاسبية الافتراضية (Accounting Settings)</span>
+        </button>
       </div>
 
       {/* Dynamic Content Frame */}
       <div className="min-h-[400px]">
-        {activeTab === 'chart' ? <ChartOfAccounts /> : <FiscalYears />}
+        {activeTab === 'chart' ? (
+          <ChartOfAccounts />
+        ) : activeTab === 'fiscal' ? (
+          <FiscalYears />
+        ) : (
+          <AccountingSettings />
+        )}
       </div>
 
     </div>

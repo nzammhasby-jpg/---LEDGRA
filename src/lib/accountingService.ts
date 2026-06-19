@@ -3,54 +3,8 @@ import {
   FiscalYear, 
   FiscalPeriod, 
   Account, 
-  AccountingSettings, 
-  AccountClassification, 
-  AccountNature 
+  AccountingSettings 
 } from '../types';
-
-// Helper to check if year dates overlap with existing years
-async function hasFiscalYearOverlap(
-  orgId: string, 
-  startDate: string, 
-  endDate: string, 
-  excludeYearId?: string
-): Promise<boolean> {
-  let query = supabase
-    .from('fiscal_years')
-    .select('id, start_date, end_date')
-    .eq('organization_id', orgId);
-    
-  if (excludeYearId) {
-    query = query.neq('id', excludeYearId);
-  }
-  
-  const { data, error } = await query;
-  if (error || !data) return false;
-  
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  
-  return data.some(y => {
-    const yStart = new Date(y.start_date);
-    const yEnd = new Date(y.end_date);
-    // Overlap condition
-    return (start <= yEnd && end >= yStart);
-  });
-}
-
-// Helper to check if period dates overlap
-function hasPeriodOverlap(periods: { start_date: string; end_date: string }[]): boolean {
-  for (let i = 0; i < periods.length; i++) {
-    const s1 = new Date(periods[i].start_date);
-    const e1 = new Date(periods[i].end_date);
-    for (let j = i + 1; j < periods.length; j++) {
-      const s2 = new Date(periods[j].start_date);
-      const e2 = new Date(periods[j].end_date);
-      if (s1 <= e2 && e1 >= s2) return true;
-    }
-  }
-  return false;
-}
 
 export const accountingService = {
   // ==========================================
@@ -80,16 +34,14 @@ export const accountingService = {
 
   async createFiscalYear(
     orgId: string, 
-    yearData: { name: string; start_date: string; end_date: string; is_current: boolean },
-    userId?: string
+    yearData: { name: string; start_date: string; end_date: string; is_current: boolean }
   ): Promise<FiscalYear> {
     const { data: yearId, error: rpcError } = await supabase.rpc('create_fiscal_year', {
       p_org_id: orgId,
       p_name: yearData.name,
       p_start_date: yearData.start_date,
       p_end_date: yearData.end_date,
-      p_is_current: yearData.is_current,
-      p_user_id: userId || null
+      p_is_current: yearData.is_current
     });
 
     if (rpcError) throw rpcError;
@@ -117,25 +69,7 @@ export const accountingService = {
     if (error) throw error;
   },
 
-  async updateFiscalYearStatus(orgId: string, yearId: string, status: 'open' | 'closed' | 'draft'): Promise<void> {
-    const { error } = await supabase
-      .from('fiscal_years')
-      .update({ status })
-      .eq('id', yearId)
-      .eq('organization_id', orgId);
-      
-    if (error) throw error;
-  },
 
-  async updateFiscalPeriodStatus(orgId: string, periodId: string, status: 'open' | 'closed'): Promise<void> {
-    const { error } = await supabase
-      .from('fiscal_periods')
-      .update({ status })
-      .eq('id', periodId)
-      .eq('organization_id', orgId);
-
-    if (error) throw error;
-  },
 
 
   // ==========================================
@@ -156,53 +90,34 @@ export const accountingService = {
     orgId: string, 
     accountData: Omit<Account, 'id' | 'created_at' | 'updated_at' | 'organization_id'>
   ): Promise<Account> {
-    // 1. Check code uniqueness
-    const { data: existingCode } = await supabase
+    const { data: accountId, error: rpcError } = await supabase.rpc('create_account', {
+      p_org_id: orgId,
+      p_code: accountData.code,
+      p_name_ar: accountData.name_ar,
+      p_name_en: accountData.name_en || null,
+      p_classification: accountData.classification,
+      p_nature: accountData.nature,
+      p_parent_id: accountData.parent_id || null,
+      p_description: accountData.description || null,
+      p_is_active: accountData.is_active !== undefined ? accountData.is_active : true,
+      p_allow_direct_posting: accountData.allow_direct_posting !== undefined ? accountData.allow_direct_posting : true
+    });
+
+    if (rpcError) throw rpcError;
+    if (!accountId) throw new Error('فشلت عملية حفظ الحساب في خادم البيانات.');
+
+    // Retrieve the full created account
+    const { data: newAccount, error: fetchError } = await supabase
       .from('accounts')
-      .select('id')
+      .select('*')
+      .eq('id', accountId)
       .eq('organization_id', orgId)
-      .eq('code', accountData.code)
-      .maybeSingle();
-
-    if (existingCode) {
-      throw new Error(`رمز الحساب "${accountData.code}" مكرر ومسجل بالفعل لحساب آخر.`);
-    }
-
-    // 2. Perform parent check to make sure it's valid
-    if (accountData.parent_id) {
-      const { data: parentAccount, error: parentError } = await supabase
-        .from('accounts')
-        .select('*')
-        .eq('id', accountData.parent_id)
-        .eq('organization_id', orgId)
-        .single();
-        
-      if (parentError || !parentAccount) {
-        throw new Error('الحساب الأب المحدد غير موجود أو ينتمي لمنشأة أخرى.');
-      }
-
-      // If the parent has direct postings enabled, set it to false since it now acts as an aggregator (non-leaf node)
-      if (parentAccount.allow_direct_posting) {
-        await supabase
-          .from('accounts')
-          .update({ allow_direct_posting: false })
-          .eq('id', parentAccount.id);
-      }
-    }
-
-    // 3. Save new account
-    const { data: newAccount, error: insertError } = await supabase
-      .from('accounts')
-      .insert({
-        ...accountData,
-        organization_id: orgId
-      })
-      .select()
       .single();
 
-    if (insertError) throw insertError;
-    if (!newAccount) throw new Error('فشلت عملية حفظ الحساب في خادم البيانات.');
-    
+    if (fetchError || !newAccount) {
+      throw new Error('فشل استرداد الحساب المحفوظ حديثًا من قاعدة البيانات.');
+    }
+
     return newAccount;
   },
 
@@ -228,96 +143,47 @@ export const accountingService = {
       throw new Error('الحساب المحاد تعديله غير موجود أو يفتقر للصلاحية.');
     }
 
-    // Check system account guidelines
-    if (original.is_system) {
-      // System accounts classifications & natural tendencies cannot be modified!
-      if (updates.classification && updates.classification !== original.classification) {
-        throw new Error('لا يمكن تعديل التصنيف الرئيسي لحساب نظامي محمي.');
-      }
-      if (updates.nature && updates.nature !== original.nature) {
-        throw new Error('لا يمكن تعديل طبيعة الحساب (مدين/دائن) لحساب نظامي محمي.');
-      }
-      if (updates.code && updates.code !== original.code) {
-        throw new Error('لا يمكن تغيير الرمز التعريفي لحساب نظامي محمي.');
-      }
-    }
+    // 3. Merge original with updates
+    const merged = { ...original, ...updates };
 
-    // 3. Check for circular depth check in parent hierarchies if changing parent
-    if (updates.parent_id && updates.parent_id !== original.parent_id) {
-      // Loop check
-      let currentParentId: string | null = updates.parent_id;
-      while (currentParentId) {
-        if (currentParentId === accountId) {
-          throw new Error('لا يمكن ربط الحساب بحساب ابن فرعي من مستواه لمنع الدورة التكرارية اللانهائية.');
-        }
-        const { data: nextParent } = await supabase
-          .from('accounts')
-          .select('parent_id')
-          .eq('id', currentParentId)
-          .maybeSingle();
-        currentParentId = nextParent ? nextParent.parent_id : null;
-      }
+    const { error: rpcError } = await supabase.rpc('update_account', {
+      p_org_id: orgId,
+      p_account_id: accountId,
+      p_code: merged.code,
+      p_name_ar: merged.name_ar,
+      p_name_en: merged.name_en || null,
+      p_classification: merged.classification,
+      p_nature: merged.nature,
+      p_parent_id: merged.parent_id || null,
+      p_description: merged.description || null,
+      p_is_active: merged.is_active,
+      p_allow_direct_posting: merged.allow_direct_posting
+    });
 
-      // Convert new parent's allow_direct_posting to false
-      await supabase
-        .from('accounts')
-        .update({ allow_direct_posting: false })
-        .eq('id', updates.parent_id);
-    }
+    if (rpcError) throw rpcError;
 
-    const { data: updatedAccount, error: updateError } = await supabase
-      .from('accounts')
-      .update(updates)
-      .eq('id', accountId)
-      .eq('organization_id', orgId)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
-    if (!updatedAccount) throw new Error('فشلت خطوة تحديث الحساب المحاسبي.');
-
-    return updatedAccount;
-  },
-
-  async deleteAccount(orgId: string, accountId: string): Promise<void> {
-    // 1. Fetch details
-    const { data: act, error: selectErr } = await supabase
+    // Retrieve again to return refreshed entity
+    const { data: updatedAccount, error: fetchError } = await supabase
       .from('accounts')
       .select('*')
       .eq('id', accountId)
       .eq('organization_id', orgId)
       .single();
 
-    if (selectErr || !act) {
-      throw new Error('الحساب المطلوب حذفه غير موجود أو غير مرخص للوصول.');
+    if (fetchError || !updatedAccount) {
+      throw new Error('فشلت خطوة استعادة بيانات الحساب المعدل.');
     }
 
-    // 2. Prevent deleting system accounts
-    if (act.is_system) {
-      throw new Error('يمنع حذف الحسابات النظامية المحمية نظراً لاعتماد وظائف الفوترة والضريبة والقيود عليها بشكل كامل.');
-    }
+    return updatedAccount;
+  },
 
-    // 3. Prevent deleting if it contains child accounts
-    const { data: children, error: childErr } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('organization_id', orgId)
-      .eq('parent_id', accountId)
-      .limit(1);
+  async deleteAccount(orgId: string, accountId: string): Promise<void> {
+    const { error } = await supabase.rpc('delete_account', {
+      p_org_id: orgId,
+      p_account_id: accountId
+    });
 
-    if (childErr) throw childErr;
-    if (children && children.length > 0) {
-      throw new Error('لا يمكن حذف حساب تجميعي يحتوي على حسابات فرعية دونه. يرجى نقل أو حذف الحسابات التابعة له أولاً.');
-    }
-
-    // 4. Ready to delete
-    const { error: deleteErr } = await supabase
-      .from('accounts')
-      .delete()
-      .eq('id', accountId)
-      .eq('organization_id', orgId);
-
-    if (deleteErr) throw deleteErr;
+    if (error) throw error;
   },
 
 
@@ -336,45 +202,36 @@ export const accountingService = {
   },
 
   async updateAccountingSettings(orgId: string, settings: Partial<AccountingSettings>): Promise<AccountingSettings> {
-    // Clean keys not editable or metadata
-    const cleanSettings = { ...settings };
-    delete cleanSettings.id;
-    delete cleanSettings.organization_id;
-    delete cleanSettings.created_at;
-    delete cleanSettings.updated_at;
+    // Retrieve existing first to merge updates
+    const existing = await this.getAccountingSettings(orgId);
 
-    // Verify all specified account pointers are active leaf nodes
-    const checkPromises = Object.entries(cleanSettings)
-      .filter(([_, value]) => value !== null && value !== undefined)
-      .map(async ([field, value]) => {
-        const { data: targetAccount } = await supabase
-          .from('accounts')
-          .select('name_ar, is_active, allow_direct_posting')
-          .eq('id', value)
-          .eq('organization_id', orgId)
-          .single();
+    const merged = { ...existing, ...settings };
 
-        if (!targetAccount) {
-          throw new Error(`الحساب المختار لا ينتمي لهذه المنشأة.`);
-        }
-         if (!targetAccount.is_active) {
-          throw new Error(`الحساب "${targetAccount.name_ar}" تم إيقاف نشاطه ولا يمكن ربطه كحساب افتراضي.`);
-        }
-        if (!targetAccount.allow_direct_posting) {
-          throw new Error(`الحساب "${targetAccount.name_ar}" هو حساب رتبة تجميعية (أب)، ولا يمكن الترحيل المباشر أو الربط الافتراضي لعمليات الفوترة عليه.`);
-        }
-      });
+    const { error: rpcError } = await supabase.rpc('update_accounting_settings', {
+      p_org_id: orgId,
+      p_receivables: merged.default_receivables_account_id || null,
+      p_payables: merged.default_payables_account_id || null,
+      p_cash: merged.default_cash_account_id || null,
+      p_bank: merged.default_bank_account_id || null,
+      p_sales: merged.default_sales_account_id || null,
+      p_service_sales: merged.default_service_sales_account_id || null,
+      p_tax_output: merged.default_tax_output_account_id || null,
+      p_tax_input: merged.default_tax_input_account_id || null,
+      p_cogs: merged.default_cogs_account_id || null,
+      p_inventory: merged.default_inventory_account_id || null,
+      p_retained: merged.default_retained_earnings_account_id || null
+    });
 
-    await Promise.all(checkPromises);
+    if (rpcError) throw rpcError;
 
-    const { data, error } = await supabase
+    // Retrieve fresh
+    const { data, error: fetchError } = await supabase
       .from('accounting_settings')
-      .update(cleanSettings)
+      .select('*')
       .eq('organization_id', orgId)
-      .select()
       .single();
 
-    if (error) throw error;
+    if (fetchError) throw fetchError;
     return data;
   },
 
@@ -382,11 +239,12 @@ export const accountingService = {
   // ==========================================
   // GENERATE DEFAULT COA (ONE-TIME INITIALIZER)
   // ==========================================
-  async generateDefaultChartOfAccounts(orgId: string): Promise<void> {
-    const { error } = await supabase.rpc('seed_default_chart_of_accounts', {
+  async generateDefaultChartOfAccounts(orgId: string): Promise<string> {
+    const { data, error } = await supabase.rpc('seed_default_chart_of_accounts', {
       p_org_id: orgId
     });
 
     if (error) throw error;
+    return data;
   }
 };

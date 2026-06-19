@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { formatArabicDateWithLatinDigits } from '../../lib/formatters';
 import { 
   Building2, 
   TrendingUp, 
@@ -21,7 +22,7 @@ export const Dashboard: React.FC = () => {
   const { profile, currentOrg, roleInCurrentOrg } = useAuth();
   const navigate = useNavigate();
 
-  // Saudi formatted localized date
+  // Saudi formatted localized date with Latin digits
   const getSaudiFormattedDate = () => {
     const options: Intl.DateTimeFormatOptions = { 
       weekday: 'long', 
@@ -29,7 +30,7 @@ export const Dashboard: React.FC = () => {
       month: 'long', 
       day: 'numeric' 
     };
-    return new Date().toLocaleDateString('ar-SA', options);
+    return formatArabicDateWithLatinDigits(new Date(), options, 'ar-SA');
   };
 
   return (

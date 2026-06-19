@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { accountingService } from '../../lib/accountingService';
-import { FiscalYear, FiscalPeriod, Profile } from '../../types';
-import { supabase } from '../../lib/supabase';
+import { FiscalYear, FiscalPeriod } from '../../types';
+import { getErrorMessage } from '../../lib/errors';
+import { formatArabicDateWithLatinDigits } from '../../lib/formatters';
 import { 
   Calendar, 
   Plus, 
@@ -59,25 +60,14 @@ export const FiscalYears: React.FC = () => {
         loadPeriodsForYear(data[0].id);
       }
       
-      // Fetch creator profiles to show human names
-      const creatorIds = Array.from(new Set(data.map(y => y.created_by).filter((id): id is string => !!id)));
-      if (creatorIds.length > 0) {
-        const { data: profiles, error: profErr } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', creatorIds);
-          
-        if (profiles && !profErr) {
-          const map: { [id: string]: string } = {};
-          profiles.forEach(p => {
-             map[p.id] = p.full_name || 'مستخدم لِدجرا';
-          });
-          setProfilesMap(map);
-        }
+      const map: { [id: string]: string } = {};
+      if (profile?.id) {
+        map[profile.id] = profile.full_name || 'المستخدم الحالي';
       }
-    } catch (err: any) {
+      setProfilesMap(map);
+    } catch (err) {
       console.error(err);
-      setError(err.message || 'حدث خطأ أثناء تحميل السنوات المالية.');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -119,36 +109,13 @@ export const FiscalYears: React.FC = () => {
     setLoading(true);
     try {
       await accountingService.setCurrentFiscalYear(currentOrg.id, year.id);
-      setSuccess(`تم تفعيل السنة المالية الحالية "${year.name}" بنجاح بجداول الترحيل.`);
+      setSuccess('تم تعيين السنة المالية الحالية بنجاح.');
       await loadYearsData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(err.message || 'فشلت عملية تعيين السنة المالية الحالية.');
+      alert(getErrorMessage(err));
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Toggle status of specific Fiscal Period
-  const handleTogglePeriodStatus = async (yearId: string, period: FiscalPeriod) => {
-    if (!currentOrg || !isPrivileged) return;
-    const nextStatus = period.status === 'open' ? 'closed' : 'open';
-
-    const confirmation = window.confirm(
-      nextStatus === 'closed'
-        ? `هل تريد إغلاق الفترة المحاسبية "${period.name}"؟ لن يقبل النظام ترحيل أي حركات محاسبية عليها بعد إغلاقها.`
-        : `هل ترغب بإعادة فتح الفترة المحاسبية "${period.name}" لقبول القيود والترحيل؟`
-    );
-
-    if (!confirmation) return;
-
-    try {
-      await accountingService.updateFiscalPeriodStatus(currentOrg.id, period.id, nextStatus);
-      setSuccess(`تم تحديث حالة الفترة "${period.name}" إلى ${nextStatus === 'closed' ? 'مغلقة' : 'مفتوحة'} بنجاح.`);
-      await loadPeriodsForYear(yearId);
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'فشل تعديل حالة الفترة المحاسبية.');
     }
   };
 
@@ -216,14 +183,14 @@ export const FiscalYears: React.FC = () => {
         start_date: formStartDate,
         end_date: formEndDate,
         is_current: formIsCurrent
-      }, profile?.id);
+      });
 
       setSuccess(`تم بنجاح إشهار السنة المالية الجديدة "${formName}" وتهيئة الفترات الـ 12 شهراً التابعة لها تلقائياً.`);
       setShowAddModal(false);
       await loadYearsData();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setFormError(err.message || 'فشلت عملية إنشاء السنة المالية في الخادم.');
+      setFormError(getErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -252,7 +219,7 @@ export const FiscalYears: React.FC = () => {
       <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 font-sans text-right">
         <div>
           <h3 className="text-sm font-extrabold text-slate-800">الحفاظ على الفترات والسنوات المالية</h3>
-          <p className="text-[11px] text-slate-400 mt-1">قم بإغلاق الفترات القديمة وفتح فترات الاستحقاق الحالية بدقة لحصر المبيعات وحسابات القيود.</p>
+          <p className="text-[11px] text-slate-400 mt-1">أنشئ السنوات المالية وفتراتها الشهرية وحدد السنة التشغيلية الحالية. سيتم تفعيل الإقفال والترحيل بعد بناء محرك القيود اليومية.</p>
         </div>
         
         {isPrivileged && (
@@ -272,7 +239,7 @@ export const FiscalYears: React.FC = () => {
           <p className="text-xs font-bold text-slate-400 font-sans">جاري تحميل الفترات وترتيب المخططات الدورية...</p>
         </div>
       ) : years.length === 0 ? (
-        <div className="bg-white border border-slate-205 rounded-3xl p-16 text-center space-y-4 max-w-lg mx-auto font-sans">
+        <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center space-y-4 max-w-lg mx-auto font-sans">
           <Calendar className="w-12 h-12 text-slate-300 mx-auto" />
           <div className="space-y-1">
             <h4 className="text-sm font-bold text-slate-800">لا توجد سنوات مالية مسجلة</h4>
@@ -292,7 +259,9 @@ export const FiscalYears: React.FC = () => {
           {years.map(year => {
             const isExpanded = expandedYears[year.id];
             const periods = selectedPeriods[year.id] || [];
-            const creatorName = year.created_by ? (profilesMap[year.created_by] || 'مسؤول النظام') : 'تهيئة أولية';
+            const creatorName = year.created_by === profile?.id
+              ? (profile?.full_name || 'المستخدم الحالي')
+              : 'مستخدم مخول';
 
             return (
               <div 
@@ -335,21 +304,21 @@ export const FiscalYears: React.FC = () => {
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
                             : year.status === 'closed'
                             ? 'bg-red-50 text-red-700 border-red-100'
-                            : 'bg-slate-50 text-slate-650 border-slate-200'
+                            : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}>
                           {year.status === 'open' ? 'دورة محاسبية مفتوحة' : year.status === 'closed' ? 'مغلقة كلياً' : 'مسودة'}
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10.5px] text-slate-450 font-mono">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10.5px] text-slate-500 font-mono">
                         <span className="flex items-center gap-1">
                           <span>البداية:</span>
-                          <strong className="text-slate-600">{year.start_date}</strong>
+                          <strong className="text-slate-600">{formatArabicDateWithLatinDigits(year.start_date)}</strong>
                         </span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <span>النهاية:</span>
-                          <strong className="text-slate-600">{year.end_date}</strong>
+                          <strong className="text-slate-600">{formatArabicDateWithLatinDigits(year.end_date)}</strong>
                         </span>
                       </div>
                     </div>
@@ -359,12 +328,12 @@ export const FiscalYears: React.FC = () => {
                   <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end border-t border-slate-100 pt-3 md:border-none md:pt-0">
                     <div className="flex flex-col text-right text-[10px] text-slate-400">
                       <span className="flex items-center gap-1 justify-end leading-none">
-                        <User className="w-3 h-3 text-slate-350" />
+                        <User className="w-3 h-3 text-slate-400" />
                         <span>منشئ: {creatorName}</span>
                       </span>
                       <span className="flex items-center gap-1 justify-end leading-none mt-1">
-                        <Clock className="w-3 h-3 text-slate-350" />
-                        <span>في: {new Date(year.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: 'numeric', day: 'numeric' })}</span>
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        <span>في: {formatArabicDateWithLatinDigits(year.created_at, { year: 'numeric', month: 'numeric', day: 'numeric' })}</span>
                       </span>
                     </div>
 
@@ -375,7 +344,7 @@ export const FiscalYears: React.FC = () => {
                             e.stopPropagation();
                             handleSetCurrentYear(year);
                           }}
-                          className="text-[10px] bg-white hover:bg-slate-55 border border-slate-200 text-slate-550 hover:text-slate-750 font-extrabold px-3 py-2 rounded-xl transition cursor-pointer"
+                          className="text-[10px] bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 hover:text-slate-700 font-extrabold px-3 py-2 rounded-xl transition cursor-pointer"
                         >
                           تفعيل كالسنة التشغيلية
                         </button>
@@ -392,7 +361,7 @@ export const FiscalYears: React.FC = () => {
                 {isExpanded && (
                   <div className="border-t border-slate-100 bg-slate-50/20 p-5 space-y-4">
                     <div className="flex items-center gap-1.5 text-slate-500 font-bold text-xs select-none">
-                      <FolderOpen className="w-4 h-4 text-slate-450" />
+                      <FolderOpen className="w-4 h-4 text-slate-500" />
                       <span>الأقسام والفترات المعتمدة داخل هذه الدورة المحددة</span>
                     </div>
 
@@ -408,43 +377,44 @@ export const FiscalYears: React.FC = () => {
                               className={`p-3.5 rounded-2xl border bg-white transition flex items-center justify-between gap-3 text-right ${
                                 isOpen 
                                   ? 'border-slate-100 shadow-xs' 
-                                  : 'border-slate-250 bg-slate-50/50'
+                                  : 'border-slate-200 bg-slate-50/50'
                               }`}
                             >
                               <div className="truncate space-y-1 shrink min-w-0">
-                                <span className={`text-[11px] font-extrabold block truncate ${isOpen ? 'text-slate-750' : 'text-slate-400 line-through'}`}>
+                                <span className={`text-[11px] font-extrabold block truncate ${isOpen ? 'text-slate-700' : 'text-slate-400 line-through'}`}>
                                   {period.name}
                                 </span>
                                 <div className="text-[9.5px] font-mono text-slate-400">
-                                  <span>{period.start_date}</span>
+                                  <span>{formatArabicDateWithLatinDigits(period.start_date)}</span>
                                   <span className="mx-1 font-bold">إلى</span>
-                                  <span>{period.end_date}</span>
+                                  <span>{formatArabicDateWithLatinDigits(period.end_date)}</span>
                                 </div>
                               </div>
 
-                              {/* Toggle active / toggle closed */}
-                              {isPrivileged ? (
-                                <button
-                                  onClick={() => handleTogglePeriodStatus(year.id, period)}
-                                  className={`p-2 rounded-xl border transition cursor-pointer shrink-0 ${
-                                    isOpen 
-                                      ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-100' 
-                                      : 'bg-red-50 hover:bg-red-100 text-red-500 border-red-100'
-                                  }`}
-                                  title={isOpen ? 'إغلاق الفترة المحاسبية' : 'إعادة فتح الفترة'}
-                                >
-                                  {isOpen ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                                </button>
-                              ) : (
-                                <div className={`p-2 rounded-xl border shrink-0 ${
-                                  isOpen ? 'bg-emerald-50/30 text-emerald-400 border-emerald-50' : 'bg-red-50/30 text-red-300 border-red-50'
-                                }`}>
-                                  {isOpen ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                                </div>
-                              )}
+                              {/* Toggle active / toggle closed - Grayed out & disabled for upcoming Phase 3 */}
+                              <button
+                                disabled={true}
+                                className="p-2 rounded-xl border shrink-0 bg-slate-50 text-slate-400 border-slate-100 opacity-55 cursor-not-allowed transition"
+                                title="سيتم تمكين فتح وإغلاق الفترات مع تفعيل محرك اليومية العامة."
+                              >
+                                {isOpen ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                              </button>
                             </div>
                           );
                         })}
+                        
+                        {/* Explanatory roadmap banner block */}
+                        <div className="col-span-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-right flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-slate-500">
+                          <div className="flex items-center gap-2.5">
+                            <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                            <span className="text-[10.5px] font-semibold text-slate-500">
+                              سيتم تفعيل ميزة إقفال وفتح الفترات الدورية الفرعية يدوياً فور إطلاق محرك قيود اليومية العامة في التحديث القادم لضمان سلامة العمليات المحاسبية وسجلات الترحيل.
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-bold bg-amber-500/10 text-amber-600 px-2.5 py-1 rounded-md shrink-0">
+                            مجدول للمرحلة التالية
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -465,7 +435,7 @@ export const FiscalYears: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <button 
                 onClick={() => setShowAddModal(false)}
-                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-755 rounded-lg cursor-pointer transition"
+                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -487,7 +457,7 @@ export const FiscalYears: React.FC = () => {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="مثال: سنة 2026"
-                  className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-850 outline-none"
+                  className="w-full text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none"
                 />
               </div>
 
@@ -515,8 +485,8 @@ export const FiscalYears: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-amber-850 text-[10px] leading-relaxed flex gap-2">
-                <AlertTriangle className="w-4.5 h-4.5 shrink-0 text-amber-550 mt-0.5" />
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-amber-800 text-[10px] leading-relaxed flex gap-2">
+                <AlertTriangle className="w-4.5 h-4.5 shrink-0 text-amber-600 mt-0.5" />
                 <div>
                   <strong>ميزة التأسيس التلقائي النشط من لِدجرا:</strong>
                   <p className="mt-0.5">عند الضغط على حفظ، سيقوم النظام تلقائياً بإنشاء 12 فترة محاسبية شهرية دورية تتبع هذه لتمكين ضبط القيود بشكل ربع سنوي وسنوي معقد.</p>
@@ -531,7 +501,7 @@ export const FiscalYears: React.FC = () => {
                     onChange={(e) => setFormIsCurrent(e.target.checked)}
                     className="rounded border-slate-300 text-brand-blue"
                   />
-                  <span className="text-[11px] font-extrabold text-slate-650">الحسابات والقيود تستهدف الترحيل لهذه السنة حالاً</span>
+                  <span className="text-[11px] font-extrabold text-slate-600">تعيين هذه السنة كالسنة المالية التشغيلية الحالية للمنشأة</span>
                 </label>
               </div>
 

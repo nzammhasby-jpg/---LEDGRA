@@ -3,6 +3,7 @@ import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation, Locale } from '../i18n/translations';
+import { formatArabicDateWithLatinDigits } from '../lib/formatters';
 import { Logo } from '../components/Logo';
 import { 
   Home, 
@@ -156,15 +157,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   const formatNotificationDate = (dateStr: string) => {
     try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('ar-SA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return formatArabicDateWithLatinDigits(dateStr, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }, 'ar-SA');
     } catch {
       return '';
     }
   };
 
   return (
-    <div className="min-h-screen flex bg-brand-bg select-none font-sans text-slate-800" dir="rtl">
+    <div className="min-h-screen flex bg-brand-bg select-none font-sans text-slate-800 overflow-x-hidden" dir="rtl">
       
       {/* 1. Backdrop for mobile drawer */}
       {mobileMenuOpen && (
@@ -176,8 +176,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
       {/* 2. SIDEBAR - Responsive drawer/rail layout */}
       <aside 
-        className={`fixed md:sticky top-0 right-0 h-screen bg-brand-navy text-white z-50 flex flex-col justify-between transition-all duration-300 ${
-          sidebarCollapsed ? 'w-20' : 'w-64'
+        className={`fixed md:sticky top-0 right-0 h-screen bg-brand-navy text-white z-50 flex flex-col justify-between transition-all duration-300 overflow-x-hidden ${
+          sidebarCollapsed ? 'w-20' : 'w-72'
         } ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}
       >
         {/* Sidebar Header containing logo & close toggle */}
@@ -226,9 +226,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     title={`${item.name} - قريبًا`}
                   >
                     <IconComponent className="w-4.5 h-4.5 shrink-0" />
-                    {!sidebarCollapsed && <span className="truncate">{item.name}</span>}
+                    {!sidebarCollapsed && <span className="min-w-0 flex-1 whitespace-nowrap">{item.name}</span>}
                     {!sidebarCollapsed && (
-                      <span className="mr-auto text-[9px] font-bold bg-white/10 text-brand-turquoise px-1.5 py-0.5 rounded">
+                      <span className="mr-auto text-[9px] font-bold bg-white/10 text-brand-turquoise px-1.5 py-0.5 rounded shrink-0">
                         {t('sidebar.soon')}
                       </span>
                     )}
@@ -248,7 +248,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                     }`}
                   >
                     <IconComponent className="w-4.5 h-4.5 shrink-0" />
-                    {!sidebarCollapsed && <span className="truncate">{item.name}</span>}
+                    {!sidebarCollapsed && <span className="min-w-0 flex-1 whitespace-nowrap">{item.name}</span>}
                   </NavLink>
                 )}
                 

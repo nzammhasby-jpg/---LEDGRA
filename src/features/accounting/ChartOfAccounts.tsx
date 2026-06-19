@@ -48,6 +48,7 @@ export const ChartOfAccounts: React.FC = () => {
   const [formNature, setFormNature] = useState<AccountNature>('debit');
   const [formAllowDirect, setFormAllowDirect] = useState<boolean>(true);
   const [formIsActive, setFormIsActive] = useState<boolean>(true);
+  const [formParentId, setFormParentId] = useState<string | null>(null);
   const [formDescription, setFormDescription] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -80,8 +81,12 @@ export const ChartOfAccounts: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      await accountingService.generateDefaultChartOfAccounts(currentOrg.id);
-      setSuccess('تم تأسيس الدليل المحاسبي السعودي الافتراضي بنجاح وتجهيز كافة الحسابات الأساسية!');
+      const status = await accountingService.generateDefaultChartOfAccounts(currentOrg.id);
+      if (status === 'created') {
+        setSuccess('تم تأسيس الدليل المحاسبي السعودي الافتراضي بنجاح وتجهيز كافة الحسابات الأساسية!');
+      } else if (status === 'already_initialized') {
+        setSuccess('الدليل المحاسبي للمنشأة مهيأ مسبقاً بالفعل.');
+      }
       await loadAccounts();
     } catch (err: any) {
       console.error('Error seeding COA:', err);
@@ -137,13 +142,40 @@ export const ChartOfAccounts: React.FC = () => {
 
   const handleCollapseAll = () => {
     const newCollapsed: { [id: string]: boolean } = {};
+    const parentIds = new Set(accounts.map(a => a.parent_id).filter(Boolean));
     accounts.forEach(act => {
-      if (act.children && act.children.length > 0) {
+      if (parentIds.has(act.id)) {
         newCollapsed[act.id] = true;
       }
     });
     setCollapsedNodes(newCollapsed);
   };
+
+  const isDescendant = (potentialDescendantId: string, ancestorId: string): boolean => {
+    let currentId: string | null = potentialDescendantId;
+    while (currentId) {
+      const parent = accounts.find(a => a.id === currentId);
+      if (!parent) break;
+      if (parent.parent_id === ancestorId) return true;
+      currentId = parent.parent_id;
+    }
+    return false;
+  };
+
+  const parentOptions = useMemo(() => {
+    if (!editingAccount) return [];
+    return accounts.filter(acc => {
+      // 1. Cannot select self
+      if (acc.id === editingAccount.id) return false;
+      // 2. Cannot select a descendant
+      if (isDescendant(acc.id, editingAccount.id)) return false;
+      // 3. Must match classification
+      if (acc.classification !== formClassification) return false;
+      // 4. Must match nature
+      if (acc.nature !== formNature) return false;
+      return true;
+    });
+  }, [accounts, editingAccount, formClassification, formNature]);
 
   // Open Form Dialog for Create
   const openAddModal = (parent: Account | null = null) => {
@@ -200,6 +232,7 @@ export const ChartOfAccounts: React.FC = () => {
     setFormNature(account.nature);
     setFormAllowDirect(account.allow_direct_posting);
     setFormIsActive(account.is_active);
+    setFormParentId(account.parent_id);
     setFormDescription(account.description || '');
     setShowEditModal(true);
   };
@@ -273,6 +306,7 @@ export const ChartOfAccounts: React.FC = () => {
         name_en: formNameEn || null,
         classification: formClassification,
         nature: formNature,
+        parent_id: formParentId,
         allow_direct_posting: formAllowDirect,
         is_active: formIsActive,
         description: formDescription || null
@@ -375,7 +409,7 @@ export const ChartOfAccounts: React.FC = () => {
 
   // Recursively render tree row layout
   const renderAccountTreeNode = (node: Account, depth = 0) => {
-    const isCollapsed = collapsedNodes[node.id];
+    const isCollapsed = searchQuery ? false : collapsedNodes[node.id];
     const hasChildren = node.children && node.children.length > 0;
     const styles = getClassificationStyles(node.classification);
 
@@ -662,7 +696,7 @@ export const ChartOfAccounts: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <button 
                 onClick={() => setShowAddModal(false)}
-                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-750 rounded-lg cursor-pointer transition"
+                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -688,7 +722,7 @@ export const ChartOfAccounts: React.FC = () => {
                     value={formCode}
                     onChange={(e) => setFormCode(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="مثل 1111"
-                    className="w-full text-xs font-semibold font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-850 outline-none focus:border-brand-blue"
+                    className="w-full text-xs font-semibold font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none focus:border-brand-blue"
                     style={{ direction: 'ltr' }}
                   />
                 </div>
@@ -715,7 +749,7 @@ export const ChartOfAccounts: React.FC = () => {
                   value={formNameAr}
                   onChange={(e) => setFormNameAr(e.target.value)}
                   placeholder="مثال: حساب الأرباح المبقاة"
-                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-850 outline-none focus:border-brand-blue"
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none focus:border-brand-blue"
                 />
               </div>
 
@@ -726,7 +760,7 @@ export const ChartOfAccounts: React.FC = () => {
                   value={formNameEn}
                   onChange={(e) => setFormNameEn(e.target.value)}
                   placeholder="Example: Retained Earnings"
-                  className="w-full text-xs font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-850 outline-none focus:border-brand-blue"
+                  className="w-full text-xs font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none focus:border-brand-blue"
                   style={{ direction: 'ltr' }}
                 />
               </div>
@@ -756,7 +790,7 @@ export const ChartOfAccounts: React.FC = () => {
                       onChange={(e) => setFormAllowDirect(e.target.checked)}
                       className="rounded border-slate-300 text-brand-blue"
                     />
-                    <span className="text-[11px] font-bold text-slate-650">يقبل الترحيل والقيود المباشرة</span>
+                    <span className="text-[11px] font-bold text-slate-600">يقبل الترحيل والقيود المباشرة</span>
                   </label>
                 </div>
               </div>
@@ -802,7 +836,7 @@ export const ChartOfAccounts: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <button 
                 onClick={() => setShowEditModal(false)}
-                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-750"
+                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -863,7 +897,7 @@ export const ChartOfAccounts: React.FC = () => {
                   type="text"
                   value={formNameEn}
                   onChange={(e) => setFormNameEn(e.target.value)}
-                  className="w-full text-xs font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-850 outline-none"
+                  className="w-full text-xs font-mono text-left bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-800 outline-none"
                   style={{ direction: 'ltr' }}
                 />
               </div>
@@ -891,9 +925,10 @@ export const ChartOfAccounts: React.FC = () => {
                       type="checkbox"
                       checked={formAllowDirect}
                       onChange={(e) => setFormAllowDirect(e.target.checked)}
-                      className="rounded border-slate-300 text-brand-blue"
+                      disabled={editingAccount.is_system}
+                      className="rounded border-slate-300 text-brand-blue disabled:opacity-50"
                     />
-                    <span className="text-[11px] font-bold text-slate-650">يقبل ترحيل القيود مباشرة</span>
+                    <span className="text-[11px] font-bold text-slate-600">يقبل ترحيل القيود مباشرة</span>
                   </label>
 
                   <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -901,12 +936,31 @@ export const ChartOfAccounts: React.FC = () => {
                       type="checkbox"
                       checked={formIsActive}
                       onChange={(e) => setFormIsActive(e.target.checked)}
-                      className="rounded border-slate-300 text-brand-blue"
+                      disabled={editingAccount.is_system}
+                      className="rounded border-slate-300 text-brand-blue disabled:opacity-50"
                     />
-                    <span className="text-[11px] font-bold text-slate-650 text-emerald-600">نشط وفعّال ومتاح للقيود</span>
+                    <span className="text-[11px] font-bold text-slate-600 text-emerald-600">نشط وفعّال ومتاح للقيود</span>
                   </label>
                 </div>
               </div>
+
+              {!editingAccount.is_system && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 block mb-1">الحساب الأب (نقل الحساب)</label>
+                  <select
+                    value={formParentId || ''}
+                    onChange={(e) => setFormParentId(e.target.value || null)}
+                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none"
+                  >
+                    <option value="">« بدون حساب أب - حساب رئيسي »</option>
+                    {parentOptions.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.code} - {p.name_ar} {p.name_en ? `(${p.name_en})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="text-[10px] font-bold text-slate-400 block mb-1">الوصف والملاحظات</label>
