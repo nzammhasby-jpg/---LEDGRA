@@ -59,6 +59,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   // Highlight page title depending on router path
   const getPageTitle = () => {
+    if (location.pathname.startsWith('/sales/invoices')) {
+      return 'فواتير المبيعات';
+    }
+    if (location.pathname.startsWith('/sales/receipts')) {
+      return 'سندات القبض';
+    }
     switch (location.pathname) {
       case '/':
         return 'الرئيسية';
@@ -80,7 +86,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   // Sidebar Links
   const sidebarItems = [
     { name: t('sidebar.home'), path: '/', icon: Home, isSoon: false },
-    { name: t('sidebar.sales'), path: '/sales-soon', icon: Tag, isSoon: true },
+    { name: 'فواتير المبيعات', path: '/sales/invoices', icon: Tag, isSoon: false },
+    { name: 'سندات القبض', path: '/sales/receipts', icon: ArrowRightLeft, isSoon: false },
     { name: t('sidebar.purchases'), path: '/purchases-soon', icon: ShoppingCart, isSoon: true },
     { name: t('sidebar.expenses'), path: '/expenses-soon', icon: CreditCard, isSoon: true },
     { name: t('sidebar.items'), path: '/items', icon: FileText, isSoon: false },

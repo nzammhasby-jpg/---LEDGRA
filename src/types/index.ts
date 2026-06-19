@@ -306,5 +306,100 @@ export interface Item {
   expense_account?: Account;
 }
 
+// ==========================================
+// Phase 5: Sales Invoices and Receipts (المبيعات والمتحصلات)
+// ==========================================
+export type SalesInvoiceStatus = 'draft' | 'approved' | 'cancelled';
+export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid';
+
+export interface SalesInvoice {
+  id: string;
+  organization_id: string;
+  customer_id: string;
+  invoice_number: string;
+  invoice_date: string;
+  due_date: string;
+  status: SalesInvoiceStatus;
+  payment_status: PaymentStatus;
+  subtotal: number;
+  discount_total: number;
+  tax_total: number;
+  total: number;
+  paid_amount: number;
+  balance_due: number;
+  currency: string;
+  notes: string | null;
+  journal_entry_id: string | null;
+  cancelled_journal_entry_id: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  customer?: Customer;
+  lines?: SalesInvoiceLine[];
+}
+
+export interface SalesInvoiceLine {
+  id: string;
+  sales_invoice_id: string;
+  organization_id: string;
+  item_id: string;
+  line_number: number;
+  description: string | null;
+  quantity: number;
+  unit_price: number;
+  discount_amount: number;
+  tax_rate: number;
+  tax_amount: number;
+  line_total: number;
+  revenue_account_id: string;
+  tax_account_id: string | null;
+  created_at: string;
+  item?: Item;
+}
+
+export type ReceiptStatus = 'draft' | 'approved' | 'cancelled';
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'card' | 'other';
+
+export interface Receipt {
+  id: string;
+  organization_id: string;
+  customer_id: string;
+  receipt_number: string;
+  receipt_date: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  cash_account_id: string | null;
+  bank_account_id: string | null;
+  reference: string | null;
+  notes: string | null;
+  status: ReceiptStatus;
+  journal_entry_id: string | null;
+  cancelled_journal_entry_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  approved_at: string | null;
+  approved_by: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  customer?: Customer;
+  allocations?: ReceiptAllocation[];
+}
+
+export interface ReceiptAllocation {
+  id: string;
+  organization_id: string;
+  receipt_id: string;
+  sales_invoice_id: string;
+  allocated_amount: number;
+  created_at: string;
+  sales_invoice?: SalesInvoice;
+}
+
+
 
 

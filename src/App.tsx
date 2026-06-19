@@ -12,6 +12,8 @@ import { AccountingLayout } from './features/accounting/AccountingLayout';
 import { CustomersPage } from './features/customers/CustomersPage';
 import { VendorsPage } from './features/vendors/VendorsPage';
 import { ItemsPage } from './features/items/ItemsPage';
+import { InvoicesPage } from './features/sales/InvoicesPage';
+import { ReceiptsPage } from './features/sales/ReceiptsPage';
 import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -251,8 +253,9 @@ export default function App() {
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route path="/settings" element={<Settings />} />
             
-            {/* Coming soon locked modules */}
-            <Route path="/sales-soon" element={<SoonModule />} />
+            {/* Sales Invoices & Receipts Module */}
+            <Route path="/sales/invoices" element={<InvoicesPage />} />
+            <Route path="/sales/receipts" element={<ReceiptsPage />} />
             <Route path="/purchases-soon" element={<SoonModule />} />
             <Route path="/expenses-soon" element={<SoonModule />} />
             <Route path="/items" element={<ItemsPage />} />
