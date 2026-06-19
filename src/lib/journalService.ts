@@ -18,7 +18,7 @@ export const journalService = {
   ): Promise<JournalEntry[]> {
     let query = supabase
       .from('journal_entries')
-      .select('*, fiscal_years(name), fiscal_periods(name)')
+      .select('*, fiscal_years(name), fiscal_periods:fiscal_periods!journal_entries_period_fk(name)')
       .eq('organization_id', orgId);
 
     if (filters) {
@@ -61,7 +61,7 @@ export const journalService = {
   async getJournalEntry(orgId: string, entryId: string): Promise<JournalEntry> {
     const { data: entry, error: entryError } = await supabase
       .from('journal_entries')
-      .select('*, fiscal_years(name), fiscal_periods(name)')
+      .select('*, fiscal_years(name), fiscal_periods:fiscal_periods!journal_entries_period_fk(name)')
       .eq('id', entryId)
       .eq('organization_id', orgId)
       .single();
@@ -70,7 +70,7 @@ export const journalService = {
 
     const { data: lines, error: linesError } = await supabase
       .from('journal_entry_lines')
-      .select('*, accounts(*)')
+      .select('*, accounts:accounts!journal_entry_lines_account_org_fk(*)')
       .eq('journal_entry_id', entryId)
       .eq('organization_id', orgId)
       .order('line_number', { ascending: true });
@@ -184,7 +184,7 @@ export const journalService = {
   ) {
     let query = supabase
       .from('journal_entry_lines')
-      .select('debit, credit, description, created_at, journal_entries!inner(entry_number, entry_date, description, status, fiscal_year_id)')
+      .select('debit, credit, description, created_at, journal_entries:journal_entries!journal_entry_lines_entry_org_fk!inner(entry_number, entry_date, description, status, fiscal_year_id)')
       .eq('organization_id', orgId)
       .eq('account_id', accountId)
       .eq('journal_entries.status', 'posted');
@@ -264,7 +264,7 @@ export const journalService = {
 
     let query = supabase
       .from('journal_entry_lines')
-      .select('account_id, debit, credit, journal_entries!inner(status, entry_date, fiscal_year_id)')
+      .select('account_id, debit, credit, journal_entries:journal_entries!journal_entry_lines_entry_org_fk!inner(status, entry_date, fiscal_year_id)')
       .eq('organization_id', orgId)
       .eq('journal_entries.status', 'posted');
 

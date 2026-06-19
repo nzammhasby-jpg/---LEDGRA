@@ -219,4 +219,92 @@ export interface JournalEntryLine {
   account?: Account;
 }
 
+export type CustomerType = 'individual' | 'company' | 'government' | 'other';
+export type OpeningBalanceType = 'debit' | 'credit';
+
+export interface Customer {
+  id: string;
+  organization_id: string;
+  code: string;
+  name: string;
+  display_name: string | null;
+  customer_type: CustomerType;
+  tax_number: string | null;
+  commercial_registration: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  city: string | null;
+  address: string | null;
+  opening_balance: number;
+  opening_balance_type: OpeningBalanceType;
+  receivable_account_id: string;
+  is_active: boolean;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  receivable_account?: Account;
+}
+
+export type VendorType = 'individual' | 'company' | 'other';
+
+export interface Vendor {
+  id: string;
+  organization_id: string;
+  code: string;
+  name: string;
+  display_name: string | null;
+  vendor_type: VendorType;
+  tax_number: string | null;
+  commercial_registration: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  city: string | null;
+  address: string | null;
+  opening_balance: number;
+  opening_balance_type: OpeningBalanceType;
+  payable_account_id: string;
+  is_active: boolean;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  payable_account?: Account;
+}
+
+export type ItemType = 'product' | 'service';
+
+export interface Item {
+  id: string;
+  organization_id: string;
+  item_type: ItemType;
+  code: string;
+  name: string;
+  description: string | null;
+  unit: string | null;
+  sku: string | null;
+  barcode: string | null;
+  selling_price: number;
+  purchase_price: number;
+  tax_rate: number;
+  sales_account_id: string | null;
+  service_revenue_account_id: string | null;
+  inventory_account_id: string | null;
+  cogs_account_id: string | null;
+  expense_account_id: string | null;
+  is_stockable: boolean;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  sales_account?: Account;
+  service_revenue_account?: Account;
+  inventory_account?: Account;
+  cogs_account?: Account;
+  expense_account?: Account;
+}
+
+
 

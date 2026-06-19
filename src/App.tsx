@@ -9,6 +9,9 @@ import { Onboarding } from './features/onboarding/Onboarding';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { Settings } from './features/settings/Settings';
 import { AccountingLayout } from './features/accounting/AccountingLayout';
+import { CustomersPage } from './features/customers/CustomersPage';
+import { VendorsPage } from './features/vendors/VendorsPage';
+import { ItemsPage } from './features/items/ItemsPage';
 import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -252,9 +255,9 @@ export default function App() {
             <Route path="/sales-soon" element={<SoonModule />} />
             <Route path="/purchases-soon" element={<SoonModule />} />
             <Route path="/expenses-soon" element={<SoonModule />} />
-            <Route path="/items-soon" element={<SoonModule />} />
-            <Route path="/customers-soon" element={<SoonModule />} />
-            <Route path="/vendors-soon" element={<SoonModule />} />
+            <Route path="/items" element={<ItemsPage />} />
+            <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/accounting" element={<AccountingLayout />} />
             <Route path="/reports-soon" element={<SoonModule />} />
             <Route path="/help-panel" element={<HelpPanel />} />

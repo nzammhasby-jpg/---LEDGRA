@@ -663,7 +663,7 @@ export const Settings: React.FC = () => {
                   {/* Category 1: Cash & Banks */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>١. حسابات السيولة السريعة والنقدية</span>
+                      <span>1. حسابات السيولة السريعة والنقدية</span>
                     </h4>
 
                     <div className="space-y-3">
@@ -700,7 +700,7 @@ export const Settings: React.FC = () => {
                   {/* Category 2: Receivables & Payables */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>٢. حسابات الشركاء والذمم (العملاء والموردين)</span>
+                      <span>2. حسابات الشركاء والذمم (العملاء والموردين)</span>
                     </h4>
 
                     <div className="space-y-3">
@@ -737,7 +737,7 @@ export const Settings: React.FC = () => {
                   {/* Category 3: Product & Service Sales */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>٣. حسابات المبيعات وإيرادات النشاط</span>
+                      <span>3. حسابات المبيعات وإيرادات النشاط</span>
                     </h4>
 
                     <div className="space-y-3">
@@ -774,7 +774,7 @@ export const Settings: React.FC = () => {
                   {/* Category 4: Inventory & Cost */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>٤. حسابات المخازن وتكاليف البضاعة</span>
+                      <span>4. حسابات المخازن وتكاليف البضاعة</span>
                     </h4>
 
                     <div className="space-y-3">
@@ -811,7 +811,7 @@ export const Settings: React.FC = () => {
                   {/* Category 5: Taxes and Retained Earnings */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50 md:col-span-2">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>٥. ضريبة القيمة المضافة والأرباح المدورة</span>
+                      <span>5. ضريبة القيمة المضافة والأرباح المدورة</span>
                     </h4>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -66,6 +66,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         return 'إعدادات المنشأة';
       case '/onboarding':
         return 'إعداد المنشأة';
+      case '/customers':
+        return 'إدارة العملاء والعملاء المعتمدين';
+      case '/vendors':
+        return 'إدارة الموردين والشركاء';
+      case '/items':
+        return 'المنتجات والخدمات';
       default:
         return 'لوحة التحكم';
     }
@@ -77,9 +83,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { name: t('sidebar.sales'), path: '/sales-soon', icon: Tag, isSoon: true },
     { name: t('sidebar.purchases'), path: '/purchases-soon', icon: ShoppingCart, isSoon: true },
     { name: t('sidebar.expenses'), path: '/expenses-soon', icon: CreditCard, isSoon: true },
-    { name: t('sidebar.items'), path: '/items-soon', icon: FileText, isSoon: true },
-    { name: t('sidebar.customers'), path: '/customers-soon', icon: Users, isSoon: true },
-    { name: t('sidebar.vendors'), path: '/vendors-soon', icon: Truck, isSoon: true },
+    { name: t('sidebar.items'), path: '/items', icon: FileText, isSoon: false },
+    { name: t('sidebar.customers'), path: '/customers', icon: Users, isSoon: false },
+    { name: t('sidebar.vendors'), path: '/vendors', icon: Truck, isSoon: false },
     { name: t('sidebar.accounting'), path: '/accounting', icon: FileSpreadsheet, isSoon: false },
     { name: t('sidebar.reports'), path: '/reports-soon', icon: SlidersHorizontal, isSoon: true },
     { name: t('sidebar.settings'), path: '/settings', icon: Settings, isSoon: false }

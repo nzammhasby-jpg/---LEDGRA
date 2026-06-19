@@ -648,7 +648,7 @@ export const JournalEntries: React.FC = () => {
                         {entry.status === 'posted' && isPrivileged && (
                           <button
                             onClick={() => handleReverseEntry(entry)}
-                            className="p-1.5 text-amber-550 hover:text-amber-800 rounded-lg hover:bg-amber-50"
+                            className="p-1.5 text-amber-500 hover:text-amber-800 rounded-lg hover:bg-amber-50"
                             title="عكس قيد اليومية"
                           >
                             <RotateCcw className="w-4 h-4" />
@@ -674,7 +674,7 @@ export const JournalEntries: React.FC = () => {
                 <h3 className="text-sm font-bold text-slate-800">
                   {activeModal === 'add' ? 'إنشاء قيد محاسبي يدوي جديد' : `تعديل قيد مسودة: ${selectedEntry?.entry_number || ''}`}
                 </h3>
-                <p className="text-[10px] text-slate-405">أدخل البيانات الأساسية وبنود القيد اليدوي مع التحقق التلقائي من ميزان المزدوج المالي.</p>
+                <p className="text-[10px] text-slate-400">أدخل البيانات الأساسية وبنود القيد اليدوي مع التحقق التلقائي من ميزان المزدوج المالي.</p>
               </div>
               <button
                 onClick={() => setActiveModal(null)}
@@ -1086,7 +1086,7 @@ export const JournalEntries: React.FC = () => {
               {selectedEntryDetails.status === 'posted' && isPrivileged && (
                 <button
                   onClick={() => handleReverseEntry(selectedEntryDetails)}
-                  className="flex items-center gap-1.5 bg-amber-550 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-600 cursor-pointer"
+                  className="flex items-center gap-1.5 bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-600 cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   عكس القيد بالكامل (Reverse)

@@ -34,7 +34,7 @@ export const HelpPanel: React.FC = () => {
           
           <div className="flex gap-4 items-start border-b border-slate-100 pb-4">
             <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-800 font-bold flex items-center justify-center shrink-0">
-              ١
+              1
             </div>
             <div className="space-y-1">
               <h4 className="text-xs font-bold text-slate-900">إنشاء مشروع Supabase جديد</h4>
@@ -46,7 +46,7 @@ export const HelpPanel: React.FC = () => {
 
           <div className="flex gap-4 items-start border-b border-slate-100 pb-4">
             <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-800 font-bold flex items-center justify-center shrink-0">
-              ٢
+              2
             </div>
             <div className="space-y-1">
               <h4 className="text-xs font-bold text-slate-900">تشغيل ملف الهيكل المحاسبي والـ Schema</h4>
@@ -58,7 +58,7 @@ export const HelpPanel: React.FC = () => {
 
           <div className="flex gap-4 items-start border-b border-slate-100 pb-4">
             <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-800 font-bold flex items-center justify-center shrink-0">
-              ٣
+              3
             </div>
             <div className="space-y-1">
               <h4 className="text-xs font-bold text-slate-900">تفعيل متغيرات البيئة في AI Studio</h4>
