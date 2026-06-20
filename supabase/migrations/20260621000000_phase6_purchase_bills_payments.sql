@@ -281,13 +281,13 @@ DROP TRIGGER IF EXISTS trg_set_updated_at_purchase_bills ON public.purchase_bill
 CREATE TRIGGER trg_set_updated_at_purchase_bills
     BEFORE UPDATE ON public.purchase_bills
     FOR EACH ROW
-    EXECUTE FUNCTION public.set_updated_at();
+    EXECUTE FUNCTION public.set_updated_at_column();
 
 DROP TRIGGER IF EXISTS trg_set_updated_at_payments ON public.payments;
 CREATE TRIGGER trg_set_updated_at_payments
     BEFORE UPDATE ON public.payments
     FOR EACH ROW
-    EXECUTE FUNCTION public.set_updated_at();
+    EXECUTE FUNCTION public.set_updated_at_column();
 
 
 -- ==========================================================
