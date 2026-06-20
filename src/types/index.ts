@@ -495,6 +495,45 @@ export interface PaymentAllocation {
   purchase_bill?: PurchaseBill;
 }
 
+// ==========================================
+// Phase 7: Basic Inventory and Movements
+// ==========================================
+export interface InventoryBalance {
+  id: string;
+  organization_id: string;
+  item_id: string;
+  quantity_on_hand: number;
+  average_cost: number;
+  inventory_value: number;
+  last_movement_at: string;
+  created_at: string;
+  updated_at: string;
+  item?: Item;
+}
+
+export type InventoryMovementType = 'purchase' | 'sale' | 'purchase_cancel' | 'sale_cancel' | 'adjustment';
+
+export interface InventoryMovement {
+  id: string;
+  organization_id: string;
+  item_id: string;
+  movement_type: InventoryMovementType;
+  movement_date: string;
+  source_type: 'purchase_bill' | 'sales_invoice' | 'manual_adjustment';
+  source_id: string;
+  quantity_in: number;
+  quantity_out: number;
+  unit_cost: number;
+  total_cost: number;
+  quantity_after: number;
+  average_cost_after: number;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  item?: Item;
+}
+
+
 
 
 

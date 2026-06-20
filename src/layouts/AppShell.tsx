@@ -30,7 +30,8 @@ import {
   Sparkles,
   User,
   CheckCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Package
 } from 'lucide-react';
 
 interface AppShellProps {
@@ -71,6 +72,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     if (location.pathname.startsWith('/purchases/payments')) {
       return 'سندات الصرف';
     }
+    if (location.pathname.startsWith('/inventory/balances')) {
+      return 'رصيد المخزون';
+    }
+    if (location.pathname.startsWith('/inventory/movements')) {
+      return 'حركة الصنف';
+    }
     switch (location.pathname) {
       case '/':
         return 'الرئيسية';
@@ -97,6 +104,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { name: 'فواتير المشتريات', path: '/purchases/bills', icon: ShoppingCart, isSoon: false },
     { name: 'سندات الصرف', path: '/purchases/payments', icon: CreditCard, isSoon: false },
     { name: t('sidebar.items'), path: '/items', icon: FileText, isSoon: false },
+    { name: 'رصيد المخزون', path: '/inventory/balances', icon: Package, isSoon: false },
     { name: t('sidebar.customers'), path: '/customers', icon: Users, isSoon: false },
     { name: t('sidebar.vendors'), path: '/vendors', icon: Truck, isSoon: false },
     { name: t('sidebar.accounting'), path: '/accounting', icon: FileSpreadsheet, isSoon: false },
