@@ -18,6 +18,7 @@ import { PurchaseBillsPage } from './features/purchases/PurchaseBillsPage';
 import { PaymentsPage } from './features/purchases/PaymentsPage';
 import { InventoryBalancesPage } from './features/inventory/InventoryBalancesPage';
 import { InventoryMovementsPage } from './features/inventory/InventoryMovementsPage';
+import { ReportsLayout } from './features/reports/ReportsLayout';
 import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -271,6 +272,7 @@ export default function App() {
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/accounting" element={<AccountingLayout />} />
+            <Route path="/reports" element={<ReportsLayout />} />
             <Route path="/reports-soon" element={<SoonModule />} />
             <Route path="/help-panel" element={<HelpPanel />} />
           </Route>

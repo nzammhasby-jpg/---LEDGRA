@@ -63,6 +63,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     if (location.pathname.startsWith('/sales/invoices')) {
       return 'فواتير المبيعات';
     }
+    if (location.pathname.startsWith('/reports')) {
+      return 'التقارير المالية والتحليلات الجارية';
+    }
     if (location.pathname.startsWith('/sales/receipts')) {
       return 'سندات القبض';
     }
@@ -108,7 +111,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { name: t('sidebar.customers'), path: '/customers', icon: Users, isSoon: false },
     { name: t('sidebar.vendors'), path: '/vendors', icon: Truck, isSoon: false },
     { name: t('sidebar.accounting'), path: '/accounting', icon: FileSpreadsheet, isSoon: false },
-    { name: t('sidebar.reports'), path: '/reports-soon', icon: SlidersHorizontal, isSoon: true },
+    { name: t('sidebar.reports'), path: '/reports', icon: SlidersHorizontal, isSoon: false },
     { name: t('sidebar.settings'), path: '/settings', icon: Settings, isSoon: false }
   ];
 
