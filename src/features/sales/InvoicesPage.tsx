@@ -14,7 +14,8 @@ import { getErrorMessage } from '../../lib/errors';
 import { 
   formatNumberWithLatinDigits, 
   formatArabicDateWithLatinDigits,
-  toEnglishDigits
+  toEnglishDigits,
+  normalizeDecimalInput
 } from '../../lib/formatters';
 import { 
   Tag, 
@@ -78,9 +79,9 @@ export const InvoicesPage: React.FC = () => {
     uuid: string; // client-side key
     item_id: string;
     description: string;
-    quantity: number;
-    unit_price: number;
-    discount_amount: number;
+    quantity: number | string;
+    unit_price: number | string;
+    discount_amount: number | string;
     tax_rate: number;
     revenue_account_id: string;
   }>>([]);
@@ -123,12 +124,16 @@ export const InvoicesPage: React.FC = () => {
     let taxTotal = 0;
 
     lines.forEach(line => {
-      const lineSubtotal = line.quantity * line.unit_price;
-      const lineNet = Math.max(0, lineSubtotal - line.discount_amount);
+      const gQty = Number(line.quantity) || 0;
+      const gPrice = Number(line.unit_price) || 0;
+      const gDisc = Number(line.discount_amount) || 0;
+      
+      const lineSubtotal = gQty * gPrice;
+      const lineNet = Math.max(0, lineSubtotal - gDisc);
       const lineTax = lineNet * (line.tax_rate / 100);
 
       subtotal += lineSubtotal;
-      discountTotal += line.discount_amount;
+      discountTotal += gDisc;
       taxTotal += lineTax;
     });
 
@@ -161,9 +166,9 @@ export const InvoicesPage: React.FC = () => {
         uuid: Math.random().toString(),
         item_id: '',
         description: '',
-        quantity: 1,
-        unit_price: 0,
-        discount_amount: 0,
+        quantity: '1',
+        unit_price: '0',
+        discount_amount: '0',
         tax_rate: 15.00, // standard default
         revenue_account_id: ''
       }
@@ -180,7 +185,7 @@ export const InvoicesPage: React.FC = () => {
     if (item) {
       updated[index].item_id = itemId;
       updated[index].description = item.description || item.name || '';
-      updated[index].unit_price = item.selling_price || 0;
+      updated[index].unit_price = String(item.selling_price || 0);
       updated[index].tax_rate = item.tax_rate !== undefined ? item.tax_rate : 15.00;
 
       // Determine correct revenue account
@@ -194,7 +199,7 @@ export const InvoicesPage: React.FC = () => {
     } else {
       updated[index].item_id = '';
       updated[index].description = '';
-      updated[index].unit_price = 0;
+      updated[index].unit_price = '0';
       updated[index].tax_rate = 15.00;
       updated[index].revenue_account_id = '';
     }
@@ -218,9 +223,9 @@ export const InvoicesPage: React.FC = () => {
         uuid: Math.random().toString(),
         item_id: '',
         description: '',
-        quantity: 1,
-        unit_price: 0,
-        discount_amount: 0,
+        quantity: '1',
+        unit_price: '0',
+        discount_amount: '0',
         tax_rate: 15.00,
         revenue_account_id: ''
       }
@@ -255,7 +260,7 @@ export const InvoicesPage: React.FC = () => {
       return;
     }
 
-    if (lines.some(l => l.quantity <= 0 || l.unit_price < 0)) {
+    if (lines.some(l => Number(l.quantity) <= 0 || Number(l.unit_price) < 0)) {
       setFormError('الكميات يجب أن تكون أكبر من صفر والأسعار موجبة.');
       setSaveLoading(false);
       return;
@@ -855,11 +860,10 @@ export const InvoicesPage: React.FC = () => {
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-slate-400">الكمية *</label>
                           <input
-                            type="number"
-                            min="1"
-                            step="any"
+                            type="text"
+                            inputMode="decimal"
                             value={line.quantity}
-                            onChange={(e) => handleUpdateLineField(index, 'quantity', Number(toEnglishDigits(e.target.value)))}
+                            onChange={(e) => handleUpdateLineField(index, 'quantity', normalizeDecimalInput(e.target.value))}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
                           />
                         </div>
@@ -868,11 +872,10 @@ export const InvoicesPage: React.FC = () => {
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-slate-400">سعر الوحدة *</label>
                           <input
-                            type="number"
-                            min="0"
-                            step="any"
+                            type="text"
+                            inputMode="decimal"
                             value={line.unit_price}
-                            onChange={(e) => handleUpdateLineField(index, 'unit_price', Number(toEnglishDigits(e.target.value)))}
+                            onChange={(e) => handleUpdateLineField(index, 'unit_price', normalizeDecimalInput(e.target.value))}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
                           />
                         </div>
@@ -881,11 +884,10 @@ export const InvoicesPage: React.FC = () => {
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-slate-400">قيمة الخصم</label>
                           <input
-                            type="number"
-                            min="0"
-                            step="any"
+                            type="text"
+                            inputMode="decimal"
                             value={line.discount_amount}
-                            onChange={(e) => handleUpdateLineField(index, 'discount_amount', Number(toEnglishDigits(e.target.value)))}
+                            onChange={(e) => handleUpdateLineField(index, 'discount_amount', normalizeDecimalInput(e.target.value))}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
                           />
                         </div>

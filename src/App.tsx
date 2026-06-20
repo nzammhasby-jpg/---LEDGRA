@@ -14,6 +14,8 @@ import { VendorsPage } from './features/vendors/VendorsPage';
 import { ItemsPage } from './features/items/ItemsPage';
 import { InvoicesPage } from './features/sales/InvoicesPage';
 import { ReceiptsPage } from './features/sales/ReceiptsPage';
+import { PurchaseBillsPage } from './features/purchases/PurchaseBillsPage';
+import { PaymentsPage } from './features/purchases/PaymentsPage';
 import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured } from './lib/supabase';
@@ -256,8 +258,8 @@ export default function App() {
             {/* Sales Invoices & Receipts Module */}
             <Route path="/sales/invoices" element={<InvoicesPage />} />
             <Route path="/sales/receipts" element={<ReceiptsPage />} />
-            <Route path="/purchases-soon" element={<SoonModule />} />
-            <Route path="/expenses-soon" element={<SoonModule />} />
+            <Route path="/purchases/bills" element={<PurchaseBillsPage />} />
+            <Route path="/purchases/payments" element={<PaymentsPage />} />
             <Route path="/items" element={<ItemsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/vendors" element={<VendorsPage />} />

@@ -15,7 +15,8 @@ import { getErrorMessage } from '../../lib/errors';
 import { 
   formatNumberWithLatinDigits, 
   formatArabicDateWithLatinDigits,
-  toEnglishDigits
+  toEnglishDigits,
+  normalizeDecimalInput
 } from '../../lib/formatters';
 import { 
   CreditCard, 
@@ -168,7 +169,7 @@ export const ReceiptsPage: React.FC = () => {
   const handleUpdateAllocation = (invId: string, val: string) => {
     setAllocations(prev => ({
       ...prev,
-      [invId]: toEnglishDigits(val)
+      [invId]: normalizeDecimalInput(val)
     }));
   };
 
@@ -711,11 +712,10 @@ export const ReceiptsPage: React.FC = () => {
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-slate-400">المبلغ المقبوض الإجمالي (SAR) *</label>
                     <input
-                      type="number"
-                      step="any"
-                      min="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={amount}
-                      onChange={(e) => setAmount(toEnglishDigits(e.target.value))}
+                      onChange={(e) => setAmount(normalizeDecimalInput(e.target.value))}
                       required
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:outline-none focus:border-brand-blue rounded-xl text-xs font-bold text-slate-700 font-sans text-left"
                     />
@@ -848,10 +848,8 @@ export const ReceiptsPage: React.FC = () => {
                             
                             <td className="px-3 py-2.5 text-left">
                               <input
-                                type="number"
-                                step="any"
-                                min="0"
-                                max={inv.balance_due}
+                                type="text"
+                                inputMode="decimal"
                                 value={allocations[inv.id] || ''}
                                 onChange={(e) => handleUpdateAllocation(inv.id, e.target.value)}
                                 placeholder="0.00"

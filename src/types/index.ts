@@ -401,5 +401,101 @@ export interface ReceiptAllocation {
 }
 
 
+// ==========================================
+// Phase 6: Purchase Bills and Payments (المشتريات والمدفوعات)
+// ==========================================
+export type PurchaseBillStatus = 'draft' | 'approved' | 'cancelled';
+
+export interface PurchaseBill {
+  id: string;
+  organization_id: string;
+  vendor_id: string;
+  bill_number: string;
+  vendor_invoice_number: string | null;
+  bill_date: string;
+  due_date: string;
+  status: PurchaseBillStatus;
+  payment_status: PaymentStatus;
+  subtotal: number;
+  discount_total: number;
+  tax_total: number;
+  total: number;
+  paid_amount: number;
+  balance_due: number;
+  currency: string;
+  notes: string | null;
+  journal_entry_id: string | null;
+  cancelled_journal_entry_id: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  vendor?: Vendor;
+  lines?: PurchaseBillLine[];
+}
+
+export interface PurchaseBillLine {
+  id: string;
+  purchase_bill_id: string;
+  organization_id: string;
+  item_id: string | null;
+  line_number: number;
+  description: string | null;
+  quantity: number;
+  unit_cost: number;
+  discount_amount: number;
+  tax_rate: number;
+  tax_amount: number;
+  line_total: number;
+  expense_account_id: string | null;
+  inventory_account_id: string | null;
+  tax_account_id: string | null;
+  created_at: string;
+  item?: Item;
+}
+
+export type PaymentStatusType = 'draft' | 'approved' | 'cancelled';
+
+export interface Payment {
+  id: string;
+  organization_id: string;
+  vendor_id: string;
+  payment_number: string;
+  payment_date: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  cash_account_id: string | null;
+  bank_account_id: string | null;
+  reference: string | null;
+  notes: string | null;
+  status: PaymentStatusType;
+  journal_entry_id: string | null;
+  cancelled_journal_entry_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at?: string;
+  approved_at: string | null;
+  approved_by: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  vendor?: Vendor;
+  allocations?: PaymentAllocation[];
+}
+
+export interface PaymentAllocation {
+  id: string;
+  organization_id: string;
+  payment_id: string;
+  purchase_bill_id: string;
+  allocated_amount: number;
+  created_at: string;
+  purchase_bill?: PurchaseBill;
+}
+
+
+
 
 

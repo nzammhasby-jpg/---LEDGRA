@@ -65,6 +65,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     if (location.pathname.startsWith('/sales/receipts')) {
       return 'سندات القبض';
     }
+    if (location.pathname.startsWith('/purchases/bills')) {
+      return 'فواتير المشتريات';
+    }
+    if (location.pathname.startsWith('/purchases/payments')) {
+      return 'سندات الصرف';
+    }
     switch (location.pathname) {
       case '/':
         return 'الرئيسية';
@@ -88,8 +94,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { name: t('sidebar.home'), path: '/', icon: Home, isSoon: false },
     { name: 'فواتير المبيعات', path: '/sales/invoices', icon: Tag, isSoon: false },
     { name: 'سندات القبض', path: '/sales/receipts', icon: ArrowRightLeft, isSoon: false },
-    { name: t('sidebar.purchases'), path: '/purchases-soon', icon: ShoppingCart, isSoon: true },
-    { name: t('sidebar.expenses'), path: '/expenses-soon', icon: CreditCard, isSoon: true },
+    { name: 'فواتير المشتريات', path: '/purchases/bills', icon: ShoppingCart, isSoon: false },
+    { name: 'سندات الصرف', path: '/purchases/payments', icon: CreditCard, isSoon: false },
     { name: t('sidebar.items'), path: '/items', icon: FileText, isSoon: false },
     { name: t('sidebar.customers'), path: '/customers', icon: Users, isSoon: false },
     { name: t('sidebar.vendors'), path: '/vendors', icon: Truck, isSoon: false },
