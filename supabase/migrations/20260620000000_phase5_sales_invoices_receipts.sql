@@ -1110,7 +1110,10 @@ BEGIN
         END IF;
 
         IF v_alloc_amt > v_balance_due THEN
-            RAISE EXCEPTION 'المبلغ المخصص (' || v_alloc_amt || ') يتجاوز الرصيد المتبقي المستحق على الفاتورة (' || v_balance_due || ').';
+            RAISE EXCEPTION
+                'المبلغ المخصص (%) يتجاوز الرصيد المتبقي المستحق على الفاتورة (%).',
+                v_alloc_amt,
+                v_balance_due;
         END IF;
 
         v_allocated_sum := v_allocated_sum + v_alloc_amt;
@@ -1124,7 +1127,10 @@ BEGIN
     END LOOP;
 
     IF v_allocated_sum > p_amount THEN
-        RAISE EXCEPTION 'مجموع المبالغ المخصصة للفواتير (' || v_allocated_sum || ') يتجاوز القيمة الإجمالية لسند القبض (' || p_amount || ').';
+        RAISE EXCEPTION
+            'مجموع المبالغ المخصصة للفواتير (%) يتجاوز القيمة الإجمالية لسند القبض (%).',
+            v_allocated_sum,
+            p_amount;
     END IF;
 
     -- Log action in Audit Logs
@@ -1258,7 +1264,10 @@ BEGIN
         END IF;
 
         IF v_alloc_amt > v_balance_due THEN
-            RAISE EXCEPTION 'المبلغ المخصص (' || v_alloc_amt || ') يتجاوز الرصيد المتبقي المستحق على الفاتورة (' || v_balance_due || ').';
+            RAISE EXCEPTION
+                'المبلغ المخصص (%) يتجاوز الرصيد المتبقي المستحق على الفاتورة (%).',
+                v_alloc_amt,
+                v_balance_due;
         END IF;
 
         v_allocated_sum := v_allocated_sum + v_alloc_amt;
@@ -1272,7 +1281,10 @@ BEGIN
     END LOOP;
 
     IF v_allocated_sum > p_amount THEN
-        RAISE EXCEPTION 'مجموع المبالغ المخصصة للفواتير (' || v_allocated_sum || ') يتجاوز القيمة الإجمالية لسند القبض (' || p_amount || ').';
+        RAISE EXCEPTION
+            'مجموع المبالغ المخصصة للفواتير (%) يتجاوز القيمة الإجمالية لسند القبض (%).',
+            v_allocated_sum,
+            p_amount;
     END IF;
 
     -- Update Receipt Header
@@ -1502,7 +1514,11 @@ BEGIN
         END IF;
 
         IF v_alloc.allocated_amount > v_invoice_bal THEN
-            RAISE EXCEPTION 'القيمة المخصصة للتحصيل (' || v_alloc.allocated_amount || ') تتجاوز القيمة المستحقة المتبقية للفاتورة ' || v_invoice_num || ' (' || v_invoice_bal || ').';
+            RAISE EXCEPTION
+                'القيمة المخصصة للتحصيل (%) تتجاوز القيمة المستحقة المتبقية للفاتورة % (%).',
+                v_alloc.allocated_amount,
+                v_invoice_num,
+                v_invoice_bal;
         END IF;
 
         v_alloc_sum := v_alloc_sum + v_alloc.allocated_amount;
@@ -1530,7 +1546,10 @@ BEGIN
     END LOOP;
 
     IF v_alloc_sum > v_amount THEN
-        RAISE EXCEPTION 'مجموع التخصيصات الفعلي (' || v_alloc_sum || ') تجاوز قيمة سند القبض (' || v_amount || ').';
+        RAISE EXCEPTION
+            'مجموع التخصيصات الفعلي (%) تجاوز قيمة سند القبض (%).',
+            v_alloc_sum,
+            v_amount;
     END IF;
 
     -- Mark Receipt as Approved
