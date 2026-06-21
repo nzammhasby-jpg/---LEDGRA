@@ -24,6 +24,18 @@ import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured } from './lib/supabase';
 import { ShieldAlert, Terminal, HelpCircle } from 'lucide-react';
 
+// Official Print Feature Component Pages
+import { SalesInvoicePrint } from './features/print/SalesInvoicePrint';
+import { ReceiptPrint } from './features/print/ReceiptPrint';
+import { PurchaseBillPrint } from './features/print/PurchaseBillPrint';
+import { PaymentPrint } from './features/print/PaymentPrint';
+import { CustomerStatementPrint } from './features/print/CustomerStatementPrint';
+import { VendorStatementPrint } from './features/print/VendorStatementPrint';
+import { IncomeStatementPrint } from './features/print/IncomeStatementPrint';
+import { BalanceSheetPrint } from './features/print/BalanceSheetPrint';
+import { InventoryReportPrint } from './features/print/InventoryReportPrint';
+
+
 // Beautiful configuration missing notice for development when secrets are not set
 const SupabaseConfigAlert: React.FC = () => {
   return (
@@ -190,6 +202,25 @@ const ProtectedRoute: React.FC = () => {
   );
 };
 
+// PROTECTED PRINT ROUTES: Requires Login AND Completed Onboarding (No Sidebar/Header Shell elements)
+const ProtectedPrintRoute: React.FC = () => {
+  const { user, currentOrg, loading, dataError, refreshUserData } = useAuth();
+
+  if (dataError) return <DatabaseErrorAlert error={dataError} onRetry={refreshUserData} />;
+
+  if (loading) return <FullScreenLoader />;
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!currentOrg || !currentOrg.onboarding_completed) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return <Outlet />;
+};
+
 // ONBOARDING ROUTES: Requires Login BUT must NOT have completed onboarding yet
 const OnboardingRoute: React.FC = () => {
   const { user, currentOrg, loading, dataError, refreshUserData } = useAuth();
@@ -275,6 +306,19 @@ export default function App() {
             <Route path="/reports" element={<ReportsLayout />} />
             <Route path="/reports-soon" element={<SoonModule />} />
             <Route path="/help-panel" element={<HelpPanel />} />
+          </Route>
+
+          {/* Protected Financial A4 Clean Print Templates (Without Sidebar/Header AppShell) */}
+          <Route element={<ProtectedPrintRoute />}>
+            <Route path="/print/sales-invoice/:id" element={<SalesInvoicePrint />} />
+            <Route path="/print/receipt/:id" element={<ReceiptPrint />} />
+            <Route path="/print/purchase-bill/:id" element={<PurchaseBillPrint />} />
+            <Route path="/print/payment/:id" element={<PaymentPrint />} />
+            <Route path="/print/customer-statement" element={<CustomerStatementPrint />} />
+            <Route path="/print/vendor-statement" element={<VendorStatementPrint />} />
+            <Route path="/print/income-statement" element={<IncomeStatementPrint />} />
+            <Route path="/print/balance-sheet" element={<BalanceSheetPrint />} />
+            <Route path="/print/inventory-report" element={<InventoryReportPrint />} />
           </Route>
 
           {/* Absolute Fallback Redirect */}

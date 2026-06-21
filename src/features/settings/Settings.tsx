@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { Branch, Account, AccountingSettings as AccountingSettingsType } from '../../types';
 import { accountingService } from '../../lib/accountingService';
 import { normalizeIntegerInput } from '../../lib/formatters';
+import { organizationSettingsService } from '../../lib/organizationSettingsService';
 import { 
   Building, 
   Users, 
@@ -17,7 +18,16 @@ import {
   AlertCircle,
   BookOpen,
   Save,
-  HelpCircle
+  HelpCircle,
+  Upload,
+  Trash2,
+  Palette,
+  Check,
+  Globe,
+  Tag,
+  Phone,
+  Layout,
+  LayoutGrid
 } from 'lucide-react';
 
 interface SettingsMember {
@@ -38,9 +48,204 @@ interface RPCMemberResult {
 }
 
 export const Settings: React.FC = () => {
-  const { currentOrg, roleInCurrentOrg } = useAuth();
+  const { currentOrg, roleInCurrentOrg, updateOrg } = useAuth();
   const { t } = useTranslation('ar');
   const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting'>('info');
+
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (currentOrg?.logo_url) {
+      if (currentOrg.logo_url.startsWith('http://') || currentOrg.logo_url.startsWith('https://')) {
+        setLogoUrl(currentOrg.logo_url);
+      } else {
+        organizationSettingsService.getLogoSignedUrl(currentOrg.logo_url)
+          .then(url => {
+            if (active) setLogoUrl(url);
+          })
+          .catch(err => {
+            console.error('Failed to retrieve logo signed URL:', err);
+            if (active) setLogoUrl(null);
+          });
+      }
+    } else {
+      setLogoUrl(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [currentOrg?.logo_url]);
+
+  // ==========================================
+  // Phase 10: Enterprise & Print Brand Settings Space
+  // ==========================================
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const [formData, setFormData] = useState({
+    name_ar: '',
+    name_en: '',
+    cr_number: '',
+    vat_number: '',
+    is_vat_registered: false,
+    phone: '',
+    email: '',
+    website: '',
+    address_line: '',
+    city: '',
+    country: 'المملكة العربية السعودية',
+    postal_code: '',
+    print_primary_color: '#111827',
+    print_footer_text: '',
+    default_invoice_note: '',
+    default_receipt_note: '',
+    default_payment_note: '',
+    show_logo_on_print: true,
+    show_tax_number_on_print: true,
+    show_commercial_registration_on_print: true,
+  });
+
+  useEffect(() => {
+    if (currentOrg) {
+      setFormData({
+        name_ar: currentOrg.name_ar || '',
+        name_en: currentOrg.name_en || '',
+        cr_number: currentOrg.cr_number || '',
+        vat_number: currentOrg.vat_number || '',
+        is_vat_registered: currentOrg.is_vat_registered || false,
+        phone: currentOrg.phone || '',
+        email: currentOrg.email || '',
+        website: currentOrg.website || '',
+        address_line: currentOrg.address_line || '',
+        city: currentOrg.city || '',
+        country: currentOrg.country || 'المملكة العربية السعودية',
+        postal_code: currentOrg.postal_code || '',
+        print_primary_color: currentOrg.print_primary_color || '#111827',
+        print_footer_text: currentOrg.print_footer_text || '',
+        default_invoice_note: currentOrg.default_invoice_note || '',
+        default_receipt_note: currentOrg.default_receipt_note || '',
+        default_payment_note: currentOrg.default_payment_note || '',
+        show_logo_on_print: currentOrg.show_logo_on_print ?? true,
+        show_tax_number_on_print: currentOrg.show_tax_number_on_print ?? true,
+        show_commercial_registration_on_print: currentOrg.show_commercial_registration_on_print ?? true,
+      });
+    }
+  }, [currentOrg]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    setFormData(prev => ({ ...prev, [name]: val }));
+  };
+
+  const handleCheckboxChange = (name: string, checked: boolean) => {
+    setFormData(prev => ({ ...prev, [name]: checked }));
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentOrg) return;
+    if (!isPrivileged) {
+      setSettingsError('عذراً، لا تمتلك الصلاحيات الكافية لتعديل إعدادات المنشأة. الحفظ متاح فقط للمالك والمسؤولين.');
+      return;
+    }
+
+    setSavingSettings(true);
+    setSettingsSuccess(null);
+    setSettingsError(null);
+
+    try {
+      // Direct call to standard updateOrg that refreshes Context AND database beautifully
+      const { error } = await updateOrg(currentOrg.id, {
+        name_ar: formData.name_ar,
+        name_en: formData.name_en,
+        cr_number: formData.cr_number || null,
+        vat_number: formData.vat_number || null,
+        is_vat_registered: formData.is_vat_registered,
+        phone: formData.phone || null,
+        email: formData.email || null,
+        website: formData.website || null,
+        address_line: formData.address_line || null,
+        city: formData.city || null,
+        country: formData.country || null,
+        postal_code: formData.postal_code || null,
+        print_primary_color: formData.print_primary_color,
+        print_footer_text: formData.print_footer_text || null,
+        default_invoice_note: formData.default_invoice_note || null,
+        default_receipt_note: formData.default_receipt_note || null,
+        default_payment_note: formData.default_payment_note || null,
+        show_logo_on_print: formData.show_logo_on_print,
+        show_tax_number_on_print: formData.show_tax_number_on_print,
+        show_commercial_registration_on_print: formData.show_commercial_registration_on_print,
+      });
+
+      if (error) {
+        setSettingsError(error);
+      } else {
+        setSettingsSuccess('تم حفظ إعدادات الكيان والهوية التجارية بنجاح!');
+      }
+    } catch (err: unknown) {
+      const errorObj = err as Error;
+      setSettingsError(errorObj.message || 'حدث خطأ غير متوقع أثناء الحفظ.');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !currentOrg) return;
+    if (!isPrivileged) {
+      setSettingsError('عذراً، لا تمتلك الصلاحيات لتعديل هويات أو شعارات المنشأة.');
+      return;
+    }
+
+    setUploadingLogo(true);
+    setSettingsSuccess(null);
+    setSettingsError(null);
+
+    try {
+      const file = files[0];
+      const filePath = await organizationSettingsService.uploadLogo(currentOrg.id, file);
+      // Sync with context so it triggers everywhere with reactive goodness
+      await updateOrg(currentOrg.id, { logo_url: filePath });
+      setSettingsSuccess('تم رفع شعار المنشأة بنجاح وأرشفته بمركز الملفات!');
+    } catch (err: unknown) {
+      const errorObj = err as Error;
+      setSettingsError(errorObj.message || 'حدث خطأ غير متوقع أثناء الرفع.');
+    } finally {
+      setUploadingLogo(false);
+      // clear output element
+      e.target.value = '';
+    }
+  };
+
+  const handleLogoDelete = async () => {
+    if (!currentOrg) return;
+    if (!isPrivileged) {
+      setSettingsError('عذراً، لا تمتلك صلاحية حذف الشعار.');
+      return;
+    }
+    if (!confirm('هل ترغب في إزالة الشعار بالكامل؟ سيتم الاحتفاظ بباقي الإعدادات.')) return;
+
+    setUploadingLogo(true);
+    setSettingsSuccess(null);
+    setSettingsError(null);
+
+    try {
+      await organizationSettingsService.deleteLogo(currentOrg.id);
+      await updateOrg(currentOrg.id, { logo_url: null });
+      setSettingsSuccess('تم إزالة شعار المنشأة بشكل آمن!');
+    } catch (err: unknown) {
+      const errorObj = err as Error;
+      setSettingsError(errorObj.message || 'حدث خطأ غير متوقع أثناء الحذف.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   // Accounting Settings state
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -310,85 +515,475 @@ export const Settings: React.FC = () => {
         
         {/* Tab 1: Organization & VAT profiles */}
         {activeTab === 'info' && (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4 flex items-center gap-2">
-                <Building className="w-5 h-5 text-brand-blue" />
-                <span>بيانات الكيان والهوية الضريبية للشركة</span>
-              </h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={handleSaveSettings} className="space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
               <div>
-                <span className="text-[11px] text-slate-400 block mb-1">اسم المنشأة بالعربية</span>
-                <p className="text-sm font-bold text-slate-800 bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl">
-                  {currentOrg ? currentOrg.name_ar : 'منشأة غير محددة'}
-                </p>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Building className="w-5 h-5 text-brand-blue" />
+                  <span>إعدادات المنشأة والهوية التجارية للطباعة</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">أدخل البيانات الرسمية وهوية الفواتير والمستندات والتقارير المطبوعة A4.</p>
               </div>
-
-              <div>
-                <span className="text-[11px] text-slate-400 block mb-1">اسم المنشأة بالإنجليزية</span>
-                <p className="text-sm font-semibold text-slate-600 bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl font-mono text-left" style={{ direction: 'ltr' }}>
-                  {currentOrg?.name_en || 'None English Name'}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <span className="text-[11px] text-slate-400 block mb-1">مدينة التشغيل الرئيسي</span>
-                <p className="text-sm font-bold text-slate-800 bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl">
-                  {currentOrg?.city || 'الرياض'}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-[11px] text-slate-400 block mb-1">الرقم الموحد / السجل التجاري (CR)</span>
-                <p className="text-sm font-bold text-slate-800 bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl font-mono tracking-wide" style={{ direction: 'ltr', textAlign: 'right' }}>
-                  {currentOrg?.cr_number || 'غير متوفر'}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-[11px] text-slate-400 block mb-1">العملة الأساسية للتقارير المالية</span>
-                <p className="text-sm font-extrabold text-brand-navy bg-slate-50 border border-slate-200 py-2.5 px-3 rounded-xl">
-                  الريال السعودي (ر.س)
-                </p>
-              </div>
-            </div>
-
-            {/* VAT Specific panel */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div>
-                  <span className="text-xs font-bold text-slate-900 block">{t('settings.vat_status')}</span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">نهج ومعلومات الامتثال والربط الضريبي للمنشأة</span>
-                </div>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold leading-none ${
-                  currentOrg?.is_vat_registered ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
-                }`}>
-                  {currentOrg?.is_vat_registered ? 'منشأة مسجلة ضريبياً' : 'غير مسجلة حالياً'}
-                </span>
-              </div>
-
-              {currentOrg?.is_vat_registered && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-[11px] text-slate-400 block mb-1">الرقم الضريبي الموحد للمنشأة (15 خانة)</span>
-                    <p className="text-sm font-extrabold font-mono text-slate-800 bg-white border border-slate-200 py-2 px-3 rounded-xl tracking-wider">
-                      {currentOrg?.vat_number || 'غير متوفر'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block mb-1">نسبة ضريبة القيمة المضافة الافتراضية باتحاد المملكة</span>
-                    <p className="text-sm font-extrabold font-mono text-slate-800 bg-white border border-slate-200 py-2 px-3 rounded-xl">
-                      15%
-                    </p>
-                  </div>
-                </div>
+              {isPrivileged && (
+                <button
+                  type="submit"
+                  disabled={savingSettings}
+                  className="bg-brand-blue hover:bg-brand-blue/90 disabled:bg-slate-300 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingSettings ? 'جاري الحفظ...' : 'حفظ التغييرات'}</span>
+                </button>
               )}
             </div>
-          </div>
+
+            {!isPrivileged && (
+              <div className="bg-slate-50 border border-slate-200 text-slate-600 rounded-xl p-3.5 text-xs font-bold leading-relaxed flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>عذراً، تتوفر الإعدادات للقراءة فقط، والتعديل مقتصر على الملاك والمشرفين (Owner & Admin).</span>
+              </div>
+            )}
+
+            {settingsSuccess && (
+              <div className="bg-emerald-50 border-r-4 border-emerald-500 text-emerald-800 p-4 rounded-xl text-xs font-bold flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600" />
+                <span>{settingsSuccess}</span>
+              </div>
+            )}
+
+            {settingsError && (
+              <div className="bg-red-50 border-r-4 border-red-500 text-red-800 p-4 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                <span>{settingsError}</span>
+              </div>
+            )}
+
+            {/* Grid for General Fields & Logo uploading */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+              {/* Left Column (2 Cols): General Information Fields */}
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* 1. الأسماء وعناوين الكيان */}
+                <div className="bg-slate-50/50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
+                  <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2 mb-2">البيانات الأساسية للمنشأة</h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">اسم المنشأة بالعربية <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        name="name_ar"
+                        value={formData.name_ar}
+                        onChange={handleInputChange}
+                        required
+                        disabled={!isPrivileged}
+                        placeholder="مثال: شركة لِدجرا للتقنية المحاسبية"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">اسم المنشأة بالإنجليزية</label>
+                      <input
+                        type="text"
+                        name="name_en"
+                        value={formData.name_en}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="e.g. Ledgra Accounting Tech LLC"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition text-left font-mono disabled:bg-slate-100 placeholder:font-sans"
+                        style={{ direction: 'ltr' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">رقم السجل التجاري / الرقم الموحد (10 خانات)</label>
+                      <input
+                        type="text"
+                        name="cr_number"
+                        value={formData.cr_number}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="أدخل 10 أرقام رقمية فقط"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition font-sans disabled:bg-slate-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">الرقم الضريبي الموحد للمنشأة (15 خانة)</label>
+                      <input
+                        type="text"
+                        name="vat_number"
+                        value={formData.vat_number}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="يبدأ بالرقم 3 وينتهي بـ 3"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition font-sans disabled:bg-slate-100"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">الهاتف</label>
+                      <input
+                        type="text"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="مثال: 0500000000"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100 text-left font-mono"
+                        style={{ direction: 'ltr' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">البريد الإلكتروني للخطابات</label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="مثال: info@company.com"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100 text-left font-mono placeholder:font-sans"
+                        style={{ direction: 'ltr' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">الموقع الإلكتروني</label>
+                      <input
+                        type="text"
+                        name="website"
+                        value={formData.website}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="مثال: www.company.com"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100 text-left font-mono placeholder:font-sans"
+                        style={{ direction: 'ltr' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. تفاصيل العنوان الفعلي */}
+                <div className="bg-slate-50/50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
+                  <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2 mb-2">العنوان والمدينة الفروع الرئيسية</h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">اسم الشارع والحي فند ريادي</label>
+                      <input
+                        type="text"
+                        name="address_line"
+                        value={formData.address_line}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="مثال: طريق الملك عبد العزيز، حي الياسمين"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">المدينة</label>
+                      <input
+                        type="text"
+                        name="city"
+                        value={formData.city}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="مثال: الرياض"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">الدولة</label>
+                      <input
+                        type="text"
+                        name="country"
+                        value={formData.country}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="مثال: المملكة العربية السعودية"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">الرمز البريدي</label>
+                      <input
+                        type="text"
+                        name="postal_code"
+                        value={formData.postal_code}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="مثال: 11145"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100 font-sans text-right"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. ملاحظات افتراضية للفواتير والسندات */}
+                <div className="bg-slate-50/50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
+                  <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2 mb-2">الملاحظات الافتراضية والشروط للمستندات</h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">شروط وملاحظات فاتورة المبيعات الافتراضية</label>
+                      <textarea
+                        name="default_invoice_note"
+                        value={formData.default_invoice_note}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        rows={2}
+                        placeholder="تظهر أسفل الفاتورة مبيعات، مثل: البضاعة المباعة لا ترد ولا تستبدل بعد 3 أيام."
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">ملاحظات و بنود سند القبض الافتراضية</label>
+                      <textarea
+                        name="default_receipt_note"
+                        value={formData.default_receipt_note}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        rows={2}
+                        placeholder="تظهر أسفل سند القبض، مثل: شكرًا لتعاملكم مع شركتنا."
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">ملاحظات و بنود سند الصرف الافتراضية</label>
+                      <textarea
+                        name="default_payment_note"
+                        value={formData.default_payment_note}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        rows={2}
+                        placeholder="تظهر أسفل سند الصرف للموردين، مثل: مستند لصرف مستحقات المشتريات المعتمدة."
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Right Column (1 Col): Brand Identity, Logo, Print switches */}
+              <div className="space-y-6">
+                
+                {/* الشعار */}
+                <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4 flex flex-col items-center text-center">
+                  <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2 w-full text-right">شعار المنشأة المعتمد</h4>
+                  
+                  {currentOrg?.logo_url ? (
+                    <div className="space-y-3 w-full">
+                      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-center min-h-[140px] shadow-sm relative group overflow-hidden">
+                        {logoUrl ? (
+                          <img 
+                            src={logoUrl} 
+                            alt="Company Logo" 
+                            referrerPolicy="no-referrer"
+                            className="max-h-[120px] max-w-full object-contain"
+                            onError={() => setLogoUrl(null)}
+                          />
+                        ) : (
+                          <div className="text-xs text-slate-400">جاري تحميل الشعار...</div>
+                        )}
+                      </div>
+                      {isPrivileged && (
+                        <div className="flex gap-2 justify-center">
+                          <label className="bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1 transition">
+                            <Upload className="w-3 h-3" />
+                            <span>تغيير</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleLogoUpload}
+                              className="hidden"
+                              disabled={uploadingLogo}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleLogoDelete}
+                            disabled={uploadingLogo}
+                            className="bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer font-sans"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>حذف الشعار</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-6 w-full flex flex-col items-center justify-center min-h-[140px] text-slate-400">
+                      <Building2 className="w-10 h-10 text-slate-300 mb-2" />
+                      <span className="text-[10px] font-bold">لا يوجد شعار حالياً</span>
+                      <span className="text-[9px] text-slate-400 mt-1">يُوصى بصيغة مربعة وبحجم أقل من 2MB</span>
+                      {isPrivileged && (
+                        <label className="bg-brand-blue hover:bg-brand-blue/90 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer mt-4 flex items-center gap-1 transition shadow-sm">
+                          <Upload className="w-3 h-3" />
+                          <span>رفع شعار</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleLogoUpload}
+                            className="hidden"
+                            disabled={uploadingLogo}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+                  {uploadingLogo && (
+                    <div className="text-[10px] font-bold text-brand-blue animate-pulse mt-1">
+                      جاري رفع الشعار ومعالجة الأرشفة الآمنة...
+                    </div>
+                  )}
+                </div>
+
+                {/* اللون الرئيسي للطباعة */}
+                <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4">
+                  <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                    <Palette className="w-4 h-4 text-brand-blue" />
+                    <span>اللون الرئيسي للطباعة</span>
+                  </h4>
+
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-bold text-slate-500 block">اختر لون الطابع الأساسي للخطوط والعناوين</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        name="print_primary_color"
+                        value={formData.print_primary_color}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        className="w-10 h-10 border border-slate-200 rounded-lg cursor-pointer shrink-0"
+                      />
+                      <input
+                        type="text"
+                        name="print_primary_color"
+                        value={formData.print_primary_color}
+                        onChange={handleInputChange}
+                        disabled={!isPrivileged}
+                        placeholder="#111827"
+                        className="w-full text-xs font-mono font-bold border border-slate-200 py-2 px-2 rounded-xl focus:border-brand-blue outline-none bg-white uppercase"
+                      />
+                    </div>
+
+                    {/* Quick presets */}
+                    <div className="pt-2">
+                      <span className="text-[9px] font-bold text-slate-400 block mb-1.5">لوحات مسبقة الضبط ومحاسبية:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { name: 'الافتراضي الفاخر', color: '#111827' },
+                          { name: 'الأزرق الملكي', color: '#1e3a8a' },
+                          { name: 'الأخضر الداكن', color: '#14532d' },
+                          { name: 'البحريني الدافئ', color: '#881337' },
+                          { name: 'الرمادي المطفي', color: '#334155' }
+                        ].map((pCol) => (
+                          <button
+                            key={pCol.color}
+                            type="button"
+                            onClick={() => isPrivileged && setFormData(prev => ({ ...prev, print_primary_color: pCol.color }))}
+                            className="bg-white border hover:bg-slate-50 text-[10px] py-1 px-2 rounded-lg flex items-center gap-1 cursor-pointer transition select-none"
+                          >
+                            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: pCol.color }} />
+                            <span>{pCol.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* نص التذييل للطباعة */}
+                <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4">
+                  <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2">تفاصيل ذيل الورقة الفاخرة</h4>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-500 block mb-1">نص تذييل الفواتير المطبوعة</label>
+                    <input
+                      type="text"
+                      name="print_footer_text"
+                      value={formData.print_footer_text}
+                      onChange={handleInputChange}
+                      disabled={!isPrivileged}
+                      placeholder="مثال: يسعدنا خدمتكم، الرقم الموحد للإرجاع والدعم 920000000"
+                      className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition bg-white disabled:bg-slate-100"
+                    />
+                  </div>
+                </div>
+
+                {/* خيارات الظهور */}
+                <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-3.5">
+                  <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2">خيارات الهوية في الطباعة</h4>
+                  
+                  <div className="space-y-2.5 pt-1">
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                      <input
+                        type="checkbox"
+                        checked={formData.show_logo_on_print}
+                        onChange={(e) => isPrivileged && handleCheckboxChange('show_logo_on_print', e.target.checked)}
+                        disabled={!isPrivileged}
+                        className="w-4 h-4 accent-brand-blue rounded border-slate-300"
+                      />
+                      <span>إظهار شعار المنشأة في الطباعة</span>
+                    </label>
+
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                      <input
+                        type="checkbox"
+                        checked={formData.show_tax_number_on_print}
+                        onChange={(e) => isPrivileged && handleCheckboxChange('show_tax_number_on_print', e.target.checked)}
+                        disabled={!isPrivileged}
+                        className="w-4 h-4 accent-brand-blue rounded border-slate-300"
+                      />
+                      <span>إظهار الرقم الضريبي للمنشأة</span>
+                    </label>
+
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700 select-none">
+                      <input
+                        type="checkbox"
+                        checked={formData.show_commercial_registration_on_print}
+                        onChange={(e) => isPrivileged && handleCheckboxChange('show_commercial_registration_on_print', e.target.checked)}
+                        disabled={!isPrivileged}
+                        className="w-4 h-4 accent-brand-blue rounded border-slate-300"
+                      />
+                      <span>إظهار السجل التجاري في الهيدر</span>
+                    </label>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Bottom Save Action Panel */}
+            {isPrivileged && (
+              <div className="flex justify-end pt-4 border-t border-slate-100">
+                <button
+                  type="submit"
+                  disabled={savingSettings}
+                  className="bg-brand-blue hover:bg-brand-blue/90 disabled:bg-slate-300 text-white text-xs font-bold px-7 py-3 rounded-xl transition flex items-center gap-2 shadow-md cursor-pointer"
+                >
+                  <Save className="w-4.5 h-4.5" />
+                  <span>{savingSettings ? 'جاري حفظ التعديلات...' : 'حفظ إعدادات المنشأة والهوية'}</span>
+                </button>
+              </div>
+            )}
+          </form>
         )}
 
         {/* Tab 2: Users & permissions memberships */}

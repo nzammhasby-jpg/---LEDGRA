@@ -32,6 +32,18 @@ export interface Organization {
   system_start_date: string | null;
   accounting_mode: string | null;
   starting_balances_later: boolean | null;
+  website?: string | null;
+  address_line?: string | null;
+  country?: string | null;
+  postal_code?: string | null;
+  print_primary_color?: string | null;
+  print_footer_text?: string | null;
+  default_invoice_note?: string | null;
+  default_receipt_note?: string | null;
+  default_payment_note?: string | null;
+  show_logo_on_print?: boolean;
+  show_tax_number_on_print?: boolean;
+  show_commercial_registration_on_print?: boolean;
   updated_at: string | null;
   created_at: string;
 }

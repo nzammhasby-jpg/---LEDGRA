@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
@@ -28,6 +29,8 @@ import {
 
 export const ItemsPage: React.FC = () => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   // Checking permissions
   const canManage = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
@@ -73,6 +76,17 @@ export const ItemsPage: React.FC = () => {
       loadData();
     }
   }, [currentOrg?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') === 'new') {
+      setIsModalOpen(true);
+      if (params.get('type') === 'stockable') {
+        setIsStockable(true);
+      }
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate]);
 
   const loadData = async () => {
     setLoading(true);

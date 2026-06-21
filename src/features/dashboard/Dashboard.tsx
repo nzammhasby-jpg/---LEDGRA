@@ -150,13 +150,8 @@ export const Dashboard: React.FC = () => {
             <h3 className="text-base font-bold text-slate-900">بانتظار البيانات والقيود المالية للمنشأة</h3>
             <p className="text-xs leading-relaxed text-slate-500">
               قمت لتوك بتهيئة منشأتك وعزل فروعها سحابياً بنجاح تحت نظام <strong>لِدجرا</strong> الآمن.
-              الحسابات والتقارير والرسوم البيانية الضريبية ستظهر تلقائياً بمجرد تفعيل المرحلة الثانية وتدوين أول فاتورة إلكترونية أو قيد يومي ومصروفات.
+              الحسابات والتقارير والرسوم البيانية الضريبية ستظهر تلقائياً بمجرد تفعيل الدورة المحاسبية وتدوين أول فاتورة إلكترونية أو قيد يومي وسند صرف.
             </p>
-          </div>
-
-          <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100/60 px-4 py-1.5 rounded-full text-[11px] font-bold text-brand-navy">
-            <AlertCircle className="w-3.5 h-3.5 text-brand-blue shrink-0" />
-            <span>نظام الفواتير والقيود اليومية قيد التطوير في المرحلة القادمة</span>
           </div>
         </div>
 
@@ -165,19 +160,19 @@ export const Dashboard: React.FC = () => {
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-2.5 mb-2 flex items-center justify-between">
               <span>إجراءات سريعة</span>
-              <span className="text-[9px] bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full font-bold">المرحلة الثانية</span>
+              <span className="text-[9px] bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full font-bold">نشط</span>
             </h3>
             
             <p className="text-xs text-slate-400 leading-normal mb-1">
-              هذه الإجراءات تم تخطيطها لتفعيل مستندات التدوين المحاسبي الفوري عند إطلاق الإصدار 2.0:
+              روابط وإجراءات سريعة لتسريع العمليات الفورية والوصول المباشر لنماذج إدخال المعاملات:
             </p>
 
             <div className="space-y-2.5">
               {[
-                { id: 'sales-soon', label: 'إصدار فاتورة مبيعات هجينة', icon: PlusCircle, route: '/sales-soon' },
-                { id: 'customers-soon', label: 'إضافة عميل سعودي جديد', icon: UserPlus, route: '/customers-soon' },
-                { id: 'expenses-soon', label: 'إضافة مستند مصروفات', icon: CreditCard, route: '/expenses-soon' },
-                { id: 'items-soon', label: 'إضافة منتجات ومخزون', icon: PackagePlus, route: '/items-soon' }
+                { id: 'sales-new', label: 'فاتورة مبيعات جديدة', icon: PlusCircle, route: '/sales/invoices?action=new' },
+                { id: 'customers-new', label: 'إضافة عميل جديد', icon: UserPlus, route: '/customers?action=new' },
+                { id: 'expenses-new', label: 'سند صرف جديد', icon: CreditCard, route: '/purchases/payments?action=new' },
+                { id: 'items-new', label: 'إضافة منتج ومخزون', icon: PackagePlus, route: '/items?action=new&type=stockable' }
               ].map((act) => {
                 const IconComp = act.icon;
                 return (
@@ -192,7 +187,7 @@ export const Dashboard: React.FC = () => {
                       </div>
                       <span className="text-xs font-semibold text-slate-700">{act.label}</span>
                     </div>
-                    <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Coming Soon</span>
+                    <span className="text-[9px] bg-brand-blue/5 text-brand-blue px-2 py-0.5 rounded-full">نشط</span>
                   </button>
                 );
               })}
@@ -205,4 +200,5 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+
 export default Dashboard;

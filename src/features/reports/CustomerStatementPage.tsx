@@ -14,6 +14,7 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowRight,
+  Printer,
   Info
 } from 'lucide-react';
 
@@ -147,6 +148,18 @@ export const CustomerStatementPage: React.FC = () => {
           {loadingReport ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           <span>تحديث التقرير</span>
         </button>
+
+        {reportData && (
+          <a
+            href={`#/print/customer-statement?id=${selectedCustomerId}&dateFrom=${dateFrom}&dateTo=${dateTo}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer animate-fade-in"
+          >
+            <Printer className="w-4.5 h-4.5" />
+            <span>طباعة كشف حركات العميل A4</span>
+          </a>
+        )}
       </form>
 
       {errorCode && (

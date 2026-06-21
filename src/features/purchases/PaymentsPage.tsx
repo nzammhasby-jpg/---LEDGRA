@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { purchaseService, CreatePaymentInput } from '../../lib/purchaseService';
 import { masterDataService } from '../../lib/masterDataService';
@@ -41,6 +42,8 @@ import {
 
 export const PaymentsPage: React.FC = () => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   // Checking permissions: Owner, admin, accountant can approve/cancel.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
@@ -86,6 +89,14 @@ export const PaymentsPage: React.FC = () => {
       loadData();
     }
   }, [currentOrg?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') === 'new') {
+      setViewState('add');
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -526,6 +537,16 @@ export const PaymentsPage: React.FC = () => {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
+                          <a
+                            href={`#/print/payment/${p.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-lg transition cursor-pointer"
+                            title="طباعة سند الصرف A4"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </a>
+
                           {p.status === 'draft' && (
                             <>
                               {canApproveOrCancel && (
@@ -854,13 +875,15 @@ export const PaymentsPage: React.FC = () => {
             </div>
 
             <div className="flex gap-2 self-stretch md:self-auto">
-              <button
-                onClick={() => window.print()}
-                className="flex items-center justify-center gap-1.5 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+              <a
+                href={`#/print/payment/${selectedPayment.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
               >
                 <Printer className="w-4 h-4 text-slate-500" />
-                <span>طباعة السند</span>
-              </button>
+                <span>تحضير وطباعة السند A4</span>
+              </a>
 
               {selectedPayment.status === 'draft' && canApproveOrCancel && (
                 <button

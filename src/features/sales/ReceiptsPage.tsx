@@ -569,6 +569,17 @@ export const ReceiptsPage: React.FC = () => {
                               <span>التفاصيل</span>
                             </button>
 
+                            <a
+                              href={`#/print/receipt/${rc.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 px-1.5 text-slate-600 hover:bg-slate-100 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                              title="طباعة سند القبض الضابط"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>طباعة A4</span>
+                            </a>
+
                             {/* Approve option if draft */}
                             {rc.status === 'draft' && canApproveOrCancel && (
                               <button
@@ -952,13 +963,15 @@ export const ReceiptsPage: React.FC = () => {
 
             {/* Right Action buttons */}
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => window.print()}
-                className="px-3.5 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+              <a
+                href={`#/print/receipt/${selectedReceipt.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition"
               >
                 <Printer className="w-4 h-4" />
-                <span>طباعة السند</span>
-              </button>
+                <span>تحضير وطباعة السند A4</span>
+              </a>
 
               {/* Journal Link */}
               {selectedReceipt.journal_entry_id && (

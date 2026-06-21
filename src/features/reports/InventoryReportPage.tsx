@@ -12,6 +12,7 @@ import {
   CheckCircle,
   FileText,
   Warehouse,
+  Printer,
   Coins
 } from 'lucide-react';
 
@@ -89,6 +90,18 @@ export const InventoryReportPage: React.FC = () => {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           <span>تحديث المخزون</span>
         </button>
+
+        {reportRows.length > 0 && (
+          <a
+            href="#/print/inventory-report"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer shrink-0 self-start sm:self-auto animate-fade-in"
+          >
+            <Printer className="w-4 h-4" />
+            <span>طباعة المخزون وتقييماته A4</span>
+          </a>
+        )}
       </div>
 
       {error && (

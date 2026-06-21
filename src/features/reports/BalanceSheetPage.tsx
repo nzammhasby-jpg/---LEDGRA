@@ -11,6 +11,7 @@ import {
   Calendar, 
   RefreshCw, 
   AlertCircle,
+  Printer,
   FolderLock
 } from 'lucide-react';
 
@@ -86,6 +87,18 @@ export const BalanceSheetPage: React.FC = () => {
           {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           <span>عرض المركز المالي</span>
         </button>
+
+        {reportData && (
+          <a
+            href={`#/print/balance-sheet?asOfDate=${asOfDate}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer"
+          >
+            <Printer className="w-4.5 h-4.5" />
+            <span>طباعة المركز المالي A4</span>
+          </a>
+        )}
       </form>
 
       {error && (

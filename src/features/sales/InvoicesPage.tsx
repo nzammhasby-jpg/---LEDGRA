@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { salesService, CreateInvoiceInput } from '../../lib/salesService';
 import { masterDataService } from '../../lib/masterDataService';
@@ -42,6 +43,8 @@ import {
 
 export const InvoicesPage: React.FC = () => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   // Checking permissions: Owner, admin, accountant can approve/cancel; Sales can only create drafts.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
@@ -92,6 +95,14 @@ export const InvoicesPage: React.FC = () => {
       loadData();
     }
   }, [currentOrg?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') === 'new') {
+      setViewState('add');
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -618,6 +629,17 @@ export const InvoicesPage: React.FC = () => {
                               <span>التفاصيل</span>
                             </button>
 
+                            <a
+                              href={`#/print/sales-invoice/${inv.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 px-1.5 text-slate-600 hover:bg-slate-100 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                              title="طباعة الفاتورة الضريبية"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>طباعة A4</span>
+                            </a>
+
                             {/* Approve option if draft */}
                             {inv.status === 'draft' && canApproveOrCancel && (
                               <button
@@ -1072,13 +1094,15 @@ export const InvoicesPage: React.FC = () => {
 
             {/* Quick action buttons inside viewer */}
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => window.print()}
-                className="px-3.5 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+              <a
+                href={`#/print/sales-invoice/${selectedInvoice.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer transition"
               >
                 <Printer className="w-4 h-4" />
-                <span>طباعة صك الفاتورة</span>
-              </button>
+                <span>تحضير وطباعة الفاتورة الضريبية A4</span>
+              </a>
 
               {/* Show entry link if approved */}
               {selectedInvoice.journal_entry_id && (
