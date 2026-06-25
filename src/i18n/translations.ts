@@ -45,7 +45,9 @@ export const translations = {
       forgot_password: 'نسيت كلمة المرور؟',
       sign_in: 'تسجيل الدخول',
       sign_up: 'إنشاء الحساب',
+      sign_up_btn: 'سجّل الآن',
       have_account: 'لديك حساب بالفعل؟',
+      already_have_account: 'لديك حساب بالفعل؟',
       no_account: 'ليس لديك حساب؟',
       terms_agree: 'أوافق على اتفاقية الاستخدام وسياسة الخصوصية لـ لِدجرا',
       auth_error: 'خطأ في المصادقة، يرجى التحقق من البيانات المدخلة'
@@ -199,7 +201,9 @@ export const translations = {
       forgot_password: 'Forgot Password?',
       sign_in: 'Sign In',
       sign_up: 'Sign Up',
+      sign_up_btn: 'Sign Up Now',
       have_account: 'Already have an account?',
+      already_have_account: 'Already have an account?',
       no_account: 'New to Ledgra?',
       terms_agree: 'I agree to public terms of services and privacy policy of LEDGRA',
       auth_error: 'Authentication failed. Please verify credentials.'

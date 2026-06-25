@@ -14,8 +14,7 @@ const registerSchema = z.object({
   fullName: z.string().min(3, { message: 'الاسم الكامل يجب أن لا يقل عن 3 أحرف' }),
   email: z.string().min(1, { message: 'البريد الإلكتروني مطلوب' }).email({ message: 'البريد الإلكتروني غير صحيح' }),
   phone: z.string()
-    .min(10, { message: 'رقم الجوال يجب أن لا يقل عن 10 أرقام' })
-    .regex(/^05[0-9]{8}$/, { message: 'رقم الجوال السعودي يجب أن يبدأ بـ 05 ويتكون من 10 أرقام' }),
+    .regex(/^05\d{8}$/, { message: 'أدخل رقم جوال سعودي صحيح يبدأ بـ 05 ويتكون من 10 أرقام.' }),
   password: z.string().min(6, { message: 'كلمة المرور يجب أن لا تقل عن 6 أحرف' }),
   confirmPassword: z.string().min(1, { message: 'تأكيد كلمة المرور مطلوب' }),
   agreeTerms: z.boolean().refine((val) => val === true, {
@@ -55,18 +54,20 @@ export const Register: React.FC = () => {
     try {
       const response = await signUp(data.email, data.password, data.fullName, data.phone);
       if (response.error) {
-        setApiError(response.error);
-      } else if (response.verificationRequired) {
-        setNeedsVerification(true);
-        setApiSuccess(true);
+        const errorMsg = response.error.toLowerCase();
+        if (errorMsg.includes('already exists') || errorMsg.includes('already registered') || errorMsg.includes('مسجل مسبق')) {
+          setApiError('هذا البريد مستخدم مسبقًا. جرّب تسجيل الدخول بدلًا من إنشاء حساب جديد.');
+        } else if (errorMsg.includes('password should be') || errorMsg.includes('weak') || errorMsg.includes('خانات أو أكثر') || errorMsg.includes('ضعيفة')) {
+          setApiError('كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل.');
+        } else {
+          setApiError('تعذر إنشاء الحساب حاليًا. حاول مرة أخرى.');
+        }
       } else {
         setApiSuccess(true);
-        setTimeout(() => {
-          navigate('/onboarding');
-        }, 1200);
+        setNeedsVerification(true);
       }
     } catch (e: any) {
-      setApiError(e.message || 'حدث خطأ أثناء إنشاء حسابك.');
+      setApiError('تعذر إنشاء الحساب حاليًا. حاول مرة أخرى.');
     }
   };
 
@@ -160,21 +161,12 @@ export const Register: React.FC = () => {
           )}
 
           {apiSuccess && (
-            <div className={`border-r-4 p-4 rounded-xl flex items-start gap-2 ${
-              needsVerification 
-              ? 'bg-amber-50 border-amber-500' 
-              : 'bg-emerald-50 border-emerald-500'
-            }`}>
-              <CheckCircle2 className={`w-5 h-5 shrink-0 mt-0.5 ${needsVerification ? 'text-amber-600' : 'text-emerald-600'}`} />
+            <div className="bg-emerald-50 border-r-4 border-emerald-500 p-4 rounded-xl flex items-start gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
-                <h5 className={`text-sm font-semibold ${needsVerification ? 'text-amber-900' : 'text-emerald-900'}`}>
-                  {needsVerification ? 'تأكيد البريد الإلكتروني مطلوب' : 'تم تسجيل الحساب بنجاح'}
-                </h5>
-                <p className={`text-xs mt-0.5 ${needsVerification ? 'text-amber-700' : 'text-emerald-700'}`}>
-                  {needsVerification 
-                    ? 'تم إرسال رابط تأكيد الحساب إلى بريدك الإلكتروني. يرجى مراجعة صندوق الوارد والضغط عليه لتفعيل حسابك ومتابعة التسجيل.'
-                    : 'مرحباً بك! جاري توجيهك لصفحة تهيئة المنشأة...'
-                  }
+                <h5 className="text-sm font-semibold text-emerald-900">تم إنشاء الحساب بنجاح</h5>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  تم إنشاء الحساب بنجاح. تم إرسال رسالة تأكيد إلى بريدك الإلكتروني، افتح البريد واضغط رابط التفعيل لإكمال الدخول.
                 </p>
               </div>
             </div>
@@ -344,14 +336,32 @@ export const Register: React.FC = () => {
               </button>
             </form>
           ) : (
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => setNeedsVerification(false)}
-                className="text-sm font-bold text-brand-blue hover:underline bg-transparent border-none cursor-pointer"
-              >
-                ← العودة وتعديل بيانات التسجيل
-              </button>
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center space-y-4 shadow-sm animate-fade-in">
+              <div className="bg-emerald-50 text-emerald-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">تحقق من بريدك الإلكتروني</h3>
+              <p className="text-slate-600 text-xs leading-relaxed">
+                أرسلنا رابط تفعيل الحساب إلى بريدك. بعد التفعيل يمكنك تسجيل الدخول.
+              </p>
+              <div className="pt-2">
+                <Link
+                  id="btn-login-after-verify"
+                  to="/login"
+                  className="inline-block w-full py-2.5 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-xs shadow-sm transition text-center"
+                >
+                  تسجيل الدخول
+                </Link>
+              </div>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNeedsVerification(false)}
+                  className="text-xs text-slate-400 hover:text-slate-600 hover:underline bg-transparent border-none cursor-pointer"
+                >
+                  ← العودة وتعديل بيانات التسجيل
+                </button>
+              </div>
             </div>
           )}
 
