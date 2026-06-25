@@ -32,7 +32,9 @@ export const Register: React.FC = () => {
   const { t } = useTranslation('ar');
   const [apiError, setApiError] = useState<string | null>(null);
   const [apiSuccess, setApiSuccess] = useState<boolean>(false);
-  const [needsVerification, setNeedsVerification] = useState<boolean>(false);
+  const [registrationSuccess, setRegistrationSuccess] = useState<boolean>(false);
+  const [registeredEmail, setRegisteredEmail] = useState<string>('');
+  const [showToast, setShowToast] = useState<boolean>(false);
   const navigate = useNavigate();
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterFields>({
@@ -50,7 +52,7 @@ export const Register: React.FC = () => {
   const onSubmit = async (data: RegisterFields) => {
     setApiError(null);
     setApiSuccess(false);
-    setNeedsVerification(false);
+    setRegistrationSuccess(false);
     try {
       const response = await signUp(data.email, data.password, data.fullName, data.phone);
       if (response.error) {
@@ -64,7 +66,9 @@ export const Register: React.FC = () => {
         }
       } else {
         setApiSuccess(true);
-        setNeedsVerification(true);
+        setRegistrationSuccess(true);
+        setRegisteredEmail(data.email);
+        setShowToast(true);
       }
     } catch (e: any) {
       setApiError('تعذر إنشاء الحساب حاليًا. حاول مرة أخرى.');
@@ -73,6 +77,28 @@ export const Register: React.FC = () => {
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-slate-50 overflow-hidden font-sans" dir="rtl">
+      {/* Toast Alert */}
+      {showToast && (
+        <motion.div
+          initial={{ opacity: 0, y: -50, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -20, scale: 0.95 }}
+          className="fixed top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs md:text-sm px-6 py-4 rounded-2xl shadow-2xl z-50 flex items-center justify-between gap-4 max-w-[95vw] border border-slate-800"
+          dir="rtl"
+        >
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+            <span className="font-bold">تم إرسال رسالة تأكيد إلى بريدك الإلكتروني. افتح البريد وفعّل حسابك لإكمال الدخول.</span>
+          </div>
+          <button
+            onClick={() => setShowToast(false)}
+            className="text-slate-400 hover:text-white text-sm focus:outline-none cursor-pointer"
+          >
+            ✕
+          </button>
+        </motion.div>
+      )}
+
       {/* Visual Brand Panel - Left on Desktop */}
       <div className="hidden lg:flex lg:col-span-5 bg-brand-navy relative flex-col justify-between p-12 text-white">
         <div className="absolute inset-0 bg-radial-gradient opacity-20 pointer-events-none" />
@@ -160,7 +186,7 @@ export const Register: React.FC = () => {
             </div>
           )}
 
-          {apiSuccess && (
+          {apiSuccess && !registrationSuccess && (
             <div className="bg-emerald-50 border-r-4 border-emerald-500 p-4 rounded-xl flex items-start gap-2">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
@@ -173,7 +199,7 @@ export const Register: React.FC = () => {
           )}
 
           {/* Prompt verification state or show standard signup form */}
-          {!needsVerification ? (
+          {!registrationSuccess ? (
             <form id="register-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               
               {/* Full Name */}
@@ -336,27 +362,37 @@ export const Register: React.FC = () => {
               </button>
             </form>
           ) : (
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center space-y-4 shadow-sm animate-fade-in">
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center space-y-4 shadow-sm animate-fade-in" dir="rtl">
               <div className="bg-emerald-50 text-emerald-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <h3 className="text-base font-bold text-slate-900">تحقق من بريدك الإلكتروني</h3>
               <p className="text-slate-600 text-xs leading-relaxed">
-                أرسلنا رابط تفعيل الحساب إلى بريدك. بعد التفعيل يمكنك تسجيل الدخول.
+                تم إنشاء حسابك بنجاح. أرسلنا رسالة تأكيد إلى بريدك الإلكتروني. افتح الرسالة واضغط رابط التفعيل، ثم ارجع لتسجيل الدخول.
               </p>
+              
+              <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl text-xs text-slate-700 font-semibold">
+                تم الإرسال إلى: <span className="font-bold text-brand-blue font-mono">{registeredEmail}</span>
+              </div>
+
               <div className="pt-2">
                 <Link
                   id="btn-login-after-verify"
                   to="/login"
                   className="inline-block w-full py-2.5 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-xs shadow-sm transition text-center"
                 >
-                  تسجيل الدخول
+                  الانتقال إلى تسجيل الدخول
                 </Link>
               </div>
+
+              <p className="text-[10.5px] text-slate-400">
+                إذا لم تجد الرسالة، تحقق من البريد غير الهام أو أعد المحاولة لاحقًا.
+              </p>
+
               <div className="pt-2">
                 <button
                   type="button"
-                  onClick={() => setNeedsVerification(false)}
+                  onClick={() => setRegistrationSuccess(false)}
                   className="text-xs text-slate-400 hover:text-slate-600 hover:underline bg-transparent border-none cursor-pointer"
                 >
                   ← العودة وتعديل بيانات التسجيل
