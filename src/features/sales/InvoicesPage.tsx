@@ -41,7 +41,9 @@ import {
   AlertTriangle,
   ArrowRight,
   ShieldCheck,
-  RefreshCw
+  RefreshCw,
+  Check,
+  Edit
 } from 'lucide-react';
 
 export const InvoicesPage: React.FC = () => {
@@ -75,6 +77,16 @@ export const InvoicesPage: React.FC = () => {
   const [artifactLoading, setArtifactLoading] = useState<boolean>(false);
   const [generatingArtifact, setGeneratingArtifact] = useState<boolean>(false);
   const [showXmlModal, setShowXmlModal] = useState<boolean>(false);
+
+  // SDK validation states
+  const [sdkModalOpen, setSdkModalOpen] = useState<boolean>(false);
+  const [selectedArtifactForSdk, setSelectedArtifactForSdk] = useState<any>(null);
+  const [sdkValidationStatus, setSdkValidationStatus] = useState<'passed' | 'failed' | 'needs_review'>('needs_review');
+  const [sdkToolVersion, setSdkToolVersion] = useState<string>('ZATCA SDK v2.3.4');
+  const [sdkSummary, setSdkSummary] = useState<string>('');
+  const [sdkRawResult, setSdkRawResult] = useState<string>('');
+  const [sdkErrors, setSdkErrors] = useState<any[]>([]);
+  const [savingSdkResult, setSavingSdkResult] = useState<boolean>(false);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -394,6 +406,72 @@ export const InvoicesPage: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  // Handler to mark invoice artifact ready for SDK check
+  const handleMarkReadyForSdk = async (artifactId: string) => {
+    setError(null);
+    try {
+      const res = await zatcaService.markEInvoiceReadyForSdkCheck(artifactId);
+      if (res.success) {
+        // Refresh artifact
+        const art = await zatcaService.getEInvoiceArtifact(selectedInvoice!.id);
+        setEInvoiceArtifact(art);
+      } else {
+        setError(res.error || 'تعذر تحديث حالة الفحص.');
+      }
+    } catch (e: any) {
+      console.error('Error marking ready for SDK:', e);
+      setError('حدث خطأ غير متوقع أثناء تحديث الحالة.');
+    }
+  };
+
+  // Handler to parse & analyze SDK validation text pasted by user
+  const handleAnalyzeSdkText = () => {
+    if (!sdkRawResult.trim()) {
+      setError('يرجى لصق نص النتيجة الخام أولاً قبل التحليل.');
+      return;
+    }
+    setError(null);
+    const parsed = zatcaService.parseSdkValidationText(sdkRawResult);
+    setSdkValidationStatus(parsed.status);
+    setSdkErrors(parsed.errors);
+    setSdkSummary(parsed.summary);
+  };
+
+  // Handler to save manual SDK validation results to database
+  const handleSaveSdkResult = async () => {
+    if (!selectedArtifactForSdk) return;
+    setSavingSdkResult(true);
+    setError(null);
+    try {
+      const res = await zatcaService.updateSdkValidationResult({
+        artifactId: selectedArtifactForSdk.id,
+        status: sdkValidationStatus,
+        errors: sdkErrors,
+        summary: sdkSummary,
+        toolVersion: sdkToolVersion,
+        rawResult: sdkRawResult
+      });
+
+      if (res.success) {
+        // Refresh artifact
+        const art = await zatcaService.getEInvoiceArtifact(selectedInvoice!.id);
+        setEInvoiceArtifact(art);
+        setSdkModalOpen(false);
+        // Clear modal states
+        setSdkRawResult('');
+        setSdkErrors([]);
+        setSdkSummary('');
+      } else {
+        setError(res.error || 'فشل حفظ نتيجة التحقق.');
+      }
+    } catch (e: any) {
+      console.error('Error saving SDK validation results:', e);
+      setError('حدث خطأ غير متوقع أثناء حفظ نتيجة التحقق.');
+    } finally {
+      setSavingSdkResult(false);
+    }
   };
 
   // Action: Cancel Invoice
@@ -1273,7 +1351,8 @@ export const InvoicesPage: React.FC = () => {
                   
                   {/* Successfully Generated Artifact Details */}
                   {eInvoiceArtifact?.generation_status === 'xml_generated' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                       <div className="bg-white border border-slate-150 p-3.5 rounded-2xl space-y-2">
                         <span className="font-bold text-slate-500 block mb-1">بيانات الرصيد الرقمي للزكاة:</span>
                         <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600">
@@ -1339,6 +1418,135 @@ export const InvoicesPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* ZATCA SDK Validation section */}
+                    <div className="mt-4 border-t border-slate-100 pt-4 font-sans">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-1.5 text-slate-800">
+                          <ShieldCheck className="w-4 h-4 text-brand-blue" />
+                          <span className="font-extrabold text-xs">فحص ZATCA SDK والتحقق الخارجي</span>
+                        </div>
+                        
+                        {/* Validation Status Badge */}
+                        <div className="flex items-center gap-1">
+                          {(() => {
+                            const status = eInvoiceArtifact.sdk_validation_status || 'not_checked';
+                            if (status === 'passed') {
+                              return (
+                                <span className="px-2.5 py-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-150 rounded-xl flex items-center gap-1">
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>اجتاز الفحص</span>
+                                </span>
+                              );
+                            } else if (status === 'failed') {
+                              return (
+                                <span className="px-2.5 py-1 text-[10px] font-black text-red-700 bg-red-50 border border-red-150 rounded-xl flex items-center gap-1">
+                                  <XCircle className="w-3.5 h-3.5 text-red-600" />
+                                  <span>فشل الفحص</span>
+                                </span>
+                              );
+                            } else if (status === 'needs_review') {
+                              return (
+                                <span className="px-2.5 py-1 text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-150 rounded-xl flex items-center gap-1">
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>يحتاج مراجعة</span>
+                                </span>
+                              );
+                            } else if (status === 'ready_for_check') {
+                              return (
+                                <span className="px-2.5 py-1 text-[10px] font-black text-blue-700 bg-blue-50 border border-blue-150 rounded-xl flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                                  <span>جاهز للفحص</span>
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span className="px-2.5 py-1 text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-200 rounded-xl">
+                                  لم يتم الفحص بعد
+                                </span>
+                              );
+                            }
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Info / Description */}
+                      <p className="text-[11px] text-slate-500 leading-relaxed mb-3">
+                        يمكن للمستخدمين المصرح لهم تصدير كود الـ XML الخاص بالفاتورة للتحقق منه ومطابقته خارجياً عبر أداة ZATCA SDK، ثم توثيق النتيجة هنا للرجوع والامتثال الداخلي.
+                      </p>
+
+                      {/* Sdk Validation Details (Only for Authorized or Viewer) */}
+                      {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant' || roleInCurrentOrg === 'viewer') && eInvoiceArtifact.sdk_validation_status && eInvoiceArtifact.sdk_validation_status !== 'not_checked' && (
+                        <div className="bg-slate-50 border border-slate-150/65 rounded-2xl p-4 text-[11px] mb-3 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10.5px] text-slate-600">
+                            {eInvoiceArtifact.sdk_validated_at && (
+                              <div>
+                                <span className="text-slate-400 block mb-0.5">تاريخ تسجيل الفحص:</span>
+                                <span className="font-bold text-slate-800">{new Date(eInvoiceArtifact.sdk_validated_at).toLocaleString('ar-SA')}</span>
+                              </div>
+                            )}
+                            {eInvoiceArtifact.sdk_tool_version && (
+                              <div>
+                                <span className="text-slate-400 block mb-0.5">نسخة أداة الفحص:</span>
+                                <span className="font-bold text-slate-800 font-mono bg-white px-2 py-0.5 rounded border border-slate-200 inline-block">{eInvoiceArtifact.sdk_tool_version}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {eInvoiceArtifact.sdk_validation_summary && (
+                            <div className="border-t border-slate-100/70 pt-2.5">
+                              <span className="text-slate-400 text-[10px] block mb-0.5">ملخص النتيجة:</span>
+                              <p className="text-slate-800 font-extrabold leading-relaxed">{eInvoiceArtifact.sdk_validation_summary}</p>
+                            </div>
+                          )}
+
+                          {/* Render specific extracted errors if any and if user is Owner/Admin/Accountant */}
+                          {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && eInvoiceArtifact.sdk_validation_errors && eInvoiceArtifact.sdk_validation_errors.length > 0 && (
+                            <div className="border-t border-slate-100/70 pt-2.5 space-y-2">
+                              <span className="text-red-600 text-[10px] font-black block">الأخطاء/التحذيرات المستخرجة ({eInvoiceArtifact.sdk_validation_errors.length}):</span>
+                              <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 font-mono text-[10px]">
+                                {eInvoiceArtifact.sdk_validation_errors.map((err: any, idx: number) => (
+                                  <div key={idx} className="bg-red-50/50 text-red-700 p-2.5 rounded-xl border border-red-100/60 flex items-start gap-2">
+                                    <span className="bg-red-200/80 text-red-800 px-1.5 py-0.5 rounded text-[8.5px] font-black shrink-0 tracking-wide">{err.code || 'VALIDATION_MESSAGE'}</span>
+                                    <span className="break-all font-sans leading-relaxed text-red-800">{err.message}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleMarkReadyForSdk(eInvoiceArtifact.id)}
+                            className="px-3.5 py-1.75 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold rounded-xl text-[10px] flex items-center gap-1 cursor-pointer transition shrink-0"
+                          >
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>تحديد كجاهز للفحص اليدوي</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => {
+                              setSelectedArtifactForSdk(eInvoiceArtifact);
+                              setSdkValidationStatus(eInvoiceArtifact.sdk_validation_status === 'not_checked' ? 'needs_review' : eInvoiceArtifact.sdk_validation_status || 'needs_review');
+                              setSdkToolVersion(eInvoiceArtifact.sdk_tool_version || 'ZATCA SDK v2.3.4');
+                              setSdkSummary(eInvoiceArtifact.sdk_validation_summary || '');
+                              setSdkRawResult(eInvoiceArtifact.sdk_raw_result || '');
+                              setSdkErrors(eInvoiceArtifact.sdk_validation_errors || []);
+                              setSdkModalOpen(true);
+                            }}
+                            className="px-3.5 py-1.75 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-[10px] flex items-center gap-1 cursor-pointer transition shrink-0"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span>تسجيل / تعديل نتيجة فحص SDK</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    </>
                   ) : eInvoiceArtifact?.generation_status === 'invalid' ? (
                     <div className="bg-red-50/50 border border-red-100 rounded-2xl p-4 space-y-3">
                       <div className="flex items-start gap-2 text-xs text-red-900 leading-normal font-sans">
@@ -1621,6 +1829,143 @@ export const InvoicesPage: React.FC = () => {
                   إغلاق النافذة
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ZATCA SDK Validation Modal overlay Dialog */}
+      {sdkModalOpen && selectedArtifactForSdk && (roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" dir="rtl">
+          <div className="bg-white rounded-3xl w-full max-w-2xl p-6 space-y-4 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="bg-slate-900 text-white p-1.5 rounded-xl">
+                  <ShieldCheck className="w-5 h-5 animate-pulse text-brand-blue" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-800">تسجيل نتيجة فحص ZATCA SDK</h3>
+                  <p className="text-[10px] text-slate-400">توثيق نتائج فحص XML باستخدام الأدوات الخارجية</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSdkModalOpen(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 cursor-pointer transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-500 bg-amber-50/50 p-3 rounded-2xl border border-amber-100/50 leading-relaxed">
+              الصق نتيجة فحص XML من أداة ZATCA SDK أو أداة التحقق الخارجية. هذه النتيجة للتوثيق الداخلي فقط ولا تعني إرسال الفاتورة إلى منصة ZATCA.
+            </p>
+
+            <div className="flex-1 overflow-auto space-y-4 pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* SDK Status selection */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-600 block">حالة التحقق من الملف:</label>
+                  <select
+                    value={sdkValidationStatus}
+                    onChange={(e) => setSdkValidationStatus(e.target.value as any)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-brand-blue"
+                  >
+                    <option value="passed">اجتاز الفحص بنجاح (Passed)</option>
+                    <option value="failed">فشل الفحص (Failed / Error)</option>
+                    <option value="needs_review">يحتاج مراجعة (Needs Review)</option>
+                    <option value="ready_for_check">جاهز للفحص (Ready for check)</option>
+                  </select>
+                </div>
+
+                {/* SDK Tool Version */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-600 block">نسخة الأداة / النظام:</label>
+                  <input
+                    type="text"
+                    value={sdkToolVersion}
+                    onChange={(e) => setSdkToolVersion(e.target.value)}
+                    placeholder="مثال: ZATCA SDK v2.3.4"
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-mono text-slate-800 focus:outline-none focus:border-brand-blue"
+                  />
+                </div>
+              </div>
+
+              {/* Summary field */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-600 block">ملخص النتيجة (العربي):</label>
+                <input
+                  type="text"
+                  value={sdkSummary}
+                  onChange={(e) => setSdkSummary(e.target.value)}
+                  placeholder="مثال: تم فحص الفاتورة واجتازت جميع قواعد التحقق لـ ZATCA."
+                  className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-brand-blue"
+                />
+              </div>
+
+              {/* Paste raw result textarea */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-600 block">لصق مخرجات الـ SDK الخام (Raw Logs):</label>
+                  <button
+                    type="button"
+                    onClick={handleAnalyzeSdkText}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold rounded-lg text-[10px] flex items-center gap-1 cursor-pointer transition border border-slate-200"
+                  >
+                    <RefreshCw className="w-3 h-3 text-slate-600 animate-spin-hover" />
+                    <span>تحليل المخرجات واستخراج الأخطاء</span>
+                  </button>
+                </div>
+                <textarea
+                  value={sdkRawResult}
+                  onChange={(e) => setSdkRawResult(e.target.value)}
+                  rows={4}
+                  placeholder="الصق هنا النص الخام الناتج من تنفيذ الأداة..."
+                  className="w-full bg-white border border-slate-200 rounded-2xl p-3 text-[11px] font-mono text-slate-700 focus:outline-none focus:border-brand-blue leading-normal"
+                />
+              </div>
+
+              {/* Analyzed / Extracted errors list */}
+              {sdkErrors.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-slate-600 block">الأخطاء المستخرجة ({sdkErrors.length}):</span>
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1 font-mono text-[10px]">
+                    {sdkErrors.map((err, idx) => (
+                      <div key={idx} className={`p-2.5 rounded-xl border flex items-start gap-2 ${err.severity === 'warning' ? 'bg-amber-50/50 border-amber-150 text-amber-800' : 'bg-red-50/50 border-red-150 text-red-800'}`}>
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-black shrink-0 ${err.severity === 'warning' ? 'bg-amber-200 text-amber-900' : 'bg-red-200 text-red-900'}`}>
+                          {err.code || 'VAL-CODE'}
+                        </span>
+                        <div className="space-y-0.5 font-sans">
+                          <p className="font-medium text-[10.5px] leading-relaxed">{err.message}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={savingSdkResult}
+                onClick={handleSaveSdkResult}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white font-extrabold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition shadow-md"
+              >
+                {savingSdkResult ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <CheckCircle className="w-4 h-4" />
+                )}
+                <span>حفظ نتيجة الفحص</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setSdkModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition border border-slate-200"
+              >
+                إلغاء
+              </button>
             </div>
           </div>
         </div>

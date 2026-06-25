@@ -53,6 +53,13 @@ export const ZatcaSettingsComp: React.FC = () => {
   });
 
   const [readinessErrors, setReadinessErrors] = useState<string[]>([]);
+  const [sdkStats, setSdkStats] = useState<Record<string, number>>({
+    passed: 0,
+    failed: 0,
+    needs_review: 0,
+    ready_for_check: 0,
+    not_checked: 0
+  });
 
   // Function to load settings from DB if present, or configure defaults
   const loadZatcaSettings = async () => {
@@ -112,6 +119,14 @@ export const ZatcaSettingsComp: React.FC = () => {
 
         const errs = zatcaService.validateZatcaReadiness(freshData);
         setReadinessErrors(errs);
+      }
+
+      // Fetch SDK Validation counts/statistics
+      try {
+        const stats = await zatcaService.getSdkValidationStats(currentOrg.id);
+        setSdkStats(stats);
+      } catch (statsErr) {
+        console.error('Error fetching SDK stats:', statsErr);
       }
     } catch (err: any) {
       console.error('ZATCA settings load failed:', err);
@@ -655,6 +670,42 @@ export const ZatcaSettingsComp: React.FC = () => {
               <p className="text-[9px] text-slate-500 font-medium">مستندات الفحص جاهزة تحت بروتوكول ZATCA XML Preparation.</p>
             </div>
 
+          </div>
+        </div>
+
+        {/* ZATCA SDK Validation Summary Card */}
+        <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4 shadow-sm h-fit">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+            <ShieldCheck className="w-4 h-4 text-slate-500" />
+            <h4 className="text-xs font-bold text-slate-950">إحصاءات فحص ZATCA SDK</h4>
+          </div>
+
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            مؤشرات وحالة مستندات الفوترة الإلكترونية التي خضعت للفحص والتحقق عبر الأدوات والـ SDK الخارجي:
+          </p>
+
+          <div className="grid grid-cols-2 gap-2 text-center text-[10.5px]">
+            <div className="bg-emerald-50 border border-emerald-100/70 rounded-xl p-2.5">
+              <span className="text-emerald-700 block text-[9.5px] font-black">اجتاز الفحص</span>
+              <strong className="text-emerald-900 text-sm font-black">{sdkStats.passed}</strong>
+            </div>
+            <div className="bg-red-50 border border-red-100/70 rounded-xl p-2.5">
+              <span className="text-red-700 block text-[9.5px] font-black">فشل الفحص</span>
+              <strong className="text-red-900 text-sm font-black">{sdkStats.failed}</strong>
+            </div>
+            <div className="bg-amber-50 border border-amber-100/70 rounded-xl p-2.5">
+              <span className="text-amber-700 block text-[9.5px] font-black">يحتاج مراجعة</span>
+              <strong className="text-amber-900 text-sm font-black">{sdkStats.needs_review}</strong>
+            </div>
+            <div className="bg-blue-50 border border-blue-100/70 rounded-xl p-2.5">
+              <span className="text-blue-700 block text-[9.5px] font-black">جاهز للفحص</span>
+              <strong className="text-blue-900 text-sm font-black">{sdkStats.ready_for_check}</strong>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex justify-between items-center text-[10px] text-slate-600 font-bold">
+            <span>لم تفحص بعد (معلق):</span>
+            <span className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded-full font-extrabold">{sdkStats.not_checked}</span>
           </div>
         </div>
 

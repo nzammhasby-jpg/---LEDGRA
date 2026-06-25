@@ -375,5 +375,144 @@ export const zatcaService = {
       const artifact = await this.getEInvoiceArtifact(invoice.id);
       return { success: false, artifact, errors: compileErrors };
     }
+  },
+
+  async getEInvoiceArtifactWithSdkStatus(invoiceId: string): Promise<EInvoiceArtifact | null> {
+    return this.getEInvoiceArtifact(invoiceId);
+  },
+
+  async markEInvoiceReadyForSdkCheck(artifactId: string): Promise<{ success: boolean; error?: string }> {
+    return this.updateSdkValidationResult({
+      artifactId,
+      status: 'ready_for_check',
+      errors: [],
+      summary: 'المستند جاهز للفحص الخارجي باستخدام ZATCA SDK',
+      toolVersion: null,
+      rawResult: null
+    });
+  },
+
+  async updateSdkValidationResult(input: {
+    artifactId: string;
+    status: 'ready_for_check' | 'passed' | 'failed' | 'needs_review';
+    errors: any[];
+    summary: string | null;
+    toolVersion: string | null;
+    rawResult: string | null;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { error } = await supabase.rpc('update_e_invoice_sdk_validation', {
+      p_artifact_id: input.artifactId,
+      p_status: input.status,
+      p_errors: input.errors,
+      p_summary: input.summary,
+      p_tool_version: input.toolVersion,
+      p_raw_result: input.rawResult
+    });
+
+    if (error) {
+      console.error('Error updating SDK validation result via RPC:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  },
+
+  parseSdkValidationText(rawText: string): {
+    status: 'passed' | 'failed' | 'needs_review';
+    errors: Array<{ code?: string; message: string; severity?: string }>;
+    summary: string;
+  } {
+    const textUpper = rawText.toUpperCase();
+    
+    let status: 'passed' | 'failed' | 'needs_review' = 'needs_review';
+    if (textUpper.includes('PASS') || textUpper.includes('PASSED') || textUpper.includes('SUCCESS')) {
+      status = 'passed';
+    }
+    if (textUpper.includes('ERROR') || textUpper.includes('FAILED') || textUpper.includes('FAIL')) {
+      status = 'failed';
+    }
+
+    const lines = rawText.split('\n');
+    const errors: Array<{ code?: string; message: string; severity?: string }> = [];
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      
+      const lineUpper = trimmed.toUpperCase();
+      if (lineUpper.includes('ERROR') || lineUpper.includes('FAIL') || lineUpper.includes('INVALID') || lineUpper.includes('EXCEPTION')) {
+        let code: string | undefined = undefined;
+        const codeMatch = trimmed.match(/\[([A-Z0-9_-]+)\]/i);
+        if (codeMatch) {
+          code = codeMatch[1];
+        }
+        
+        errors.push({
+          code,
+          message: trimmed,
+          severity: 'error'
+        });
+      } else if (lineUpper.includes('WARN') || lineUpper.includes('WARNING')) {
+        let code: string | undefined = undefined;
+        const codeMatch = trimmed.match(/\[([A-Z0-9_-]+)\]/i);
+        if (codeMatch) {
+          code = codeMatch[1];
+        }
+        
+        errors.push({
+          code,
+          message: trimmed,
+          severity: 'warning'
+        });
+      }
+    }
+
+    const summary = status === 'passed' 
+      ? 'اجتاز فحص التحقق من ZATCA SDK بنجاح.' 
+      : status === 'failed' 
+        ? `فشل الفحص. تم اكتشاف ${errors.length} أخطاء/تحذيرات.` 
+        : 'يحتاج المستند إلى مراجعة يدوية إضافية.';
+
+    return {
+      status,
+      errors,
+      summary
+    };
+  },
+
+  async getSdkValidationStats(orgId: string): Promise<Record<string, number>> {
+    const { data, error } = await supabase
+      .from('e_invoice_artifacts')
+      .select('sdk_validation_status')
+      .eq('organization_id', orgId);
+
+    if (error) {
+      console.error('Error fetching SDK stats:', error);
+      return {
+        passed: 0,
+        failed: 0,
+        needs_review: 0,
+        ready_for_check: 0,
+        not_checked: 0
+      };
+    }
+
+    const counts: Record<string, number> = {
+      passed: 0,
+      failed: 0,
+      needs_review: 0,
+      ready_for_check: 0,
+      not_checked: 0
+    };
+
+    (data || []).forEach((row: any) => {
+      const status = row.sdk_validation_status || 'not_checked';
+      if (status in counts) {
+        counts[status]++;
+      } else {
+        counts.not_checked++;
+      }
+    });
+
+    return counts;
   }
 };

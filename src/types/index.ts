@@ -576,4 +576,11 @@ export interface EInvoiceArtifact {
   generated_at: string;
   created_at: string;
   updated_at: string;
+  sdk_validation_status?: 'not_checked' | 'ready_for_check' | 'passed' | 'failed' | 'needs_review';
+  sdk_validation_errors?: any[];
+  sdk_validation_summary?: string | null;
+  sdk_validated_at?: string | null;
+  sdk_validated_by?: string | null;
+  sdk_tool_version?: string | null;
+  sdk_raw_result?: string | null;
 }
