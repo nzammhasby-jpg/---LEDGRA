@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { zatcaService } from '../../lib/zatcaService';
 import { ZatcaSettings } from '../../types';
@@ -12,15 +12,16 @@ import {
   Save, 
   Check, 
   Building2, 
-  FileText,
-  AlertCircle
+  AlertCircle,
+  HelpCircle,
+  FileCode,
+  QrCode
 } from 'lucide-react';
 
 export const ZatcaSettingsComp: React.FC = () => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
   
   const isPrivileged = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin';
-  const isAccountant = roleInCurrentOrg === 'accountant';
 
   const [loadingObj, setLoadingObj] = useState(true);
   const [savingObj, setSavingObj] = useState(false);
@@ -113,8 +114,8 @@ export const ZatcaSettingsComp: React.FC = () => {
         setReadinessErrors(errs);
       }
     } catch (err: any) {
-      console.error('Failed to load ZATCA settings:', err);
-      setErrorMsg('حدث خطأ في تحميل إعدادات الفوترة الإلكترونية.');
+      console.error('ZATCA settings load failed:', err);
+      setErrorMsg('تعذر تحميل إعدادات الفوترة الإلكترونية. تأكد من تشغيل Migration المرحلة 12 أو راجع صلاحيات المستخدم.');
     } finally {
       setLoadingObj(false);
     }
@@ -137,6 +138,19 @@ export const ZatcaSettingsComp: React.FC = () => {
     }));
   };
 
+  // Helper validation checklist details computed from settings
+  const hasSellerName = settings.seller_name.trim().length > 0;
+  
+  // Tax number validation: 15 digits, starts with 3, ends with 3, English digits only.
+  const hasVatNumber = /^[3]\d{13}[3]$/.test(settings.seller_vat_number.trim());
+  const hasCr = settings.seller_commercial_registration.trim().length > 0;
+  const hasAddress = settings.seller_address.trim().length > 0;
+  const hasCity = settings.seller_city.trim().length > 0;
+  const hasPostalCode = settings.seller_postal_code.trim().length > 0;
+  const isSa = settings.seller_country === 'SA';
+
+  const isReadyForZatca = settings.is_enabled && hasSellerName && hasVatNumber && hasCr && hasAddress && hasCity && isSa;
+
   const handleManualSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentOrg) return;
@@ -149,11 +163,18 @@ export const ZatcaSettingsComp: React.FC = () => {
     setSuccessMsg(null);
     setErrorMsg(null);
 
+    // Validate Tax Number format before saving
+    if (settings.is_enabled && settings.seller_vat_number.trim().length > 0 && !hasVatNumber) {
+      setErrorMsg('الرقم الضريبي يجب أن يكون 15 رقمًا ويبدأ بـ 3 وينتهي بـ 3.');
+      setSavingObj(false);
+      return;
+    }
+
     try {
       await zatcaService.updateZatcaSettings(currentOrg.id, settings);
-      setSuccessMsg('تم حفظ إعدادات ZATCA بنجاح.');
+      setSuccessMsg('تم حفظ إعدادات الفوترة الإلكترونية بنجاح.');
       
-      // Re-trigger validation
+      // Re-trigger validation with saved settings
       const activeObject: ZatcaSettings = {
         ...settings,
         id: '',
@@ -165,23 +186,11 @@ export const ZatcaSettingsComp: React.FC = () => {
       setReadinessErrors(errs);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'فشل حفظ إعدادات ZATCA في قاعدة البيانات.');
+      setErrorMsg(err.message || 'فشل حفظ إعدادات الفوترة الإلكترونية في قاعدة البيانات.');
     } finally {
       setSavingObj(false);
     }
   };
-
-  // Helper validation checklist details
-  const hasSellerName = settings.seller_name.trim().length > 0;
-  const hasVatNumber = settings.seller_vat_number.trim().length === 15 && settings.seller_vat_number.startsWith('3');
-  const hasCr = settings.seller_commercial_registration.trim().length > 0;
-  const hasAddress = settings.seller_address.trim().length > 0;
-  const hasCity = settings.seller_city.trim().length > 0;
-  const isSa = settings.seller_country === 'SA';
-  const qrWorking = true;
-  const xmlWorking = true;
-
-  const isReadyForZatca = hasSellerName && hasVatNumber && hasCr && hasAddress && hasCity && isSa && settings.is_enabled;
 
   if (loadingObj) {
     return (
@@ -196,20 +205,20 @@ export const ZatcaSettingsComp: React.FC = () => {
     <div className="space-y-8 animate-fade-in text-right" dir="rtl">
       
       {/* Header Banner */}
-      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="bg-emerald-100 text-emerald-700 p-2 rounded-xl shrink-0">
-            <ShieldCheck className="w-5 h-5" />
+          <div className="bg-slate-100 text-slate-700 p-2.5 rounded-xl shrink-0">
+            <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900">المرحلة الأساسية للفوترة الإلكترونية (ZATCA Foundation - Phase 1)</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              يدعم هذا النظام توليد فواتير ضريبية مبسطة وفواتير قياسية مطابقة لترميز الـ TLV/Base64 ومصحوبة بمولد مستندات الـ XML الأولي (UBL 2.1) داخلياً.
+            <h3 className="text-base font-extrabold text-slate-900">الفوترة الإلكترونية</h3>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              هذه الصفحة تضبط بيانات الفوترة الإلكترونية المستخدمة في توليد QR وملفات XML الأولية للفواتير المعتمدة.
             </p>
           </div>
         </div>
-        <div className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap">
-          ⚠️ طبقة جاهزية أولية - بدون ربط API مباشر
+        <div className="bg-slate-200/80 text-slate-800 text-[11px] font-bold px-3 py-1.5 rounded-full whitespace-nowrap">
+          مرحلة تأسيسية — بدون ربط API مباشر مع ZATCA
         </div>
       </div>
 
@@ -233,24 +242,25 @@ export const ZatcaSettingsComp: React.FC = () => {
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 p-5 space-y-5 shadow-sm">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
             <Settings className="w-4 h-4 text-slate-500" />
-            <h4 className="text-xs font-bold text-slate-950">إعدادات الهوية ونوع الفوترة في الزكاة</h4>
+            <h4 className="text-xs font-bold text-slate-950">بيانات البائع وإعدادات الفاتورة</h4>
           </div>
 
-          <form onSubmit={handleManualSave} className="space-y-4">
+          <form onSubmit={handleManualSave} className="space-y-5">
             
             {/* Enable switch */}
-            <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <div className="space-y-0.5">
-                <label className="text-xs font-bold text-slate-900">تفعيل الفوترة الإلكترونية</label>
-                <p className="text-[10px] text-slate-500">تمكين إنبات أرقام QR ورموز XML الضريبية للفواتير المعتمدة</p>
+            <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div className="space-y-0.5 pl-3">
+                <label className="text-xs font-bold text-slate-900 block">تفعيل الفوترة الإلكترونية</label>
+                <p className="text-[10px] text-slate-500">تمكين توليد وطباعة أرقام QR ورموز XML الضريبية للفواتير المعتمدة</p>
               </div>
               <input 
                 type="checkbox"
                 name="is_enabled"
+                id="is_enabled"
                 checked={settings.is_enabled}
                 onChange={handleInputChange}
                 disabled={!isPrivileged}
-                className="w-4 h-4 rounded text-brand-blue border-slate-300 focus:ring-brand-blue cursor-pointer"
+                className="w-5 h-5 rounded text-brand-blue border-slate-300 focus:ring-brand-blue cursor-pointer"
               />
             </div>
 
@@ -258,10 +268,11 @@ export const ZatcaSettingsComp: React.FC = () => {
               
               {/* Seller Arabic Name */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">اسم البائع اللفظي (بالعربية)</label>
+                <label className="text-xs font-bold text-slate-700 block" id="label-seller-name">اسم البائع اللفظي (بالعربية)</label>
                 <input 
                   type="text"
                   name="seller_name"
+                  id="seller_name"
                   value={settings.seller_name}
                   onChange={handleInputChange}
                   disabled={!isPrivileged}
@@ -273,26 +284,33 @@ export const ZatcaSettingsComp: React.FC = () => {
 
               {/* VAT Number */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">الرقم الضريبي للبائع (15 خانة يبدأ بـ 3)</label>
+                <label className="text-xs font-bold text-slate-700 block" id="label-vat-number">الرقم الضريبي للبائع</label>
                 <input 
                   type="text"
                   name="seller_vat_number"
+                  id="seller_vat_number"
                   value={settings.seller_vat_number}
                   onChange={handleInputChange}
                   disabled={!isPrivileged}
                   placeholder="300000000000003"
                   maxLength={15}
-                  className="w-full text-slate-800 text-xs px-3 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-brand-blue"
+                  className={`w-full text-slate-800 text-xs px-3 py-2.5 rounded-xl border outline-none focus:border-brand-blue ${
+                    settings.seller_vat_number.trim().length > 0 && !hasVatNumber ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200'
+                  }`}
                   required
                 />
+                {settings.seller_vat_number.trim().length > 0 && !hasVatNumber && (
+                  <p className="text-[10px] text-rose-600 font-semibold mt-1">الرقم الضريبي يجب أن يكون 15 رقمًا ويبدأ بـ 3 وينتهي بـ 3.</p>
+                )}
               </div>
 
               {/* Commercial Registration */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">رقم السجل التجاري (C.R. Number)</label>
+                <label className="text-xs font-bold text-slate-700 block" id="label-cr">رقم السجل التجاري</label>
                 <input 
                   type="text"
                   name="seller_commercial_registration"
+                  id="seller_commercial_registration"
                   value={settings.seller_commercial_registration}
                   onChange={handleInputChange}
                   disabled={!isPrivileged}
@@ -304,10 +322,11 @@ export const ZatcaSettingsComp: React.FC = () => {
 
               {/* Addr */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">العنوان الجغرافي للشركة</label>
+                <label className="text-xs font-bold text-slate-700 block" id="label-address">العنوان الجغرافي للشركة</label>
                 <input 
                   type="text"
                   name="seller_address"
+                  id="seller_address"
                   value={settings.seller_address}
                   onChange={handleInputChange}
                   disabled={!isPrivileged}
@@ -319,10 +338,11 @@ export const ZatcaSettingsComp: React.FC = () => {
 
               {/* City */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">المدينة</label>
+                <label className="text-xs font-bold text-slate-700 block" id="label-city">المدينة</label>
                 <input 
                   type="text"
                   name="seller_city"
+                  id="seller_city"
                   value={settings.seller_city}
                   onChange={handleInputChange}
                   disabled={!isPrivileged}
@@ -334,10 +354,11 @@ export const ZatcaSettingsComp: React.FC = () => {
 
               {/* Postal Code */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">الرمز البريدي</label>
+                <label className="text-xs font-bold text-slate-700 block" id="label-postal-code">الرمز البريدي</label>
                 <input 
                   type="text"
                   name="seller_postal_code"
+                  id="seller_postal_code"
                   value={settings.seller_postal_code}
                   onChange={handleInputChange}
                   disabled={!isPrivileged}
@@ -348,10 +369,11 @@ export const ZatcaSettingsComp: React.FC = () => {
 
               {/* Country */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">الدولة</label>
+                <label className="text-xs font-bold text-slate-700 block" id="label-country">الدولة</label>
                 <input 
                   type="text"
                   name="seller_country"
+                  id="seller_country"
                   value={settings.seller_country}
                   onChange={handleInputChange}
                   disabled
@@ -359,11 +381,12 @@ export const ZatcaSettingsComp: React.FC = () => {
                 />
               </div>
 
-              {/* Typology */}
+              {/* Default Invoice Type */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">نوع الفواتير الافتراضي</label>
+                <label className="text-xs font-bold text-slate-700 block" id="label-invoice-type">نوع الفاتورة الافتراضي</label>
                 <select
                   name="invoice_type_default"
+                  id="invoice_type_default"
                   value={settings.invoice_type_default}
                   onChange={handleInputChange}
                   disabled={!isPrivileged}
@@ -375,10 +398,11 @@ export const ZatcaSettingsComp: React.FC = () => {
               </div>
 
               {/* Environment */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700 block">بيئة التكامل المحاكية</label>
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-bold text-slate-700 block" id="label-environment">بيئة التشغيل</label>
                 <select
                   name="environment"
+                  id="environment"
                   value={settings.environment}
                   onChange={handleInputChange}
                   disabled={!isPrivileged}
@@ -388,6 +412,9 @@ export const ZatcaSettingsComp: React.FC = () => {
                   <option value="simulation">Simulation (المحاكاة مع هيئة الزكاة)</option>
                   <option value="production">Production (الإطلاق الفعلي المحفوظ)</option>
                 </select>
+                <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                  اختيار البيئة حاليًا للتجهيز فقط، ولا يتم إرسال أي فاتورة إلى ZATCA في هذه المرحلة.
+                </p>
               </div>
 
             </div>
@@ -396,6 +423,7 @@ export const ZatcaSettingsComp: React.FC = () => {
               <div className="flex justify-end pt-3">
                 <button
                   type="submit"
+                  id="btn-save-zatca-settings"
                   disabled={savingObj}
                   className="bg-brand-blue text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition hover:brightness-95 cursor-pointer"
                 >
@@ -404,13 +432,13 @@ export const ZatcaSettingsComp: React.FC = () => {
                   ) : (
                     <Save className="w-4 h-4" />
                   )}
-                  <span>حفظ إعدادات الهيئة</span>
+                  <span>حفظ إعدادات الفوترة الإلكترونية</span>
                 </button>
               </div>
             ) : (
               <div className="text-[10px] text-slate-400 bg-slate-50 p-2.5 rounded-xl flex items-center gap-1.5 justify-center">
                 <AlertCircle className="w-3.5 h-3.5" />
-                <span>أنت مسجل بصلاحية {roleInCurrentOrg === 'accountant' ? 'محاسب' : 'مشاهد'}. لا تملك حق تعديل الخيارات الضريبية للهيئة.</span>
+                <span>أنت مسجل بصلاحية مشاهد. لا تملك حق تعديل الخيارات الضريبية للهيئة.</span>
               </div>
             )}
             
@@ -421,102 +449,185 @@ export const ZatcaSettingsComp: React.FC = () => {
         <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-5 shadow-sm h-fit">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
             <Building2 className="w-4 h-4 text-slate-500" />
-            <h4 className="text-xs font-bold text-slate-950">فحص الجاهزية الرقمية (Readiness Checklist)</h4>
+            <h4 className="text-xs font-bold text-slate-950">حالة الجاهزية العامة</h4>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             
-            {/* Readiness Summary status */}
-            <div className={`p-3.5 rounded-2xl border text-center space-y-1 ${
-              isReadyForZatca 
-                ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
-                : 'bg-rose-50 border-rose-100 text-rose-800'
-            }`}>
-              <div className="text-xs font-extrabold flex items-center justify-center gap-1.5">
-                {isReadyForZatca ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>المنشأة جاهزة لتوليد القيود والـ QR</span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>غير جاهز - بيانات ناقصة</span>
-                  </>
-                )}
+            {/* General Status Card */}
+            {!settings.is_enabled ? (
+              <div className="p-4 rounded-2xl border text-center space-y-1 bg-slate-50 border-slate-200 text-slate-700">
+                <div className="text-xs font-extrabold flex items-center justify-center gap-1.5">
+                  <AlertCircle className="w-4.5 h-4.5 text-slate-500 shrink-0" />
+                  <span>الفوترة الإلكترونية غير مفعلة</span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  فعّل الخيار ثم أكمل بيانات البائع للبدء.
+                </p>
               </div>
-              <p className="text-[10px] opacity-90 leading-relaxed">
-                {isReadyForZatca 
-                  ? 'تم استيعاب كافة الخصائص الإلزامية لصيغة الفاتورة الضريبية ومحرك TLV.'
-                  : 'تأكد من تفعيل الفوترة وتقديم الرقم الضريبي والسجل والعناوين بالكامل لتجنب كسر إصدار الفواتير.'}
-              </p>
-            </div>
+            ) : !isReadyForZatca ? (
+              <div className="p-4 rounded-2xl border text-center space-y-1 bg-rose-50 border-rose-100 text-rose-800">
+                <div className="text-xs font-extrabold flex items-center justify-center gap-1.5">
+                  <XCircle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
+                  <span>غير جاهز — بيانات ناقصة</span>
+                </div>
+                <p className="text-[10px] text-rose-500 leading-relaxed">
+                  أكمل الحقول المطلوبة لتوليد QR و XML.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl border text-center space-y-1 bg-emerald-50 border-emerald-100 text-emerald-800">
+                <div className="text-xs font-extrabold flex items-center justify-center gap-1.5">
+                  <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
+                  <span>جاهز لتوليد QR و XML أولي</span>
+                </div>
+                <p className="text-[10px] text-emerald-600 leading-relaxed">
+                  تم استيعاب كافة الخصائص الإلزامية لصيغة الفاتورة الضريبية ومحرك TLV.
+                </p>
+              </div>
+            )}
 
             {/* Checklist elements block */}
-            <div className="space-y-2 pt-2 text-[11px]">
-              
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-600">تفعيل الفوترة في النظام</span>
-                {settings.is_enabled ? (
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <div className="space-y-3 pt-1 text-[11px]">
+              <div className="font-bold text-slate-700 text-xs">قائمة التحقق التفصيلية:</div>
+
+              {/* 1. Enable */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">تفعيل الفوترة الإلكترونية</span>
+                  {settings.is_enabled ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  )}
+                </div>
+                {!settings.is_enabled && (
+                  <p className="text-[9px] text-amber-600 mt-0.5">الفوترة معطلة — الرجاء تفعيل المفتاح لحفظ وتوليد بيانات ZATCA.</p>
                 )}
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-600">اسم البائع اللفظي بالعربية</span>
-                {hasSellerName ? (
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              {/* 2. Seller Name */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">اسم البائع موجود</span>
+                  {hasSellerName ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  )}
+                </div>
+                {!hasSellerName && (
+                  <p className="text-[9px] text-rose-500 mt-0.5">اسم البائع ناقص — أدخل اسم المنشأة اللفظي بالعربية.</p>
                 )}
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-600">الرقم الضريبي للبائع (15 خانة يبدأ بـ 3)</span>
-                {hasVatNumber ? (
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              {/* 3. VAT Number */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">الرقم الضريبي صحيح</span>
+                  {hasVatNumber ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  )}
+                </div>
+                {!hasVatNumber && (
+                  <p className="text-[9px] text-rose-500 mt-0.5">الرقم الضريبي ناقص أو خاطئ — يجب أن يكون 15 رقمًا ويبدأ بـ 3 وينتهي بـ 3.</p>
                 )}
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-600">رقم السجل التجاري</span>
-                {hasCr ? (
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              {/* 4. CR */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">السجل التجاري موجود</span>
+                  {hasCr ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  )}
+                </div>
+                {!hasCr && (
+                  <p className="text-[9px] text-rose-500 mt-0.5">رقم السجل التجاري ناقص — الرجاء تعبئته لإضافته للفواتير.</p>
                 )}
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-600">العنوان الجغرافي للشركة</span>
-                {hasAddress ? (
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              {/* 5. Address */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">العنوان موجود</span>
+                  {hasAddress ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  )}
+                </div>
+                {!hasAddress && (
+                  <p className="text-[9px] text-rose-500 mt-0.5">العنوان ناقص — أدخل عنوان المنشأة الجغرافي بالتفصيل.</p>
                 )}
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-600">المدينة</span>
-                {hasCity ? (
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              {/* 6. City */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">المدينة موجودة</span>
+                  {hasCity ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  )}
+                </div>
+                {!hasCity && (
+                  <p className="text-[9px] text-rose-500 mt-0.5">المدينة ناقصة — أدخل اسم المدينة التي تتواجد فيها المنشأة.</p>
                 )}
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-600">تكويد ترميز الـ TLV/Base64</span>
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              {/* 7. Postal Code */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">الرمز البريدي موجود</span>
+                  {hasPostalCode ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  )}
+                </div>
+                {!hasPostalCode && (
+                  <p className="text-[9px] text-amber-600 mt-0.5">الرمز البريدي ناقص — يفضل كتابة الرمز البريدي لتطابق بيانات العنوان.</p>
+                )}
               </div>
 
-              <div className="flex items-center justify-between py-1 border-b border-slate-50">
-                <span className="text-slate-600">توليد ملفات XML UBL 2.1</span>
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              {/* 8. Country */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">الدولة SA</span>
+                  {isSa ? (
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  )}
+                </div>
+              </div>
+
+              {/* 9. QR */}
+              <div className="flex flex-col border-b border-slate-100 pb-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700 flex items-center gap-1">
+                    <QrCode className="w-3.5 h-3.5 text-slate-400" />
+                    <span>توليد ترميز الـ TLV/Base64</span>
+                  </span>
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                </div>
+              </div>
+
+              {/* 10. XML */}
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700 flex items-center gap-1">
+                    <FileCode className="w-3.5 h-3.5 text-slate-400" />
+                    <span>توليد ملفات XML UBL 2.1</span>
+                  </span>
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                </div>
               </div>
 
             </div>
@@ -536,8 +647,8 @@ export const ZatcaSettingsComp: React.FC = () => {
             )}
 
             <div className="border border-slate-100 bg-slate-50 rounded-xl p-3 text-[9px] text-slate-500 leading-relaxed space-y-1">
-              <span className="font-bold block text-slate-700">📌 تذكير مالي وقانوني:</span>
-              <p>توليد رموز الاستجابة السريعة (QR) وربطها بملفات XML للمستندات الإلكترونية يتطلب وجود فواتير مبيعات ضريبية برقم ضريبي نشط ومسجل لدى الهيئة العامة للزكاة والضريبة والجمارك (ZATCA).</p>
+              <span className="font-bold block text-slate-700">📌 تنويه بخصوص إرسال البيانات:</span>
+              <p>توليد رموز الاستجابة السريعة (QR) وربطها بملفات XML للمستندات الإلكترونية يتطلب فواتير مبيعات ضريبية برقم ضريبي نشط. لا يقوم النظام بإرسال فواتير مباشرة لمصلحة الضرائب والزكاة والجمارك (ZATCA) في النسخة الحالية.</p>
             </div>
 
           </div>

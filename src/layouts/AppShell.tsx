@@ -534,7 +534,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             <Link 
               to="/help-panel" 
               className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-600 transition cursor-pointer"
-              title="مركز المساعدة"
+              title="عن لِدجرا"
             >
               <HelpCircle className="w-4 h-4" />
             </Link>
