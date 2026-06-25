@@ -77,7 +77,7 @@ export const HelpPanel: React.FC = () => {
             </li>
             <li className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              <span><strong>الفوترة الإلكترونية:</strong> مرحلة تأسيسية تدعم توليد ترميز QR وملفات XML للفواتير المعتمدة بشكل محلي للامتثال الأولي.</span>
+              <span><strong>الفوترة الإلكترونية:</strong> مرحلة تأسيسية تدعم توليد ترميز QR وملفات XML للفواتير بشكل محلي للفحص والامتثال الداخلي الأولي.</span>
             </li>
             <li className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />

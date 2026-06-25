@@ -129,8 +129,8 @@ export function generateInvoiceXml(input: ZatcaInvoiceXmlInput): string {
         <cbc:Percent>${safeFormatNum(line.taxPercent)}</cbc:Percent>
         <cac:TaxScheme>
           <cbc:ID>VAT</cbc:ID>
-        </cac:ClassifiedTaxCategory>
-      </cac:Item>
+        </cac:TaxScheme>
+      </cac:ClassifiedTaxCategory>
     </cac:Item>
     <cac:Price>
       <cbc:PriceAmount currencyID="${currency}">${safeFormatNum(line.priceBeforeTax)}</cbc:PriceAmount>

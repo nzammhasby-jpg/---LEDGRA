@@ -237,7 +237,7 @@ export const SalesInvoicePrint: React.FC = () => {
           
           {/* ZATCA QR code container */}
           <div className="flex flex-col items-start gap-2 bg-slate-50 border border-slate-200/60 rounded-2xl p-4 w-fit md:w-auto">
-            <span className="text-[9px] font-black text-slate-400 block uppercase tracking-wider">الترميز الإلكتروني المعتمد (ZATCA QR)</span>
+            <span className="text-[9px] font-black text-slate-400 block uppercase tracking-wider">رمز QR للفوترة الإلكترونية</span>
             <div className="flex items-center gap-4">
               {qrBase64 ? (
                 <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm print:shadow-none shrink-0 border-solid">
@@ -249,9 +249,9 @@ export const SalesInvoicePrint: React.FC = () => {
                 </div>
               )}
               <div className="text-[10px] text-slate-500 leading-relaxed">
-                <p className="font-extrabold text-slate-700">الفاتورة مشفرة ضريبياً</p>
+                <p className="font-extrabold text-slate-700">بيانات الفاتورة الضريبية</p>
                 <p className="mt-1">صنف الفاتورة: {zatcaSettings?.invoice_type_default === 'standard' ? 'ضريبية قياسية (B2B)' : 'ضريبية مبسطة (B2C)'}</p>
-                <p className="mt-0.5">البنية الرقمية: UBL 2.1 Compliant</p>
+                <p className="mt-0.5">البنية الرقمية: XML أولي محسّن للفحص الداخلي</p>
                 {artifact?.id && (
                   <p className="mt-1 text-[9px] text-brand-blue font-semibold">مستند رقمي رقم: {artifact.id.substring(0, 8)}</p>
                 )}

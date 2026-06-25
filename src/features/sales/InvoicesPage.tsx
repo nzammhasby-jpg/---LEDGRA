@@ -873,7 +873,7 @@ export const InvoicesPage: React.FC = () => {
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={2}
-                    placeholder="سيتم إدراج الملاحظات كشروط دفع أو تفاصيل سداد في صك الفاتورة المعتمد..."
+                    placeholder="سيتم إدراج الملاحظات كشروط دفع أو تفاصيل سداد في صك الفاتورة..."
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-blue focus:border-brand-blue rounded-xl text-xs font-medium text-slate-700"
                   />
                 </div>
@@ -1285,10 +1285,10 @@ export const InvoicesPage: React.FC = () => {
                           </div>
                           <div>
                             <span className="text-slate-400">حالة التكوين:</span>
-                            <p className="font-semibold text-emerald-600">UBL 2.1 Compliant</p>
+                            <p className="font-semibold text-emerald-600">XML أولي محسّن للفحص الداخلي</p>
                           </div>
                           <div className="col-span-2">
-                            <span className="text-slate-400 block">بصمة التشفير (XML SHA-256 Hash):</span>
+                            <span className="text-slate-400 block">Hash داخلي للملف (XML SHA-256 Hash):</span>
                             <p className="font-mono text-[9px] text-slate-500 bg-slate-50 p-1 rounded-md overflow-x-auto select-all">
                               {eInvoiceArtifact.xml_hash}
                             </p>
@@ -1313,7 +1313,7 @@ export const InvoicesPage: React.FC = () => {
                                 className="px-3.5 py-1.75 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] flex items-center gap-1 cursor-pointer transition shrink-0"
                               >
                                 <FileText className="w-3.5 h-3.5" />
-                                <span>تحميل ملف XML المعتمد</span>
+                                <span>تنزيل ملف XML</span>
                               </button>
 
                               <button
@@ -1582,8 +1582,8 @@ export const InvoicesPage: React.FC = () => {
                   <ShieldCheck className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-extrabold text-slate-800">معاينة مستند XML الفاتورة الإلكترونية المعتمدة (UBL 2.1)</h3>
-                  <p className="text-[10px] text-slate-400">بصمة المستند SHA-256 الخاضعة لمراجعة مطابقة هيئة الزكاة والدخل</p>
+                  <h3 className="text-sm font-extrabold text-slate-800">معاينة XML الفاتورة للفحص الداخلي</h3>
+                  <p className="text-[10px] text-slate-400">Hash المستند SHA-256 الخاضعة لمراجعة الفحص الأولي الداخلي</p>
                 </div>
               </div>
               <button 
@@ -1595,7 +1595,7 @@ export const InvoicesPage: React.FC = () => {
             </div>
 
             <p className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl">
-              تنبيه: هذا الكود يعبر عن صيغة البيانات الضريبية المعتمدة لـ XML UBL 2.1 للمملكة العربية السعودية، والمدمجة داخلياً كقيمة فحص أولي (ZATCA Base Layer).
+              تنبيه: هذا الكود يعبر عن صيغة البيانات الضريبية لـ XML للمملكة العربية السعودية، والمدمجة داخلياً كقيمة فحص أولي (Base Layer).
             </p>
 
             <div className="flex-1 overflow-auto rounded-2xl bg-slate-950 p-4 border border-slate-900 text-left" style={{ direction: 'ltr' }}>

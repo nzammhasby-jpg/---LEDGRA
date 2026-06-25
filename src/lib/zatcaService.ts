@@ -4,6 +4,18 @@ import { generateZatcaQrBase64 } from './zatcaQr';
 import { generateInvoiceXml, calculateXmlHash } from './zatcaXml';
 import { validateZatcaInvoiceForXml, ZatcaInvoiceDocument, ZatcaInvoiceLine } from './zatcaValidation';
 
+function hasBasicXmlTagBalance(xml: string): boolean {
+  return (
+    xml.includes('<Invoice') &&
+    xml.includes('</Invoice>') &&
+    xml.includes('<cac:InvoiceLine>') &&
+    xml.includes('</cac:InvoiceLine>') &&
+    !xml.includes('undefined') &&
+    !xml.includes('null') &&
+    !xml.includes('<cbc:Percent>1500.00</cbc:Percent>')
+  );
+}
+
 export const zatcaService = {
   /**
    * Fetches ZATCA Settings for a specific Organization.
@@ -180,7 +192,7 @@ export const zatcaService = {
         const qty = Number(line.quantity) || 0;
         const price = Number(line.unit_price) || 0;
         const disc = Number(line.discount_amount) || 0;
-        const taxPercent = Number(line.tax_rate) * 100;
+        const taxPercent = Number(line.tax_rate) || 0;
         const lineExtensionAmount = Number((qty * price - disc).toFixed(2));
         const vatAmount = Number((lineExtensionAmount * (taxPercent / 100)).toFixed(2));
         const inclusiveAmount = Number((lineExtensionAmount + vatAmount).toFixed(2));
@@ -292,6 +304,24 @@ export const zatcaService = {
 
       // 5. Generate XML content and SHA256 hash representation
       const xmlContent = generateInvoiceXml(xmlInput);
+
+      if (!hasBasicXmlTagBalance(xmlContent)) {
+        const compileErrors = ['XML الناتج غير صالح للفحص الداخلي. راجع بنية الوسوم ونسب الضريبة.'];
+        await supabase.rpc('upsert_e_invoice_artifact', {
+          p_org_id: orgId,
+          p_invoice_id: invoice.id,
+          p_invoice_number: invoice.invoice_number,
+          p_invoice_type: invoiceType,
+          p_qr_tlv_base64: null,
+          p_xml_content: null,
+          p_xml_hash: null,
+          p_generation_status: 'invalid',
+          p_validation_errors: compileErrors
+        });
+        const artifact = await this.getEInvoiceArtifact(invoice.id);
+        return { success: false, artifact, errors: compileErrors };
+      }
+
       const xmlHash = await calculateXmlHash(xmlContent);
 
       // 6. Generate compliant QR Base64
