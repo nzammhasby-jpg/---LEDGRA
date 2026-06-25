@@ -646,9 +646,13 @@ export const ZatcaSettingsComp: React.FC = () => {
               </div>
             )}
 
-            <div className="border border-slate-100 bg-slate-50 rounded-xl p-3 text-[9px] text-slate-500 leading-relaxed space-y-1">
-              <span className="font-bold block text-slate-700">📌 تنويه بخصوص إرسال البيانات:</span>
-              <p>توليد رموز الاستجابة السريعة (QR) وربطها بملفات XML للمستندات الإلكترونية يتطلب فواتير مبيعات ضريبية برقم ضريبي نشط. لا يقوم النظام بإرسال فواتير مباشرة لمصلحة الضرائب والزكاة والجمارك (ZATCA) في النسخة الحالية.</p>
+            <div className="border border-slate-200 bg-slate-50/60 rounded-xl p-3.5 text-[10px] text-slate-700 leading-relaxed space-y-2">
+              <div className="font-extrabold flex items-center gap-1.5 text-slate-900 text-[11px]">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>المرحلة الحالية: تقوية XML والتحقق الداخلي</span>
+              </div>
+              <p>هذه المرحلة لا ترسل الفواتير إلى ZATCA. الهدف هو تجهيز XML و QR للفحص الداخلي والمرحلة التالية SDK Validation.</p>
+              <p className="text-[9px] text-slate-500 font-medium">مستندات الفحص جاهزة تحت بروتوكول ZATCA XML Preparation.</p>
             </div>
 
           </div>

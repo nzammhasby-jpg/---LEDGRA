@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { ZatcaSettings, EInvoiceArtifact, SalesInvoice } from '../types';
 import { generateZatcaQrBase64 } from './zatcaQr';
 import { generateInvoiceXml, calculateXmlHash } from './zatcaXml';
+import { validateZatcaInvoiceForXml, ZatcaInvoiceDocument, ZatcaInvoiceLine } from './zatcaValidation';
 
 export const zatcaService = {
   /**
@@ -171,92 +172,140 @@ export const zatcaService = {
     invoice: SalesInvoice,
     settings: ZatcaSettings
   ): Promise<{ success: boolean; artifact: EInvoiceArtifact | null; errors: string[] }> {
-    const errors = this.validateZatcaReadiness(settings, invoice);
-
     const invoiceType = settings.invoice_type_default || 'simplified';
 
-    if (errors.length > 0) {
-      // Save artifact as invalid so the system reflects readiness issues
-      try {
-        const { data: artId, error: rpcError } = await supabase.rpc('upsert_e_invoice_artifact', {
-          p_org_id: orgId,
-          p_invoice_id: invoice.id,
-          p_invoice_number: invoice.invoice_number,
-          p_invoice_type: invoiceType,
-          p_qr_tlv_base64: null,
-          p_xml_content: null,
-          p_xml_hash: null,
-          p_generation_status: 'invalid',
-          p_validation_errors: errors
-        });
-
-        if (rpcError) throw rpcError;
-
-        const artifact = await this.getEInvoiceArtifact(invoice.id);
-        return { success: false, artifact, errors };
-      } catch (e) {
-        console.error('Error saving invalid ZATCA validation artifact:', e);
-        return { success: false, artifact: null, errors: [...errors, 'فشل حفظ سجل الأخطاء في قاعدة البيانات'] };
-      }
-    }
-
     try {
-      // 1. Compile lines
-      const xmlLines = (invoice.lines || []).map(line => ({
-        id: line.id,
-        itemName: line.description || 'صنف مبيعات',
-        quantity: Number(line.quantity),
-        priceBeforeTax: Number(line.unit_price),
-        discountAmount: Number(line.discount_amount),
-        taxPercent: Number(line.tax_rate) * 100 // convert e.g. 0.15 to 15
-      }));
+      // 1. Build ZatcaInvoiceLine structures
+      const docLines: ZatcaInvoiceLine[] = (invoice.lines || []).map((line, idx) => {
+        const qty = Number(line.quantity) || 0;
+        const price = Number(line.unit_price) || 0;
+        const disc = Number(line.discount_amount) || 0;
+        const taxPercent = Number(line.tax_rate) * 100;
+        const lineExtensionAmount = Number((qty * price - disc).toFixed(2));
+        const vatAmount = Number((lineExtensionAmount * (taxPercent / 100)).toFixed(2));
+        const inclusiveAmount = Number((lineExtensionAmount + vatAmount).toFixed(2));
 
-      // Find customer fields
-      const customer = invoice.customer;
+        return {
+          id: line.id || String(idx + 1),
+          itemName: line.description || 'صنف مبيعات',
+          quantity: qty,
+          priceBeforeTax: price,
+          discountAmount: disc,
+          taxPercent: taxPercent,
+          lineExtensionAmount,
+          vatAmount,
+          inclusiveAmount
+        };
+      });
 
-      // 2. Compile XML Input
-      const xmlInput = {
-        invoiceNumber: invoice.invoice_number,
-        uuid: invoice.id, // using invoice.id as unique uuid
-        issueDate: invoice.invoice_date, // YYYY-MM-DD
-        issueTime: invoice.approved_at ? new Date(invoice.approved_at).toISOString().split('T')[1].substring(0, 8) : '12:00:00',
+      // 2. Build ZatcaInvoiceDocument
+      const doc: ZatcaInvoiceDocument = {
+        invoiceNumber: invoice.invoice_number || '',
+        uuid: invoice.id || '',
+        issueDate: invoice.invoice_date || '',
+        issueTime: invoice.approved_at 
+          ? new Date(invoice.approved_at).toISOString().split('T')[1].substring(0, 8) 
+          : '12:00:00',
         invoiceType: invoiceType,
-        sellerName: settings.seller_name || '',
-        sellerVatNumber: settings.seller_vat_number || '',
-        sellerCr: settings.seller_commercial_registration || undefined,
-        sellerAddress: settings.seller_address || undefined,
-        sellerCity: settings.seller_city || undefined,
-        sellerPostalCode: settings.seller_postal_code || undefined,
-
-        customerName: customer?.name || 'عميل نقدي',
-        customerVatNumber: customer?.tax_number || undefined,
-        customerCr: customer?.commercial_registration || undefined,
-        customerAddress: customer?.address || undefined,
-        customerCity: customer?.city || undefined,
-
-        lines: xmlLines,
+        status: invoice.status || 'draft',
+        seller: {
+          seller_name: settings.seller_name || '',
+          seller_vat_number: settings.seller_vat_number || '',
+          seller_commercial_registration: settings.seller_commercial_registration || '',
+          seller_address: settings.seller_address || '',
+          seller_city: settings.seller_city || '',
+          seller_postal_code: settings.seller_postal_code || '',
+          seller_country: settings.seller_country || 'SA'
+        },
+        buyer: {
+          customer_name: invoice.customer?.name || null,
+          customer_vat_number: invoice.customer?.tax_number || null,
+          customer_commercial_registration: invoice.customer?.commercial_registration || null,
+          customer_address: invoice.customer?.address || null,
+          customer_city: invoice.customer?.city || null
+        },
+        lines: docLines,
+        totals: {
+          subtotal: Number(invoice.subtotal) || 0,
+          discount_total: Number(invoice.discount_total) || 0,
+          tax_total: Number(invoice.tax_total) || 0,
+          total: Number(invoice.total) || 0
+        },
         currency: invoice.currency || 'SAR'
       };
 
-      // 3. Compile local XML content
+      // 3. Perform pre-generation validation
+      const validationResult = validateZatcaInvoiceForXml(doc);
+
+      if (!validationResult.isValid) {
+        const errors = validationResult.errors.map(e => e.message);
+        try {
+          await supabase.rpc('upsert_e_invoice_artifact', {
+            p_org_id: orgId,
+            p_invoice_id: invoice.id,
+            p_invoice_number: invoice.invoice_number,
+            p_invoice_type: invoiceType,
+            p_qr_tlv_base64: null,
+            p_xml_content: null,
+            p_xml_hash: null,
+            p_generation_status: 'invalid',
+            p_validation_errors: errors
+          });
+        } catch (dbErr) {
+          console.error('Error saving invalid artifact list:', dbErr);
+        }
+
+        const artifact = await this.getEInvoiceArtifact(invoice.id);
+        return { success: false, artifact, errors };
+      }
+
+      // 4. Compile inputs for XML
+      const xmlInput = {
+        invoiceNumber: doc.invoiceNumber,
+        uuid: doc.uuid,
+        issueDate: doc.issueDate,
+        issueTime: doc.issueTime,
+        invoiceType: doc.invoiceType,
+        sellerName: doc.seller.seller_name,
+        sellerVatNumber: doc.seller.seller_vat_number,
+        sellerCr: doc.seller.seller_commercial_registration || undefined,
+        sellerAddress: doc.seller.seller_address || undefined,
+        sellerCity: doc.seller.seller_city || undefined,
+        sellerPostalCode: doc.seller.seller_postal_code || undefined,
+
+        customerName: doc.buyer.customer_name || 'عميل نقدي',
+        customerVatNumber: doc.buyer.customer_vat_number || undefined,
+        customerCr: doc.buyer.customer_commercial_registration || undefined,
+        customerAddress: doc.buyer.customer_address || undefined,
+        customerCity: doc.buyer.customer_city || undefined,
+
+        lines: docLines.map(l => ({
+          id: l.id,
+          itemName: l.itemName,
+          quantity: l.quantity,
+          priceBeforeTax: l.priceBeforeTax,
+          discountAmount: l.discountAmount,
+          taxPercent: l.taxPercent
+        })),
+        currency: doc.currency
+      };
+
+      // 5. Generate XML content and SHA256 hash representation
       const xmlContent = generateInvoiceXml(xmlInput);
       const xmlHash = await calculateXmlHash(xmlContent);
 
-      // 4. Compile QR inputs
-      // For ZATCA Base64 compliance:
-      // Timestamp ISO structure: e.g. YYYY-MM-DDTHH:mm:ss
-      const isoTimestamp = `${invoice.invoice_date}T${xmlInput.issueTime}Z`;
-
+      // 6. Generate compliant QR Base64
+      const isoTimestamp = `${doc.issueDate}T${doc.issueTime}Z`;
       const qrBase64 = generateZatcaQrBase64({
-        sellerName: settings.seller_name || '',
-        vatNumber: settings.seller_vat_number || '',
+        sellerName: doc.seller.seller_name,
+        vatNumber: doc.seller.seller_vat_number,
         timestamp: isoTimestamp,
-        invoiceTotal: Number(invoice.total),
-        vatTotal: Number(invoice.tax_total)
+        invoiceTotal: doc.totals.total,
+        vatTotal: doc.totals.tax_total
       });
 
-      // 5. Save the compiled outputs via dynamic SEC DEF RPC
-      const { data: artId, error: rpcError } = await supabase.rpc('upsert_e_invoice_artifact', {
+      // 7. Save outputs via dynamic upsert RPC
+      const { error: rpcError } = await supabase.rpc('upsert_e_invoice_artifact', {
         p_org_id: orgId,
         p_invoice_id: invoice.id,
         p_invoice_number: invoice.invoice_number,
@@ -264,7 +313,7 @@ export const zatcaService = {
         p_qr_tlv_base64: qrBase64,
         p_xml_content: xmlContent,
         p_xml_hash: xmlHash,
-        p_generation_status: 'xml_generated', // successfully compiled both qr & xml
+        p_generation_status: 'xml_generated',
         p_validation_errors: []
       });
 

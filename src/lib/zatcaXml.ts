@@ -35,11 +35,11 @@ export interface ZatcaInvoiceXmlInput {
 }
 
 /**
- * Escapes special characters to ensure valid XML.
+ * Escapes special characters to ensure valid XML and prevents null/undefined text leaks.
  */
-function escapeXml(unsafe: string | null | undefined): string {
-  if (!unsafe) return '';
-  return unsafe
+export function escapeXml(unsafe: string | null | undefined): string {
+  if (unsafe === null || unsafe === undefined) return '';
+  return String(unsafe)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -48,30 +48,39 @@ function escapeXml(unsafe: string | null | undefined): string {
 }
 
 /**
+ * Safe number formatter to prevent NaN or undefined leaks in XML tags.
+ */
+function safeFormatNum(val: number | null | undefined): string {
+  if (val === null || val === undefined || isNaN(val)) {
+    return '0.00';
+  }
+  return val.toFixed(2);
+}
+
+/**
  * Generates an initial UBL 2.1 e-invoice XML string.
  * This sets up the structures required for Saudi Arabia ZATCA Electronic Invoicing.
  */
 export function generateInvoiceXml(input: ZatcaInvoiceXmlInput): string {
-  const currency = input.currency || 'SAR';
+  const currency = escapeXml(input.currency || 'SAR');
   const invoiceCode = input.invoiceType === 'simplified' ? '0100000' : '0200000'; // Simplified or Standard subtype profile
 
-  // Math totals
+  // Math totals calculation with robust fallbacks
   let totalLineExtensionAmount = 0; // Sum of line extensions (qty * price - discount)
   let totalVatAmount = 0;           // Total VAT amount
-  let totalExclusiveAmount = 0;     // Sum without VAT
-  let totalInclusiveAmount = 0;     // Sum with VAT
   let totalDiscountAmount = 0;      // Sum of discounts
 
-  // Process lines and calculate taxes
-  const processedLines = input.lines.map((line, idx) => {
-    const qty = Number(line.quantity) || 0;
-    const price = Number(line.priceBeforeTax) || 0;
-    const disc = Number(line.discountAmount) || 0;
-    const taxRate = (Number(line.taxPercent) || 0) / 100;
+  // Process lines and calculate taxes safely
+  const processedLines = (input.lines || []).map((line, idx) => {
+    const qty = Math.max(0, Number(line.quantity) || 0);
+    const price = Math.max(0, Number(line.priceBeforeTax) || 0);
+    const disc = Math.max(0, Number(line.discountAmount) || 0);
+    const taxPercent = Math.max(0, Number(line.taxPercent) || 0);
+    const taxRate = taxPercent / 100;
 
-    const lineExtensionAmount = qty * price - disc;
-    const lineVatAmount = lineExtensionAmount * taxRate;
-    const lineInclusiveAmount = lineExtensionAmount + lineVatAmount;
+    const lineExtensionAmount = Number((qty * price - disc).toFixed(2));
+    const lineVatAmount = Number((lineExtensionAmount * taxRate).toFixed(2));
+    const lineInclusiveAmount = Number((lineExtensionAmount + lineVatAmount).toFixed(2));
 
     totalLineExtensionAmount += lineExtensionAmount;
     totalVatAmount += lineVatAmount;
@@ -79,34 +88,34 @@ export function generateInvoiceXml(input: ZatcaInvoiceXmlInput): string {
 
     return {
       id: line.id || String(idx + 1),
-      itemName: line.itemName,
+      itemName: line.itemName || 'صنف مبيعات',
       quantity: qty,
       priceBeforeTax: price,
       discountAmount: disc,
-      taxPercent: line.taxPercent,
-      lineExtensionAmount: Number(lineExtensionAmount.toFixed(2)),
-      vatAmount: Number(lineVatAmount.toFixed(2)),
-      inclusiveAmount: Number(lineInclusiveAmount.toFixed(2)),
+      taxPercent: taxPercent,
+      lineExtensionAmount: lineExtensionAmount,
+      vatAmount: lineVatAmount,
+      inclusiveAmount: lineInclusiveAmount,
     };
   });
 
-  totalExclusiveAmount = totalLineExtensionAmount;
-  totalInclusiveAmount = totalExclusiveAmount + totalVatAmount;
+  const totalExclusiveAmount = Number(totalLineExtensionAmount.toFixed(2));
+  const totalInclusiveAmount = Number((totalExclusiveAmount + totalVatAmount).toFixed(2));
 
-  // Prepare Lines XML
+  // Prepare Lines XML elements safely
   const linesXml = processedLines.map((line) => {
     return `  <cac:InvoiceLine>
     <cbc:ID>${escapeXml(line.id)}</cbc:ID>
     <cbc:InvoicedQuantity unitCode="PCE">${line.quantity}</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="${currency}">${line.lineExtensionAmount.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:LineExtensionAmount currencyID="${currency}">${safeFormatNum(line.lineExtensionAmount)}</cbc:LineExtensionAmount>
     <cac:TaxTotal>
-      <cbc:TaxAmount currencyID="${currency}">${line.vatAmount.toFixed(2)}</cbc:TaxAmount>
+      <cbc:TaxAmount currencyID="${currency}">${safeFormatNum(line.vatAmount)}</cbc:TaxAmount>
       <cac:TaxSubtotal>
-        <cbc:TaxableAmount currencyID="${currency}">${line.lineExtensionAmount.toFixed(2)}</cbc:TaxableAmount>
-        <cbc:TaxAmount currencyID="${currency}">${line.vatAmount.toFixed(2)}</cbc:TaxAmount>
+        <cbc:TaxableAmount currencyID="${currency}">${safeFormatNum(line.lineExtensionAmount)}</cbc:TaxableAmount>
+        <cbc:TaxAmount currencyID="${currency}">${safeFormatNum(line.vatAmount)}</cbc:TaxAmount>
         <cac:TaxCategory>
           <cbc:ID>S</cbc:ID>
-          <cbc:Percent>${Number(line.taxPercent).toFixed(2)}</cbc:Percent>
+          <cbc:Percent>${safeFormatNum(line.taxPercent)}</cbc:Percent>
           <cac:TaxScheme>
             <cbc:ID>VAT</cbc:ID>
           </cac:TaxScheme>
@@ -117,19 +126,19 @@ export function generateInvoiceXml(input: ZatcaInvoiceXmlInput): string {
       <cbc:Name>${escapeXml(line.itemName)}</cbc:Name>
       <cac:ClassifiedTaxCategory>
         <cbc:ID>S</cbc:ID>
-        <cbc:Percent>${Number(line.taxPercent).toFixed(2)}</cbc:Percent>
+        <cbc:Percent>${safeFormatNum(line.taxPercent)}</cbc:Percent>
         <cac:TaxScheme>
           <cbc:ID>VAT</cbc:ID>
         </cac:ClassifiedTaxCategory>
       </cac:Item>
     </cac:Item>
     <cac:Price>
-      <cbc:PriceAmount currencyID="${currency}">${line.priceBeforeTax.toFixed(2)}</cbc:PriceAmount>
+      <cbc:PriceAmount currencyID="${currency}">${safeFormatNum(line.priceBeforeTax)}</cbc:PriceAmount>
     </cac:Price>
   </cac:InvoiceLine>`;
   }).join('\n');
 
-  // Format Seller fields
+  // Format Seller fields safely (ensuring fallback rather than blank tag where necessary)
   const sellerPostal = `      <cac:PostalAddress>
         <cbc:StreetName>${escapeXml(input.sellerAddress || '-')}</cbc:StreetName>
         <cbc:CityName>${escapeXml(input.sellerCity || '-')}</cbc:CityName>
@@ -139,7 +148,7 @@ export function generateInvoiceXml(input: ZatcaInvoiceXmlInput): string {
         </cac:Country>
       </cac:PostalAddress>`;
 
-  // Format Customer fields
+  // Format Customer fields safely
   const customerPostal = `      <cac:PostalAddress>
         <cbc:StreetName>${escapeXml(input.customerAddress || '-')}</cbc:StreetName>
         <cbc:CityName>${escapeXml(input.customerCity || '-')}</cbc:CityName>
@@ -148,7 +157,7 @@ export function generateInvoiceXml(input: ZatcaInvoiceXmlInput): string {
         </cac:Country>
       </cac:PostalAddress>`;
 
-  // Build root XML
+  // Build root XML with strictly validated tags
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
          xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
@@ -190,7 +199,7 @@ ${customerPostal}
         <cbc:CompanyID>${escapeXml(input.customerVatNumber || '-')}</cbc:CompanyID>
         <cac:TaxScheme>
           <cbc:ID>VAT</cbc:ID>
-        </cac:PartyTaxScheme>
+        </cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
         <cbc:RegistrationName>${escapeXml(input.customerName || 'عميل نقدي')}</cbc:RegistrationName>
@@ -199,10 +208,10 @@ ${customerPostal}
   </cac:AccountingCustomerParty>
 
   <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="${currency}">${totalVatAmount.toFixed(2)}</cbc:TaxAmount>
+    <cbc:TaxAmount currencyID="${currency}">${safeFormatNum(totalVatAmount)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="${currency}">${totalLineExtensionAmount.toFixed(2)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="${currency}">${totalVatAmount.toFixed(2)}</cbc:TaxAmount>
+      <cbc:TaxableAmount currencyID="${currency}">${safeFormatNum(totalExclusiveAmount)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="${currency}">${safeFormatNum(totalVatAmount)}</cbc:TaxAmount>
       <cac:TaxCategory>
         <cbc:ID>S</cbc:ID>
         <cbc:Percent>15.00</cbc:Percent>
@@ -214,11 +223,11 @@ ${customerPostal}
   </cac:TaxTotal>
 
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="${currency}">${totalLineExtensionAmount.toFixed(2)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="${currency}">${totalExclusiveAmount.toFixed(2)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="${currency}">${totalInclusiveAmount.toFixed(2)}</cbc:TaxInclusiveAmount>
-    <cbc:AllowanceTotalAmount currencyID="${currency}">${totalDiscountAmount.toFixed(2)}</cbc:AllowanceTotalAmount>
-    <cbc:PayableAmount currencyID="${currency}">${totalInclusiveAmount.toFixed(2)}</cbc:PayableAmount>
+    <cbc:LineExtensionAmount currencyID="${currency}">${safeFormatNum(totalExclusiveAmount)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="${currency}">${safeFormatNum(totalExclusiveAmount)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="${currency}">${safeFormatNum(totalInclusiveAmount)}</cbc:TaxInclusiveAmount>
+    <cbc:AllowanceTotalAmount currencyID="${currency}">${safeFormatNum(totalDiscountAmount)}</cbc:AllowanceTotalAmount>
+    <cbc:PayableAmount currencyID="${currency}">${safeFormatNum(totalInclusiveAmount)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
 
 ${linesXml}

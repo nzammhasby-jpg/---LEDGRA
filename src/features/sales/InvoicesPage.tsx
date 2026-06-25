@@ -1306,7 +1306,7 @@ export const InvoicesPage: React.FC = () => {
                         </p>
                         
                         <div className="flex flex-wrap gap-2 pt-1 font-sans">
-                          {eInvoiceArtifact.xml_content && (
+                          {eInvoiceArtifact.xml_content && (roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
                             <>
                               <button
                                 onClick={() => handleDownloadXml(eInvoiceArtifact.xml_content, selectedInvoice.invoice_number)}
@@ -1326,14 +1326,16 @@ export const InvoicesPage: React.FC = () => {
                             </>
                           )}
 
-                          <button
-                            disabled={generatingArtifact}
-                            onClick={handleGenerateEInvoiceData}
-                            className="px-3.5 py-1.75 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-[10px] flex items-center gap-1 cursor-pointer transition shrink-0"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${generatingArtifact ? 'animate-spin' : ''}`} />
-                            <span>إعادة توليد وتحديث</span>
-                          </button>
+                          {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
+                            <button
+                              disabled={generatingArtifact}
+                              onClick={handleGenerateEInvoiceData}
+                              className="px-3.5 py-1.75 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-[10px] flex items-center gap-1 cursor-pointer transition shrink-0"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${generatingArtifact ? 'animate-spin' : ''}`} />
+                              <span>إعادة توليد وتحديث</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1351,20 +1353,22 @@ export const InvoicesPage: React.FC = () => {
                         </div>
                       </div>
                       
-                      <div className="flex justify-end border-t border-red-100/50 pt-2.5">
-                        <button
-                          disabled={generatingArtifact}
-                          onClick={handleGenerateEInvoiceData}
-                          className="bg-brand-blue text-white px-4 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
-                        >
-                          {generatingArtifact ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-white" />
-                          ) : (
-                            <RefreshCw className="w-3" />
-                          )}
-                          <span>تحديث وإعادة الفحص والمطابقة</span>
-                        </button>
-                      </div>
+                      {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
+                        <div className="flex justify-end border-t border-red-100/50 pt-2.5">
+                          <button
+                            disabled={generatingArtifact}
+                            onClick={handleGenerateEInvoiceData}
+                            className="bg-brand-blue text-white px-4 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                          >
+                            {generatingArtifact ? (
+                              <Loader2 className="w-3 h-3 animate-spin text-white" />
+                            ) : (
+                              <RefreshCw className="w-3" />
+                            )}
+                            <span>تحديث وإعادة الفحص والمطابقة</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-white border border-slate-150 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
@@ -1372,18 +1376,24 @@ export const InvoicesPage: React.FC = () => {
                         لم يتم توليد سجل الأرشفة الإلكتروني (XML / QR) من قواعد لِدجرا لهذه الفاتورة بعد. سنقوم بفحص الحقول وتوليد بنية الفوترة الضريبية وحفظها في محفظة البيانات بمجرد النقر على الزر.
                       </p>
                       
-                      <button
-                        disabled={generatingArtifact}
-                        onClick={handleGenerateEInvoiceData}
-                        className="bg-brand-blue hover:brightness-95 text-white font-bold text-[10.5px] px-4 py-2 rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer transition shadow-md shadow-brand-blue/10"
-                      >
-                        {generatingArtifact ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-white" />
-                        ) : (
-                          <ShieldCheck className="w-4 h-4" />
-                        )}
-                        <span>توليد بيانات الفوترة الإلكترونية</span>
-                      </button>
+                      {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') ? (
+                        <button
+                          disabled={generatingArtifact}
+                          onClick={handleGenerateEInvoiceData}
+                          className="bg-brand-blue hover:brightness-95 text-white font-bold text-[10.5px] px-4 py-2 rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer transition shadow-md shadow-brand-blue/10"
+                        >
+                          {generatingArtifact ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-white" />
+                          ) : (
+                            <ShieldCheck className="w-4 h-4" />
+                          )}
+                          <span>توليد بيانات الفوترة الإلكترونية</span>
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-100">
+                          يرجى التواصل مع مسؤول النظام لتوليد الفوترة الإلكترونية.
+                        </span>
+                      )}
                     </div>
                   )}
 
@@ -1563,7 +1573,7 @@ export const InvoicesPage: React.FC = () => {
       )}
 
       {/* ZATCA XML Preview Modal overlay Dialog */}
-      {showXmlModal && eInvoiceArtifact?.xml_content && (
+      {showXmlModal && eInvoiceArtifact?.xml_content && (roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" dir="rtl">
           <div className="bg-white rounded-3xl w-full max-w-4xl p-6 space-y-4 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
