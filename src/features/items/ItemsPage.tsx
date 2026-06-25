@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { masterDataService } from '../../lib/masterDataService';
@@ -77,17 +77,6 @@ export const ItemsPage: React.FC = () => {
     }
   }, [currentOrg?.id]);
 
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('action') === 'new') {
-      setIsModalOpen(true);
-      if (params.get('type') === 'stockable') {
-        setIsStockable(true);
-      }
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.search, location.pathname, navigate]);
-
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -121,7 +110,7 @@ export const ItemsPage: React.FC = () => {
   };
 
   // Open modal as Add
-  const handleAddClick = () => {
+  const handleAddClick = useCallback(() => {
     setEditingItem(null);
     setFormError(null);
     
@@ -155,7 +144,22 @@ export const ItemsPage: React.FC = () => {
       .catch(() => null);
 
     setIsModalOpen(true);
-  };
+  }, [items, currentOrg]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    if (params.get('action') === 'new') {
+      handleAddClick();
+
+      if (params.get('type') === 'stockable') {
+        setIsStockable(true);
+        setItemType('product');
+      }
+
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate, handleAddClick]);
 
   // Open modal as Edit
   const handleEditClick = (it: Item) => {

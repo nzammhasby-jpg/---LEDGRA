@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { salesService, CreateInvoiceInput } from '../../lib/salesService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
+import { zatcaService } from '../../lib/zatcaService';
 import { 
   SalesInvoice, 
   Customer, 
@@ -38,7 +39,9 @@ import {
   DollarSign,
   Briefcase,
   AlertTriangle,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  RefreshCw
 } from 'lucide-react';
 
 export const InvoicesPage: React.FC = () => {
@@ -65,6 +68,13 @@ export const InvoicesPage: React.FC = () => {
   // View state: 'list' | 'add' | 'view'
   const [viewState, setViewState] = useState<'list' | 'add' | 'view'>('list');
   const [selectedInvoice, setSelectedInvoice] = useState<SalesInvoice | null>(null);
+
+  // ZATCA state variables
+  const [zatcaSettings, setZatcaSettings] = useState<any>(null);
+  const [eInvoiceArtifact, setEInvoiceArtifact] = useState<any>(null);
+  const [artifactLoading, setArtifactLoading] = useState<boolean>(false);
+  const [generatingArtifact, setGeneratingArtifact] = useState<boolean>(false);
+  const [showXmlModal, setShowXmlModal] = useState<boolean>(false);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -95,14 +105,6 @@ export const InvoicesPage: React.FC = () => {
       loadData();
     }
   }, [currentOrg?.id]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('action') === 'new') {
-      setViewState('add');
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.search, location.pathname, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -164,7 +166,7 @@ export const InvoicesPage: React.FC = () => {
   const selectedCustomerInfo = customers.find(c => c.id === customerId);
 
   // Initialize a new draft invoice form
-  const handleAddNewInvoice = () => {
+  const handleAddNewInvoice = useCallback(() => {
     setCustomerId('');
     setInvoiceDate(new Date().toISOString().split('T')[0]);
     // default due date: today + 30 days
@@ -186,7 +188,16 @@ export const InvoicesPage: React.FC = () => {
     ]);
     setFormError(null);
     setViewState('add');
-  };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    if (params.get('action') === 'new') {
+      handleAddNewInvoice();
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate, handleAddNewInvoice]);
 
   // Handle item change in row to auto-populate descriptions, selling prices, tax rates, and suitable revenue accounts
   const handleLineItemChange = (index: number, itemId: string) => {
@@ -341,6 +352,50 @@ export const InvoicesPage: React.FC = () => {
     }
   };
 
+  // Action: Generate ZATCA XML and QR Artifact
+  const handleGenerateEInvoiceData = async () => {
+    if (!currentOrg || !selectedInvoice) return;
+    setGeneratingArtifact(true);
+    setError(null);
+    try {
+      // Fetch latest settings if not loaded
+      let settingsObj = zatcaSettings;
+      if (!settingsObj) {
+        settingsObj = await zatcaService.getZatcaSettings(currentOrg.id);
+        setZatcaSettings(settingsObj);
+      }
+
+      if (!settingsObj) {
+        throw new Error('لم يتم العثور على إعدادات الفوترة الإلكترونية (ZATCA) في النظام للمنشأة. يرجى تهيئتها أولًا من لوحة الإعدادات.');
+      }
+
+      const res = await zatcaService.generateAndSaveArtifact(currentOrg.id, selectedInvoice, settingsObj);
+      setEInvoiceArtifact(res.artifact);
+      
+      if (!res.success) {
+        setError(`لم تنجح معايير الفحص الأولي للفوترة: ${res.errors.join(' | ')}`);
+      }
+    } catch (err: any) {
+      console.error('Error generating ZATCA artifact:', err);
+      setError(err.message || 'فشل توليد مستندات الفوترة الإلكترونية الضريبية.');
+    } finally {
+      setGeneratingArtifact(false);
+    }
+  };
+
+  // Helper: Download generated XML file
+  const handleDownloadXml = (xmlContent: string, invoiceNumber: string) => {
+    const blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `invoice-${invoiceNumber}-zatca.xml`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // Action: Cancel Invoice
   const handleCancelInvoice = async (invoiceId: string) => {
     if (!confirm('هل أنت متأكد من إلغاء هذه الفاتورة؟ سيتم إلغاء سريانها وعكس قيد اليومية بقيد عكسي تلقائي نظامي.')) return;
@@ -388,10 +443,27 @@ export const InvoicesPage: React.FC = () => {
   // View Details
   const handleShowDetails = async (invoice: SalesInvoice) => {
     setActionLoading('fetch');
+    setZatcaSettings(null);
+    setEInvoiceArtifact(null);
     try {
       const full = await salesService.getSalesInvoice(currentOrg!.id, invoice.id);
       setSelectedInvoice(full);
       setViewState('view');
+
+      if (full && full.status === 'approved') {
+        setArtifactLoading(true);
+        try {
+          const settings = await zatcaService.getZatcaSettings(currentOrg!.id);
+          setZatcaSettings(settings);
+          
+          const art = await zatcaService.getEInvoiceArtifact(full.id);
+          setEInvoiceArtifact(art);
+        } catch (ae) {
+          console.error('Error loading ZATCA settings/artifacts:', ae);
+        } finally {
+          setArtifactLoading(false);
+        }
+      }
     } catch (err: any) {
       setError(getErrorMessage(err));
     } finally {
@@ -1146,6 +1218,181 @@ export const InvoicesPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Phase 12 - ZATCA Electronic Compliance HUB */}
+          {selectedInvoice.status === 'approved' && (
+            <div className="bg-slate-50 border border-slate-200/80 rounded-3xl p-5 max-w-4xl mx-auto mb-6 space-y-4 shadow-sm print:hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-150 pb-3 gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="bg-brand-blue/10 text-brand-blue p-1.5 rounded-xl">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900">جاهزية الفوترة الإلكترونية ومستندات ZATCA</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">جاهزية أولية (QR / Base64 / UBL XML 2.1) - بدون تكامل مباشر</p>
+                  </div>
+                </div>
+                
+                {/* Status Badging */}
+                <div>
+                  {artifactLoading ? (
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>جاري جلب حالة الفاتورة رقمياً...</span>
+                    </div>
+                  ) : !zatcaSettings ? (
+                    <span className="px-2.5 py-1 text-[10px] font-bold text-amber-700 bg-amber-50 rounded-lg border border-amber-100">
+                      ⚠️ إعدادت ZATCA غير مهيأة
+                    </span>
+                  ) : !eInvoiceArtifact ? (
+                    <span className="px-2.5 py-1 text-[10px] font-bold text-slate-500 bg-slate-100 rounded-lg border border-slate-200">
+                      لم يتم توليد المستند الرقمي بعد
+                    </span>
+                  ) : eInvoiceArtifact.generation_status === 'xml_generated' ? (
+                    <span className="px-2.5 py-1 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 rounded-lg border border-emerald-150 flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>مستند الفوترة الرقمي مكتمل</span>
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 text-[10px] font-bold text-red-600 bg-red-50 rounded-lg border border-red-100 flex items-center gap-1">
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>فشل جاهزية المطابقة</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Details / Warnings / Trigger Buttons */}
+              {!zatcaSettings ? (
+                <div className="text-xs text-slate-600 bg-amber-50/40 p-3 rounded-2xl border border-amber-100/50 leading-relaxed">
+                  الفوترة الإلكترونية لهيئة الزكاة والدخل معطلة أو لم يتم تعبئتها بعد لهذه المنشأة. يرجى الذهاب إلى 
+                  <strong className="text-brand-blue cursor-pointer" onClick={() => setViewState('list')}> صفحة الإعدادات </strong> 
+                  لتفعيلها وتعبئة الرقم الضريبي، السجل التجاري وعنوان المنشأة.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  
+                  {/* Successfully Generated Artifact Details */}
+                  {eInvoiceArtifact?.generation_status === 'xml_generated' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div className="bg-white border border-slate-150 p-3.5 rounded-2xl space-y-2">
+                        <span className="font-bold text-slate-500 block mb-1">بيانات الرصيد الرقمي للزكاة:</span>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600">
+                          <div>
+                            <span className="text-slate-400">تحليل الفاتورة:</span>
+                            <p className="font-semibold text-slate-800">
+                              {eInvoiceArtifact.invoice_type === 'standard' ? 'فاتورة ضريبية قياسية (B2B)' : 'فاتورة ضريبية مبسطة (B2C)'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-slate-400">حالة التكوين:</span>
+                            <p className="font-semibold text-emerald-600">UBL 2.1 Compliant</p>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-slate-400 block">بصمة التشفير (XML SHA-256 Hash):</span>
+                            <p className="font-mono text-[9px] text-slate-500 bg-slate-50 p-1 rounded-md overflow-x-auto select-all">
+                              {eInvoiceArtifact.xml_hash}
+                            </p>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-slate-400">معرف المعاملة الفرعي (UUID):</span>
+                            <p className="font-mono text-[9px] text-slate-500 select-all">{selectedInvoice.id}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 justify-center">
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          تم بناء هذا المستند وتضمين مصفوفة الـ TLV الـ Base64 التلقائية داخل رمز الـ QR بصفحة الطباعة الرسمية أدناه. المستند جاهز للأرشفة والمصادقة الداخلية.
+                        </p>
+                        
+                        <div className="flex flex-wrap gap-2 pt-1 font-sans">
+                          {eInvoiceArtifact.xml_content && (
+                            <>
+                              <button
+                                onClick={() => handleDownloadXml(eInvoiceArtifact.xml_content, selectedInvoice.invoice_number)}
+                                className="px-3.5 py-1.75 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] flex items-center gap-1 cursor-pointer transition shrink-0"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>تحميل ملف XML المعتمد</span>
+                              </button>
+
+                              <button
+                                onClick={() => setShowXmlModal(true)}
+                                className="px-3.5 py-1.75 bg-slate-100 hover:bg-slate-200 border border-slate-250 text-slate-700 font-bold rounded-xl text-[10px] flex items-center gap-1 cursor-pointer transition shrink-0"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>معاينة كود الـ XML</span>
+                              </button>
+                            </>
+                          )}
+
+                          <button
+                            disabled={generatingArtifact}
+                            onClick={handleGenerateEInvoiceData}
+                            className="px-3.5 py-1.75 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-[10px] flex items-center gap-1 cursor-pointer transition shrink-0"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${generatingArtifact ? 'animate-spin' : ''}`} />
+                            <span>إعادة توليد وتحديث</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : eInvoiceArtifact?.generation_status === 'invalid' ? (
+                    <div className="bg-red-50/50 border border-red-100 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-start gap-2 text-xs text-red-900 leading-normal font-sans">
+                        <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="font-extrabold block mb-1">فشل فحص الجاهزية الإلكترونية:</strong>
+                          <ul className="list-disc pr-4 space-y-1 text-red-800 text-[11px]">
+                            {eInvoiceArtifact.validation_errors && eInvoiceArtifact.validation_errors.map((msg: string, i: number) => (
+                              <li key={i}>{msg}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end border-t border-red-100/50 pt-2.5">
+                        <button
+                          disabled={generatingArtifact}
+                          onClick={handleGenerateEInvoiceData}
+                          className="bg-brand-blue text-white px-4 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1 cursor-pointer transition"
+                        >
+                          {generatingArtifact ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-white" />
+                          ) : (
+                            <RefreshCw className="w-3" />
+                          )}
+                          <span>تحديث وإعادة الفحص والمطابقة</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-slate-150 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                      <p className="text-slate-500 leading-relaxed text-[11px] max-w-[500px]">
+                        لم يتم توليد سجل الأرشفة الإلكتروني (XML / QR) من قواعد لِدجرا لهذه الفاتورة بعد. سنقوم بفحص الحقول وتوليد بنية الفوترة الضريبية وحفظها في محفظة البيانات بمجرد النقر على الزر.
+                      </p>
+                      
+                      <button
+                        disabled={generatingArtifact}
+                        onClick={handleGenerateEInvoiceData}
+                        className="bg-brand-blue hover:brightness-95 text-white font-bold text-[10.5px] px-4 py-2 rounded-xl flex items-center gap-1.5 shrink-0 cursor-pointer transition shadow-md shadow-brand-blue/10"
+                      >
+                        {generatingArtifact ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        ) : (
+                          <ShieldCheck className="w-4 h-4" />
+                        )}
+                        <span>توليد بيانات الفوترة الإلكترونية</span>
+                      </button>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+            </div>
+          )}
+
           {/* Full print invoice card template */}
           <div className="bg-white border border-slate-250 p-8 rounded-3xl max-w-4xl mx-auto shadow-sm space-y-6 print:m-0 print:border-0 print:p-0">
             
@@ -1312,6 +1559,60 @@ export const InvoicesPage: React.FC = () => {
 
           </div>
 
+        </div>
+      )}
+
+      {/* ZATCA XML Preview Modal overlay Dialog */}
+      {showXmlModal && eInvoiceArtifact?.xml_content && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in" dir="rtl">
+          <div className="bg-white rounded-3xl w-full max-w-4xl p-6 space-y-4 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="bg-brand-blue/10 text-brand-blue p-1.5 rounded-xl">
+                  <ShieldCheck className="w-5 h-5 text-brand-blue" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-800">معاينة مستند XML الفاتورة الإلكترونية المعتمدة (UBL 2.1)</h3>
+                  <p className="text-[10px] text-slate-400">بصمة المستند SHA-256 الخاضعة لمراجعة مطابقة هيئة الزكاة والدخل</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowXmlModal(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 cursor-pointer transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl">
+              تنبيه: هذا الكود يعبر عن صيغة البيانات الضريبية المعتمدة لـ XML UBL 2.1 للمملكة العربية السعودية، والمدمجة داخلياً كقيمة فحص أولي (ZATCA Base Layer).
+            </p>
+
+            <div className="flex-1 overflow-auto rounded-2xl bg-slate-950 p-4 border border-slate-900 text-left" style={{ direction: 'ltr' }}>
+              <pre className="font-mono text-[10px] text-emerald-400 whitespace-pre overflow-x-auto select-all">
+                {eInvoiceArtifact.xml_content}
+              </pre>
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+              <span className="text-[10px] text-slate-400 font-mono">حجم الملف الرقمي: ~{(eInvoiceArtifact.xml_content.length / 1024).toFixed(2)} KB</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleDownloadXml(eInvoiceArtifact.xml_content, selectedInvoice.invoice_number)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition shadow-md shadow-emerald-600/10"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>تحميل ملف الـ XML</span>
+                </button>
+                <button
+                  onClick={() => setShowXmlModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition border border-slate-200"
+                >
+                  إغلاق النافذة
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

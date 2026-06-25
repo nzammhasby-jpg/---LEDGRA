@@ -545,8 +545,35 @@ export interface InventoryMovement {
   item?: Item;
 }
 
+export interface ZatcaSettings {
+  id: string;
+  organization_id: string;
+  is_enabled: boolean;
+  seller_name: string | null;
+  seller_vat_number: string | null;
+  seller_commercial_registration: string | null;
+  seller_address: string | null;
+  seller_city: string | null;
+  seller_postal_code: string | null;
+  seller_country: string;
+  invoice_type_default: 'simplified' | 'standard';
+  environment: 'sandbox' | 'simulation' | 'production';
+  created_at: string;
+  updated_at: string;
+}
 
-
-
-
-
+export interface EInvoiceArtifact {
+  id: string;
+  organization_id: string;
+  sales_invoice_id: string;
+  invoice_number: string;
+  invoice_type: 'simplified' | 'standard';
+  qr_tlv_base64: string | null;
+  xml_content: string | null;
+  xml_hash: string | null;
+  generation_status: 'draft' | 'qr_generated' | 'xml_generated' | 'invalid';
+  validation_errors: any[];
+  generated_at: string;
+  created_at: string;
+  updated_at: string;
+}

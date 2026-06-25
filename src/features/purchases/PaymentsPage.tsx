@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { purchaseService, CreatePaymentInput } from '../../lib/purchaseService';
@@ -89,14 +89,6 @@ export const PaymentsPage: React.FC = () => {
       loadData();
     }
   }, [currentOrg?.id]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('action') === 'new') {
-      setViewState('add');
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.search, location.pathname, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -192,7 +184,7 @@ export const PaymentsPage: React.FC = () => {
 
   const totalAllocated = getTotalAllocated();
 
-  const handleAddNewPayment = () => {
+  const handleAddNewPayment = useCallback(() => {
     setVendorId('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
     setAmount('0');
@@ -209,7 +201,16 @@ export const PaymentsPage: React.FC = () => {
     if (settings?.default_bank_account_id) {
       setBankAccountId(settings.default_bank_account_id);
     }
-  };
+  }, [settings]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    if (params.get('action') === 'new') {
+      handleAddNewPayment();
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate, handleAddNewPayment]);
 
   // Handle save payment receipt draft form
   const handleSavePayment = async (e: React.FormEvent) => {

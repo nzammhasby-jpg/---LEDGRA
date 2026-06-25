@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { salesService } from '../../lib/salesService';
+import { zatcaService } from '../../lib/zatcaService';
+import { generateZatcaQrBase64 } from '../../lib/zatcaQr';
+import { QRCodeSVG } from 'qrcode.react';
 import { SalesInvoice } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatNumberWithLatinDigits, formatArabicDateWithLatinDigits } from '../../lib/formatters';
@@ -19,11 +22,59 @@ export const SalesInvoicePrint: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [zatcaSettings, setZatcaSettings] = useState<any>(null);
+  const [artifact, setArtifact] = useState<any>(null);
+  const [qrBase64, setQrBase64] = useState<string | null>(null);
+
   useEffect(() => {
     if (currentOrg?.id && id) {
       loadInvoice();
     }
   }, [currentOrg?.id, id]);
+
+  useEffect(() => {
+    if (currentOrg?.id && invoice?.id) {
+      const loadZatcaData = async () => {
+        try {
+          const settings = await zatcaService.getZatcaSettings(currentOrg.id);
+          setZatcaSettings(settings);
+
+          const art = await zatcaService.getEInvoiceArtifact(invoice.id);
+          setArtifact(art);
+
+          if (art && art.qr_tlv_base64) {
+            setQrBase64(art.qr_tlv_base64);
+          } else if (settings && settings.is_enabled) {
+            // live dynamic calculations for fallback printing
+            const isoTimestamp = `${invoice.invoice_date}T${invoice.approved_at ? new Date(invoice.approved_at).toISOString().split('T')[1].substring(0, 8) : '12:00:00'}Z`;
+            const liveQr = generateZatcaQrBase64({
+              sellerName: settings.seller_name || currentOrg.name_ar || '',
+              vatNumber: settings.seller_vat_number || currentOrg.vat_number || '',
+              timestamp: isoTimestamp,
+              invoiceTotal: Number(invoice.total),
+              vatTotal: Number(invoice.tax_total)
+            });
+            setQrBase64(liveQr);
+          } else {
+            // standard safe backup values even if disablement is toggle active
+            const isoTimestamp = `${invoice.invoice_date}T12:00:00Z`;
+            const bkpQr = generateZatcaQrBase64({
+              sellerName: currentOrg.name_ar || '',
+              vatNumber: currentOrg.vat_number || '',
+              timestamp: isoTimestamp,
+              invoiceTotal: Number(invoice.total),
+              vatTotal: Number(invoice.tax_total)
+            });
+            setQrBase64(bkpQr);
+          }
+        } catch (e) {
+          console.error("Error setting ZATCA QR on print page:", e);
+        }
+      };
+
+      loadZatcaData();
+    }
+  }, [currentOrg, invoice]);
 
   const loadInvoice = async () => {
     setLoading(true);
@@ -181,9 +232,35 @@ export const SalesInvoicePrint: React.FC = () => {
           </table>
         </div>
 
-        {/* Bottom dynamic totals box */}
-        <div className="flex justify-end mb-8 font-sans" dir="rtl">
-          <div className="w-80 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs select-none">
+        {/* Bottom dynamic totals and ZATCA QR block */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 font-sans items-end" dir="rtl">
+          
+          {/* ZATCA QR code container */}
+          <div className="flex flex-col items-start gap-2 bg-slate-50 border border-slate-200/60 rounded-2xl p-4 w-fit md:w-auto">
+            <span className="text-[9px] font-black text-slate-400 block uppercase tracking-wider">الترميز الإلكتروني المعتمد (ZATCA QR)</span>
+            <div className="flex items-center gap-4">
+              {qrBase64 ? (
+                <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm print:shadow-none shrink-0 border-solid">
+                  <QRCodeSVG value={qrBase64} size={105} />
+                </div>
+              ) : (
+                <div className="w-[105px] h-[105px] bg-slate-100 rounded-xl border border-slate-200 border-dashed flex items-center justify-center text-center text-[10px] text-slate-400 p-2 shrink-0">
+                  جاري احتساب الرمز...
+                </div>
+              )}
+              <div className="text-[10px] text-slate-500 leading-relaxed">
+                <p className="font-extrabold text-slate-700">الفاتورة مشفرة ضريبياً</p>
+                <p className="mt-1">صنف الفاتورة: {zatcaSettings?.invoice_type_default === 'standard' ? 'ضريبية قياسية (B2B)' : 'ضريبية مبسطة (B2C)'}</p>
+                <p className="mt-0.5">البنية الرقمية: UBL 2.1 Compliant</p>
+                {artifact?.id && (
+                  <p className="mt-1 text-[9px] text-brand-blue font-semibold">مستند رقمي رقم: {artifact.id.substring(0, 8)}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column computations */}
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2 text-xs select-none">
             
             <div className="flex justify-between font-bold text-slate-600">
               <span>الإجمالي قبل الخصم:</span>

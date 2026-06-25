@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { masterDataService } from '../../lib/masterDataService';
@@ -76,14 +76,6 @@ export const CustomersPage: React.FC = () => {
     }
   }, [currentOrg?.id]);
 
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('action') === 'new') {
-      setIsModalOpen(true);
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.search, location.pathname, navigate]);
-
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -119,7 +111,7 @@ export const CustomersPage: React.FC = () => {
   };
 
   // Open modal for Add
-  const handleAddClick = () => {
+  const handleAddClick = useCallback(() => {
     setEditingCustomer(null);
     setFormError(null);
     
@@ -159,7 +151,16 @@ export const CustomersPage: React.FC = () => {
       });
 
     setIsModalOpen(true);
-  };
+  }, [customers, accounts, currentOrg]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+
+    if (params.get('action') === 'new') {
+      handleAddClick();
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.search, location.pathname, navigate, handleAddClick]);
 
   // Open modal for Edit
   const handleEditClick = (cust: Customer) => {

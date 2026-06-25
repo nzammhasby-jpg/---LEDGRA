@@ -6,6 +6,7 @@ import { Branch, Account, AccountingSettings as AccountingSettingsType } from '.
 import { accountingService } from '../../lib/accountingService';
 import { normalizeIntegerInput } from '../../lib/formatters';
 import { organizationSettingsService } from '../../lib/organizationSettingsService';
+import { ZatcaSettingsComp } from './ZatcaSettings';
 import { 
   Building, 
   Users, 
@@ -50,7 +51,7 @@ interface RPCMemberResult {
 export const Settings: React.FC = () => {
   const { currentOrg, roleInCurrentOrg, updateOrg } = useAuth();
   const { t } = useTranslation('ar');
-  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting' | 'zatca'>('info');
 
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
@@ -489,7 +490,8 @@ export const Settings: React.FC = () => {
           { id: 'info', label: t('settings.tab_info'), icon: Building },
           { id: 'users', label: t('settings.tab_users'), icon: Users },
           { id: 'branches', label: t('settings.tab_branches'), icon: MapPin },
-          { id: 'accounting', label: 'الإعدادات المحاسبية والسيرفر', icon: BookOpen }
+          { id: 'accounting', label: 'الإعدادات المحاسبية والسيرفر', icon: BookOpen },
+          { id: 'zatca', label: 'الفوترة الإلكترونية (ZATCA)', icon: ShieldAlert }
         ].map((tab) => {
           const TabIcon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1480,6 +1482,11 @@ export const Settings: React.FC = () => {
             )}
 
           </div>
+        )}
+
+        {/* Tab 5: ZATCA Compliance */}
+        {activeTab === 'zatca' && (
+          <ZatcaSettingsComp />
         )}
 
       </div>

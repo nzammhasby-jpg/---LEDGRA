@@ -58,6 +58,15 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const handleQuickCreate = (path: string) => {
+    setQuickActionOpen(false);
+    navigate(path);
+  };
+
+  useEffect(() => {
+    setQuickActionOpen(false);
+  }, [location.pathname, location.search]);
+
   // Highlight page title depending on router path
   const getPageTitle = () => {
     if (location.pathname.startsWith('/sales/invoices')) {
@@ -402,19 +411,31 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               {quickActionOpen && (
                 <div className="absolute left-0 mt-2 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 py-1.5 animate-fadeIn">
                   <button 
-                    onClick={() => { navigate('/sales/invoices?action=new'); setQuickActionOpen(false); }}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      handleQuickCreate('/sales/invoices?action=new');
+                    }}
                     className="w-full text-right px-4 py-2 hover:bg-slate-50 text-xs font-semibold text-slate-700 block cursor-pointer"
                   >
                     📝 فاتورة مبيعات جديدة
                   </button>
                   <button 
-                    onClick={() => { navigate('/customers?action=new'); setQuickActionOpen(false); }}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      handleQuickCreate('/customers?action=new');
+                    }}
                     className="w-full text-right px-4 py-2 hover:bg-slate-50 text-xs font-semibold text-slate-700 block cursor-pointer"
                   >
                     👤 إضافة عميل جديد
                   </button>
                   <button 
-                    onClick={() => { navigate('/purchases/payments?action=new'); setQuickActionOpen(false); }}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      handleQuickCreate('/purchases/payments?action=new');
+                    }}
                     className="w-full text-right px-4 py-2 hover:bg-slate-50 text-xs font-semibold text-slate-700 block cursor-pointer"
                   >
                     💳 سند صرف جديد
