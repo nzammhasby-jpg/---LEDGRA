@@ -71,7 +71,19 @@ export const ZatcaSettingsComp: React.FC = () => {
   });
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'basic' | 'signing'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'signing' | 'sandbox'>('basic');
+
+  // Sandbox / Simulation Integration states
+  const [submissionLogs, setSubmissionLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+  const [testingConnectivity, setTestingConnectivity] = useState<boolean>(false);
+  const [connectivityStatus, setConnectivityStatus] = useState<{
+    checked: boolean;
+    success: boolean;
+    message: string;
+    environment: 'sandbox' | 'simulation';
+  } | null>(null);
+  const [sandboxEnv, setSandboxEnv] = useState<'sandbox' | 'simulation'>('sandbox');
 
   // Signing Profile states
   const [signingEnv, setSigningEnv] = useState<'sandbox' | 'simulation' | 'production'>('sandbox');
@@ -176,6 +188,52 @@ export const ZatcaSettingsComp: React.FC = () => {
       loadSigningProfile(signingEnv);
     }
   }, [currentOrg, signingEnv]);
+
+  const loadLogs = useCallback(async () => {
+    if (!currentOrg) return;
+    setLoadingLogs(true);
+    try {
+      const logs = await zatcaService.getSubmissionLogs(currentOrg.id);
+      setSubmissionLogs(logs);
+    } catch (err) {
+      console.error('Error loading submission logs:', err);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, [currentOrg]);
+
+  useEffect(() => {
+    if (activeTab === 'sandbox') {
+      loadLogs();
+    }
+  }, [activeTab, loadLogs]);
+
+  const handleTestConnectivity = async () => {
+    if (!currentOrg) return;
+    setTestingConnectivity(true);
+    setSuccessMsg(null);
+    setErrorMsg(null);
+    try {
+      const res = await zatcaService.testConnectivity(currentOrg.id, sandboxEnv);
+      setConnectivityStatus({
+        checked: true,
+        success: res.success,
+        message: res.message,
+        environment: sandboxEnv
+      });
+      if (res.success) {
+        setSuccessMsg(`تم فحص طبقة الاتصال والجاهزية بنجاح للبيئة (${sandboxEnv}).`);
+      } else {
+        setErrorMsg(res.message);
+      }
+      await loadLogs();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'حدث خطأ أثناء فحص اتصال دالة الخادم التجريبية.');
+    } finally {
+      setTestingConnectivity(false);
+    }
+  };
 
   const handleProfileFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -470,7 +528,7 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
           </div>
         </div>
         <div className="bg-brand-blue/10 text-brand-blue text-[11px] font-black px-3 py-1.5 rounded-full whitespace-nowrap border border-brand-blue/20">
-          المرحلة 15: تحضير شهادات التوقيع و الـ CSR
+          المرحلة 16: Sandbox / Simulation API Integration
         </div>
       </div>
 
@@ -509,6 +567,23 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
           <Key className="w-4 h-4" />
           <span>تجهيز التوقيع والربط (CSR / CSID)</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('sandbox');
+            setSuccessMsg(null);
+            setErrorMsg(null);
+          }}
+          className={`px-4 py-2.5 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'sandbox'
+              ? 'border-brand-blue text-slate-950 font-black bg-slate-50/50 rounded-t-xl'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          <span>اختبارات الربط والتكامل (Sandbox)</span>
+        </button>
       </div>
 
       {/* Basic Tab Error/Success messages */}
@@ -522,6 +597,21 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
       {activeTab === 'basic' && errorMsg && (
         <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-xl p-3 flex items-center gap-2 text-xs">
           <XCircle className="w-4 h-4 shrink-0 text-rose-600" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {/* Sandbox Tab Error/Success messages */}
+      {activeTab === 'sandbox' && successMsg && (
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl p-3 flex items-center gap-2 text-xs">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {activeTab === 'sandbox' && errorMsg && (
+        <div className="bg-amber-50 border border-amber-100 text-amber-800 rounded-xl p-3 flex items-center gap-2 text-xs">
+          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
           <span>{errorMsg}</span>
         </div>
       )}
@@ -548,7 +638,7 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
         {/* ========================================================================= */}
         <div className="lg:col-span-2 space-y-6">
           
-          {activeTab === 'basic' ? (
+          {activeTab === 'basic' && (
             /* Tab Basic Form */
             <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-5 shadow-sm">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
@@ -782,7 +872,9 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
               </div>
 
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'signing' && (
             /* Tab Signing Profile Form */
             <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-6 shadow-sm">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -1213,6 +1305,153 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
             </div>
           )}
 
+          {activeTab === 'sandbox' && (
+            /* Tab Sandbox/Simulation API Integration View */
+            <div className="space-y-6">
+              {/* Connectivity check card */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-5 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-slate-500" />
+                    <h4 className="text-xs font-bold text-slate-950">فحص جاهزية الاتصال التلقائي (Connectivity Check)</h4>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10.5px] font-bold text-slate-500">البيئة المراد فحصها:</span>
+                    <select
+                      value={sandboxEnv}
+                      onChange={(e) => setSandboxEnv(e.target.value as any)}
+                      className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50 font-bold outline-none cursor-pointer"
+                    >
+                      <option value="sandbox">Sandbox (بيئة المطورين)</option>
+                      <option value="simulation">Simulation (المحاكاة)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  هذا الإجراء يقوم باستدعاء دالة الخادم الآمنة (Edge Function) للتحقق من تهيئة روابط الـ APIs وحالة تصاريح وصول المنشأة في بيئة الاختبار والتكامل لـ ZATCA.
+                </p>
+
+                <div className="flex justify-start">
+                  <button
+                    type="button"
+                    onClick={handleTestConnectivity}
+                    disabled={testingConnectivity}
+                    className="bg-brand-blue text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition hover:brightness-95 cursor-pointer"
+                  >
+                    {testingConnectivity ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Terminal className="w-4 h-4" />
+                    )}
+                    <span>فحص اتصال دالة الخادم لـ ZATCA</span>
+                  </button>
+                </div>
+
+                {connectivityStatus && (
+                  <div className={`p-4 rounded-xl border ${connectivityStatus.success ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-amber-50 border-amber-100 text-amber-800'} space-y-1.5`}>
+                    <div className="text-xs font-extrabold flex items-center gap-1.5">
+                      {connectivityStatus.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      )}
+                      <span>النتيجة: {connectivityStatus.success ? 'متصل وجاهز' : 'محظور / غير جاهز'}</span>
+                    </div>
+                    <p className="text-[10.5px] leading-relaxed font-sans font-semibold">
+                      {connectivityStatus.message}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Submission Logs card */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-slate-500" />
+                    <h4 className="text-xs font-bold text-slate-950">سجل محاولات الربط والتكامل التجريبي</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadLogs}
+                    disabled={loadingLogs}
+                    className="text-[10px] text-brand-blue font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingLogs ? 'animate-spin' : ''}`} />
+                    <span>تحديث السجل</span>
+                  </button>
+                </div>
+
+                {loadingLogs ? (
+                  <div className="py-12 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
+                    <RefreshCw className="w-6 h-6 animate-spin text-brand-blue" />
+                    <span>جاري تحميل سجلات المحاولات...</span>
+                  </div>
+                ) : submissionLogs.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 text-xs leading-normal">
+                    لا توجد عمليات إرسال مسجلة حتى الآن.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right text-[11px] border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-slate-500 font-bold">
+                          <th className="pb-2">التاريخ</th>
+                          <th className="pb-2">البيئة</th>
+                          <th className="pb-2">العملية</th>
+                          <th className="pb-2">رقم الفاتورة</th>
+                          <th className="pb-2">الحالة</th>
+                          <th className="pb-2">HTTP</th>
+                          <th className="pb-2">الرسالة</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 text-slate-700">
+                        {submissionLogs.map((log) => {
+                          const statusColors: Record<string, string> = {
+                            blocked: 'bg-amber-50 text-amber-700 border-amber-100',
+                            failed: 'bg-rose-50 text-rose-700 border-rose-100',
+                            accepted: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                            rejected: 'bg-red-50 text-red-700 border-red-100',
+                            submitted: 'bg-blue-50 text-blue-700 border-blue-100'
+                          };
+                          return (
+                            <tr key={log.id} className="hover:bg-slate-50/50">
+                              <td className="py-2.5 font-mono text-[10px] whitespace-nowrap text-slate-500">
+                                {new Date(log.created_at).toLocaleString('ar-SA', { hour12: false })}
+                              </td>
+                              <td className="py-2.5 font-bold whitespace-nowrap">
+                                <span className="capitalize">{log.environment}</span>
+                              </td>
+                              <td className="py-2.5 font-medium whitespace-nowrap">
+                                {log.operation === 'connectivity_check' ? 'فحص اتصال' : log.operation}
+                              </td>
+                              <td className="py-2.5 font-bold text-slate-900 whitespace-nowrap">
+                                {log.sales_invoices?.invoice_number || '-'}
+                              </td>
+                              <td className="py-2.5 whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded-full border text-[9.5px] font-bold ${statusColors[log.submission_status] || 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                                  {log.submission_status}
+                                </span>
+                              </td>
+                              <td className="py-2.5 font-mono font-bold text-slate-600">
+                                {log.http_status || '-'}
+                              </td>
+                              <td className="py-2.5 max-w-[150px] truncate text-slate-500 text-[10.5px]" title={log.error_message || log.zatca_status}>
+                                {log.error_message || log.zatca_status || '-'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* ========================================================================= */}
@@ -1220,7 +1459,7 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
         {/* ========================================================================= */}
         <div className="space-y-6">
           
-          {activeTab === 'basic' ? (
+          {activeTab === 'basic' && (
             /* Basic Tab Right Panel: General Readiness & stats */
             <>
               {/* Readiness Checklist */}
@@ -1472,7 +1711,9 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
                 </div>
               </div>
             </>
-          ) : (
+          )}
+
+          {activeTab === 'signing' && (
             /* Signing Tab Right Panel: Signing Readiness Checklist */
             <>
               {/* Signing Compliance Readiness Card */}
@@ -1563,6 +1804,55 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
                     <li>يتم الكشف وتصفية الكلمات الحساسة تلقائياً قبل الحفظ في السيرفر.</li>
                     <li>يتم إقران المفتاح الخاص لاحقاً بمرجع مخفي (Secret Reference Path) مستقر في Edge Functions المشفرة بالكامل.</li>
                   </ul>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'sandbox' && (
+            /* Sandbox Tab Right Panel: Safety, Secrets, and Integration Guidance */
+            <>
+              {/* Secure Sandbox Vault helper */}
+              <div className="bg-slate-950 text-slate-100 rounded-2xl p-5 space-y-4 shadow-sm">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  <h4 className="text-xs font-bold text-slate-100 font-sans">بنية أمان وخصوصية الربط</h4>
+                </div>
+
+                <div className="text-[10px] text-slate-400 space-y-2.5 leading-relaxed font-sans">
+                  <p>
+                    يتوافق نظام LEDGRA تماماً مع شروط الحماية وضوابط الأمن القومي السيبراني.
+                  </p>
+                  <p className="text-emerald-400 font-bold text-[10.5px]">
+                    سياسة عدم مشاركة الأسرار (Secrets Isolation):
+                  </p>
+                  <ul className="list-disc pr-3.5 space-y-1.5 text-slate-300">
+                    <li>يتم إرسال كافة الطلبات مباشرة من خادم Edge Functions المشفر، دون مرور مفاتيح البيئة للعميل.</li>
+                    <li>يتم استيراد الروابط وقواعد السماح بالولوج من الخزائن الآمنة (Encrypted Environment Secrets) في بيئة التشغيل.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Next Steps for Integration */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4 shadow-sm h-fit">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-2.5">
+                  <Terminal className="w-4 h-4 text-slate-500" />
+                  <h4 className="text-xs font-bold text-slate-950">مستويات امتثال الربط للمرحلة القادمة</h4>
+                </div>
+
+                <div className="space-y-3.5 text-[10.5px] text-slate-600 leading-relaxed font-sans">
+                  <div className="flex gap-2">
+                    <span className="bg-slate-100 text-slate-800 font-extrabold px-1.5 py-0.5 h-fit rounded text-[10px]">1</span>
+                    <p><strong>تفعيل خيار الإرسال:</strong> يجب تهيئة المتغير <code className="bg-slate-100 px-1 py-0.5 rounded text-[9.5px] font-mono">ZATCA_ENABLE_SANDBOX_SUBMIT</code> يدوياً على السيرفر لتفعيل النقل الفعلي لـ XML.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="bg-slate-100 text-slate-800 font-extrabold px-1.5 py-0.5 h-fit rounded text-[10px]">2</span>
+                    <p><strong>بناء التوقيع الرقمي (Digital Signing):</strong> لامتثال الإرسال، يجب توقيع الفواتير بترميز الـ ECDSA واستيراد التوقيع لملفات الـ XML أولاً.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="bg-slate-100 text-slate-800 font-extrabold px-1.5 py-0.5 h-fit rounded text-[10px]">3</span>
+                    <p><strong>محاكاة الاستجابات (Mock Verification):</strong> يتم تدوين كل المعاملات الصادرة والواردة داخل قاعدة بياناتك بصورة تفصيلية وموثوقة للفحص والمراجعة.</p>
+                  </div>
                 </div>
               </div>
             </>

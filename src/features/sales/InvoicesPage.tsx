@@ -5,6 +5,7 @@ import { salesService, CreateInvoiceInput } from '../../lib/salesService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
 import { zatcaService } from '../../lib/zatcaService';
+import { supabase } from '../../lib/supabase';
 import { 
   SalesInvoice, 
   Customer, 
@@ -43,7 +44,8 @@ import {
   ShieldCheck,
   RefreshCw,
   Check,
-  Edit
+  Edit,
+  Terminal
 } from 'lucide-react';
 
 export const InvoicesPage: React.FC = () => {
@@ -87,6 +89,12 @@ export const InvoicesPage: React.FC = () => {
   const [sdkRawResult, setSdkRawResult] = useState<string>('');
   const [sdkErrors, setSdkErrors] = useState<any[]>([]);
   const [savingSdkResult, setSavingSdkResult] = useState<boolean>(false);
+
+  // Sandbox / Simulation Integration states
+  const [testingIntegration, setTestingIntegration] = useState<boolean>(false);
+  const [latestSubmission, setLatestSubmission] = useState<any | null>(null);
+  const [loadingSubmission, setLoadingSubmission] = useState<boolean>(false);
+  const [integrationError, setIntegrationError] = useState<string | null>(null);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -426,6 +434,54 @@ export const InvoicesPage: React.FC = () => {
     }
   };
 
+  const loadLatestSubmission = async (invoiceId: string) => {
+    setLoadingSubmission(true);
+    try {
+      const { data, error } = await supabase
+        .from('zatca_api_submissions')
+        .select('*')
+        .eq('sales_invoice_id', invoiceId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!error) {
+        setLatestSubmission(data);
+      } else {
+        setLatestSubmission(null);
+      }
+    } catch (err) {
+      console.error('Error loading latest submission:', err);
+      setLatestSubmission(null);
+    } finally {
+      setLoadingSubmission(false);
+    }
+  };
+
+  const handleTestIntegration = async (environment: 'sandbox' | 'simulation') => {
+    if (!currentOrg || !selectedInvoice || !eInvoiceArtifact) return;
+    setTestingIntegration(true);
+    setIntegrationError(null);
+    try {
+      const res = await zatcaService.testInvoiceIntegration(
+        currentOrg.id,
+        selectedInvoice.id,
+        eInvoiceArtifact.id,
+        environment
+      );
+      // reload latest submission
+      await loadLatestSubmission(selectedInvoice.id);
+      
+      if (!res.success) {
+        setIntegrationError(res.message);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setIntegrationError(err.message || 'حدث خطأ أثناء إجراء الاختبار التجريبي.');
+    } finally {
+      setTestingIntegration(false);
+    }
+  };
+
   // Handler to parse & analyze SDK validation text pasted by user
   const handleAnalyzeSdkText = () => {
     if (!sdkRawResult.trim()) {
@@ -536,6 +592,7 @@ export const InvoicesPage: React.FC = () => {
           
           const art = await zatcaService.getEInvoiceArtifact(full.id);
           setEInvoiceArtifact(art);
+          await loadLatestSubmission(full.id);
         } catch (ae) {
           console.error('Error loading ZATCA settings/artifacts:', ae);
         } finally {
@@ -1542,6 +1599,107 @@ export const InvoicesPage: React.FC = () => {
                           >
                             <Edit className="w-3.5 h-3.5" />
                             <span>تسجيل / تعديل نتيجة فحص SDK</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Sandbox / Simulation API Integration Testing Card */}
+                    <div className="mt-4 border-t border-slate-200/80 pt-4 font-sans space-y-3.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2.5 gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <Terminal className="w-4 h-4 text-slate-700" />
+                          <span className="font-extrabold text-xs text-slate-900">اختبار التكامل والربط التجريبي (Sandbox / Simulation)</span>
+                        </div>
+
+                        {/* Connection status based on last submission */}
+                        {latestSubmission ? (
+                          <span className={`px-2 py-0.5 rounded-full border text-[9.5px] font-bold ${
+                            latestSubmission.submission_status === 'accepted' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                            latestSubmission.submission_status === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                            latestSubmission.submission_status === 'blocked' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                            'bg-blue-50 text-blue-700 border-blue-100'
+                          }`}>
+                            آخر نتيجة ({latestSubmission.environment}): {latestSubmission.submission_status}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full border text-[9.5px] font-bold bg-slate-50 text-slate-500 border-slate-200">
+                            لم يتم الاختبار بعد
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        هنا يمكنك محاكاة إرسال الفاتورة الحالية إلى بيئة المطورين (Sandbox) أو بيئة المحاكاة (Simulation) للتحقق من امتثالها البرمجي لـ ZATCA دون التأثير على بيئة الإنتاج الفعلية.
+                      </p>
+
+                      {/* Last submission details block */}
+                      {latestSubmission && (
+                        <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4 space-y-3 text-[11px]">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-600">
+                            <div>
+                              <span className="text-slate-400 block mb-0.5">تاريخ الإرسال:</span>
+                              <span className="font-bold text-slate-800">
+                                {new Date(latestSubmission.created_at).toLocaleString('ar-SA')}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block mb-0.5">البيئة المستهدفة:</span>
+                              <span className="font-bold text-slate-800 capitalize">{latestSubmission.environment}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block mb-0.5">رمز استجابة HTTP:</span>
+                              <span className="font-bold text-slate-800 font-mono">
+                                {latestSubmission.http_status || '-'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {latestSubmission.error_message && (
+                            <div className="border-t border-slate-100 pt-2 text-rose-700 font-semibold leading-relaxed">
+                              {latestSubmission.error_message}
+                            </div>
+                          )}
+
+                          {latestSubmission.zatca_response_payload && (
+                            <div className="border-t border-slate-100 pt-2 space-y-1">
+                              <span className="text-slate-400 text-[10px] block">استجابة بوابة الهيئة:</span>
+                              <pre className="text-[9px] bg-white border border-slate-150 rounded-xl p-2.5 overflow-x-auto max-h-32 text-slate-700 font-mono select-all">
+                                {JSON.stringify(latestSubmission.zatca_response_payload, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {integrationError && (
+                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-[10.5px] text-amber-800 font-semibold leading-relaxed flex items-start gap-1.5">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <span>{integrationError}</span>
+                        </div>
+                      )}
+
+                      {/* Test actions (Only for authorized roles) */}
+                      {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
+                        <div className="flex flex-wrap gap-2.5">
+                          <button
+                            type="button"
+                            disabled={testingIntegration || loadingSubmission}
+                            onClick={() => handleTestIntegration('sandbox')}
+                            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-[10px] flex items-center gap-1.5 cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                          >
+                            {testingIntegration ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : <Terminal className="w-3.5 h-3.5" />}
+                            <span>تشغيل اختبار Sandbox</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={testingIntegration || loadingSubmission}
+                            onClick={() => handleTestIntegration('simulation')}
+                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-250 font-extrabold rounded-xl text-[10px] flex items-center gap-1.5 cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                          >
+                            {testingIntegration ? <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-600" /> : <ShieldCheck className="w-3.5 h-3.5 text-slate-500" />}
+                            <span>تشغيل اختبار Simulation</span>
                           </button>
                         </div>
                       )}

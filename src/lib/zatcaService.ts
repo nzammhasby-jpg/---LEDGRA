@@ -514,5 +514,88 @@ export const zatcaService = {
     });
 
     return counts;
+  },
+
+  /**
+   * Tests connectivity to a sandbox or simulation environment via Edge Function.
+   */
+  async testConnectivity(
+    orgId: string,
+    environment: 'sandbox' | 'simulation'
+  ): Promise<{ success: boolean; status: string; message: string; details?: any }> {
+    const { data, error } = await supabase.functions.invoke('zatca-sandbox-integration', {
+      body: {
+        operation: 'connectivity_check',
+        organizationId: orgId,
+        environment
+      }
+    });
+
+    if (error) {
+      console.error('Error testing connectivity via Edge Function:', error);
+      throw new Error(error.message || 'فشل الاتصال بدالة الربط التجريبية.');
+    }
+
+    return data;
+  },
+
+  /**
+   * Triggers a simulated sandbox/simulation invoice transmission test via Edge Function.
+   */
+  async testInvoiceIntegration(
+    orgId: string,
+    invoiceId: string,
+    artifactId: string,
+    environment: 'sandbox' | 'simulation'
+  ): Promise<{ success: boolean; status: string; message: string; details?: any }> {
+    const { data, error } = await supabase.functions.invoke('zatca-sandbox-integration', {
+      body: {
+        operation: environment === 'sandbox' ? 'sandbox_invoice_test' : 'simulation_invoice_test',
+        organizationId: orgId,
+        invoiceId,
+        artifactId,
+        environment
+      }
+    });
+
+    if (error) {
+      console.error('Error testing invoice integration via Edge Function:', error);
+      throw new Error(error.message || 'فشل اختبار إرسال الفاتورة التجريبية.');
+    }
+
+    return data;
+  },
+
+  /**
+   * Fetches submission logs for an organization.
+   */
+  async getSubmissionLogs(orgId: string, limit = 50): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('zatca_api_submissions')
+      .select(`
+        id,
+        environment,
+        operation,
+        submission_status,
+        http_status,
+        zatca_status,
+        error_message,
+        created_at,
+        created_by,
+        sales_invoice_id,
+        sales_invoices (
+          invoice_number
+        )
+      `)
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching submission logs:', error);
+      throw error;
+    }
+
+    return data || [];
   }
 };
