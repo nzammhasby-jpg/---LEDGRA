@@ -584,3 +584,40 @@ export interface EInvoiceArtifact {
   sdk_tool_version?: string | null;
   sdk_raw_result?: string | null;
 }
+
+export type ZatcaEnvironment = 'sandbox' | 'simulation' | 'production';
+export type ZatcaProfileStatus = 'not_configured' | 'csr_metadata_ready' | 'csr_created_external' | 'csid_added' | 'ready_for_integration';
+export type ZatcaPrivateKeyStorageMode = 'not_stored' | 'external_secret_manager' | 'edge_function_secret_reference';
+
+export interface ZatcaSigningProfile {
+  id: string;
+  organization_id: string;
+  environment: ZatcaEnvironment;
+  profile_status: ZatcaProfileStatus;
+
+  csr_common_name: string | null;
+  csr_serial_number: string | null;
+  csr_organization_identifier: string | null;
+  csr_organization_unit_name: string | null;
+  csr_organization_name: string | null;
+  csr_country_name: string;
+  csr_invoice_type: string | null;
+  csr_location: string | null;
+  csr_industry: string | null;
+
+  csr_pem: string | null;
+  certificate_pem: string | null;
+  csid_value: string | null;
+  csid_type: 'compliance' | 'production' | null;
+  certificate_subject: string | null;
+  certificate_issuer: string | null;
+  certificate_valid_from: string | null;
+  certificate_valid_to: string | null;
+
+  private_key_storage_mode: ZatcaPrivateKeyStorageMode;
+  private_key_secret_reference: string | null;
+
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
