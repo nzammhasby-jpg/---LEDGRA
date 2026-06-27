@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Logo } from '../../components/Logo';
 import { Lock, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 
 const resetPasswordSchema = z.object({
   password: z.string().min(6, { message: 'كلمة المرور يجب أن لا تقل عن 6 أحرف' }),
@@ -22,6 +23,34 @@ export const ResetPassword: React.FC = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [apiSuccess, setApiSuccess] = useState<boolean>(false);
   const navigate = useNavigate();
+  const [checkingSession, setCheckingSession] = useState<boolean>(true);
+  const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
+
+  useEffect(() => {
+    let active = true;
+    const verifySession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (active) {
+          if (session && session.user) {
+            setIsSessionValid(true);
+          } else {
+            setIsSessionValid(false);
+          }
+          setCheckingSession(false);
+        }
+      } catch (err) {
+        if (active) {
+          setIsSessionValid(false);
+          setCheckingSession(false);
+        }
+      }
+    };
+    verifySession();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<ResetPasswordFields>({
     resolver: zodResolver(resetPasswordSchema),
@@ -47,12 +76,50 @@ export const ResetPassword: React.FC = () => {
         }
         setTimeout(() => {
           navigate('/login');
-        }, 2000);
+        }, 3000);
       }
     } catch (e: any) {
       setApiError(e.message || 'حدث خطأ غير متوقع أثناء تحديث كلمة المرور.');
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center p-6 bg-slate-50 font-sans" dir="rtl">
+        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center space-y-4">
+          <span className="w-8 h-8 rounded-full border-4 border-brand-blue border-t-transparent animate-spin" />
+          <p className="text-xs text-slate-500">جاري التحقق من صلاحية الجلسة المحمية...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isSessionValid) {
+    return (
+      <div className="min-h-screen flex flex-col justify-center items-center p-6 bg-slate-50 font-sans" dir="rtl">
+        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6 text-center">
+          <div className="flex justify-center mb-2">
+            <Logo variant="full" theme="light" size="md" />
+          </div>
+          <div className="bg-red-50 border-r-4 border-red-500 p-4 rounded-xl flex items-start gap-3 text-right">
+            <ShieldAlert className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <h5 className="text-sm font-semibold text-red-900">الرابط غير صالح</h5>
+              <p className="text-xs text-red-700 mt-1 leading-relaxed">
+                رابط إعادة التعيين غير صالح أو منتهي. اطلب رابطًا جديدًا.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/login?reset=true')}
+            className="w-full py-2.5 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-sm shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-brand-blue/20 transition cursor-pointer"
+          >
+            طلب رابط جديد
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col justify-center items-center p-6 bg-slate-50 font-sans" dir="rtl">

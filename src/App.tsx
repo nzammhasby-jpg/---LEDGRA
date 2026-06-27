@@ -21,9 +21,11 @@ import { InventoryMovementsPage } from './features/inventory/InventoryMovementsP
 import { ReportsLayout } from './features/reports/ReportsLayout';
 import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
-import { isSupabaseConfigured } from './lib/supabase';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { ShieldAlert, Terminal, HelpCircle } from 'lucide-react';
 import { AdminDashboard } from './features/platform/AdminDashboard';
+import { platformService } from './lib/platformService';
+import { PlatformAdminLayout } from './layouts/PlatformAdminLayout';
 
 // Official Print Feature Component Pages
 import { SalesInvoicePrint } from './features/print/SalesInvoicePrint';
@@ -260,6 +262,97 @@ const PublicRoute: React.FC = () => {
   return <Outlet />;
 };
 
+// PLATFORM ADMIN ROUTE GUARD: Requires Login AND Platform Admin verification (Independent of Organizations)
+const PlatformAdminRoute: React.FC = () => {
+  const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = React.useState<boolean | null>(null);
+  const [checking, setChecking] = React.useState<boolean>(true);
+
+  React.useEffect(() => {
+    let active = true;
+    const verifyPlatformAdmin = async () => {
+      if (!user) {
+        setChecking(false);
+        return;
+      }
+      try {
+        const check = await platformService.isPlatformAdmin();
+        if (active) {
+          setIsAdmin(check);
+          setChecking(false);
+        }
+      } catch (err) {
+        console.error('Error verifying platform admin in route guard:', err);
+        if (active) {
+          setIsAdmin(false);
+          setChecking(false);
+        }
+      }
+    };
+    verifyPlatformAdmin();
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  if (loading || checking) {
+    return <FullScreenLoader />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans select-none" dir="rtl" id="platform-unauthorized-guard">
+        <div className="w-full max-w-md bg-white border border-slate-100 p-8 rounded-2xl shadow-sm text-center space-y-6">
+          <div className="flex justify-center mb-2">
+            <ShieldAlert className="w-16 h-16 text-red-500 bg-red-50 p-3 rounded-full" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-lg font-bold text-slate-900">غير مصرح لك بالوصول</h1>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              غير مصرح لك بالوصول إلى لوحة إدارة المنصة. هذه المساحة مخصصة لمديري النظام والـ Super Admins فقط.
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.hash = '#/'}
+            className="w-full py-2.5 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-sm transition shadow-sm cursor-pointer"
+            id="back-to-system-btn-guard"
+          >
+            العودة إلى لوحة التحكم
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <Outlet />;
+};
+
+// Safe and elegant redirect for Supabase hash recovery tokens
+const HashRecoveryRedirect: React.FC = () => {
+  React.useEffect(() => {
+    const handleHash = async () => {
+      const hash = window.location.hash || '';
+      if (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) {
+        try {
+          // Let Supabase client parse and set the session first
+          await supabase.auth.getSession();
+        } catch (e) {
+          console.error("Failed to fetch session during hash recovery redirect:", e);
+        }
+        // Force routing to the hash router reset-password route
+        window.location.hash = '#/reset-password';
+      }
+    };
+    handleHash();
+  }, []);
+
+  return null;
+};
+
 export default function App() {
   if (!isSupabaseConfigured) {
     return <SupabaseConfigAlert />;
@@ -268,6 +361,7 @@ export default function App() {
   return (
     <AuthProvider>
       <Router>
+        <HashRecoveryRedirect />
         <Routes>
           
           {/* Public auth screens */}
@@ -284,12 +378,18 @@ export default function App() {
             <Route path="/onboarding" element={<Onboarding />} />
           </Route>
 
+          {/* Platform Super Admin panel routes - independent layout and protected */}
+          <Route element={<PlatformAdminRoute />}>
+            <Route element={<PlatformAdminLayout />}>
+              <Route path="/platform/admin" element={<AdminDashboard />} />
+            </Route>
+          </Route>
+
           {/* Protected SaaS Hub screens */}
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route path="/settings" element={<Settings />} />
-            <Route path="/platform/admin" element={<AdminDashboard />} />
             
             {/* Sales Invoices & Receipts Module */}
             <Route path="/sales/invoices" element={<InvoicesPage />} />

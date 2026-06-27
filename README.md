@@ -150,3 +150,18 @@ DO UPDATE SET role = 'super_admin', is_active = true;
 - [x] نجاح بناء تطبيق الويب المحكم `npm run build` والإنبات البرمجي المتين لـ `npm run lint` دون أي تحذيرات.
 - [x] فحص التوازن المحاسبي ومعادلتي المركز المالي والتشغيل في كشوفات الحركات التفصيلية والتقارير.
 - [x] سلامة الفواتير والمخزون وحمايتها الكاملة من عمليات البيع بالسالب.
+
+---
+
+## 🔒 Supabase Auth URL Configuration
+
+For the password reset and email recovery flows to function seamlessly in the production environment without falling back to local host addresses, ensure your Supabase project settings are configured as follows:
+
+- **Site URL**:
+  `https://ledgra-nu.vercel.app`
+
+- **Redirect URLs**:
+  - `https://ledgra-nu.vercel.app`
+  - `https://ledgra-nu.vercel.app/*`
+  - `https://ledgra-nu.vercel.app/#/reset-password`
+  - `https://ledgra-nu.vercel.app/#/login`

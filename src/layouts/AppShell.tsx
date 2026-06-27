@@ -6,6 +6,7 @@ import { useTranslation, Locale } from '../i18n/translations';
 import { useOrganizationSubscription } from '../hooks/useOrganizationSubscription';
 import { formatArabicDateWithLatinDigits } from '../lib/formatters';
 import { Logo } from '../components/Logo';
+import { platformService } from '../lib/platformService';
 import { 
   Home, 
   Tag, 
@@ -34,6 +35,7 @@ import {
   FileSpreadsheet,
   Package,
   ShieldAlert,
+  ShieldCheck,
   MessageCircle
 } from 'lucide-react';
 
@@ -59,6 +61,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const [orgSwitcherOpen, setOrgSwitcherOpen] = useState<boolean>(false);
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState<boolean>(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,6 +74,24 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   useEffect(() => {
     setQuickActionOpen(false);
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    let active = true;
+    const checkSuperAdmin = async () => {
+      try {
+        const check = await platformService.isPlatformAdmin();
+        if (active) {
+          setIsSuperAdmin(check);
+        }
+      } catch (err) {
+        console.error('Error in AppShell verifying platform admin:', err);
+      }
+    };
+    checkSuperAdmin();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Highlight page title depending on router path
   const getPageTitle = () => {
@@ -305,6 +326,30 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               </div>
             );
           })}
+
+          {isSuperAdmin && (
+            <div className="relative group mt-4 border-t border-white/5 pt-4">
+              <NavLink
+                id="nav-platform-admin"
+                to="/platform/admin"
+                onClick={() => setMobileMenuOpen(false)}
+                className={({ isActive }) => `flex items-center gap-3 py-3 border-r-4 text-sm font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/20 border-r-transparent ${
+                  sidebarCollapsed ? 'px-4 justify-center' : 'px-6'
+                } ${
+                  isActive ? 'bg-emerald-950/30 text-emerald-300 border-r-emerald-500 font-bold' : ''
+                }`}
+              >
+                <ShieldCheck className="w-4.5 h-4.5 shrink-0" />
+                {!sidebarCollapsed && <span className="min-w-0 flex-1 whitespace-nowrap">لوحة إدارة المنصة</span>}
+              </NavLink>
+              
+              {sidebarCollapsed && (
+                <span className="absolute right-full mr-2 top-1.5 bg-slate-900 text-white text-[10px] font-bold px-2.5 py-1.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-250 z-50 whitespace-nowrap shadow-md">
+                  لوحة إدارة المنصة
+                </span>
+              )}
+            </div>
+          )}
         </nav>
 
         {/* Sidebar Footer detailing Active corporate profile & tenant switcher */}

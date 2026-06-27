@@ -22,7 +22,15 @@ export const Login: React.FC = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [apiSuccess, setApiSuccess] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string>('');
-  const [isResetMode, setIsResetMode] = useState<boolean>(false);
+  const [isResetMode, setIsResetMode] = useState<boolean>(() => {
+    const hashPart = window.location.hash || '';
+    const queryIndex = hashPart.indexOf('?');
+    if (queryIndex !== -1) {
+      const params = new URLSearchParams(hashPart.substring(queryIndex + 1));
+      return params.get('reset') === 'true';
+    }
+    return false;
+  });
   const [resetEmail, setResetEmail] = useState<string>('');
   const [isResetSubmitting, setIsResetSubmitting] = useState<boolean>(false);
   const navigate = useNavigate();
