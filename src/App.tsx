@@ -23,6 +23,7 @@ import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured } from './lib/supabase';
 import { ShieldAlert, Terminal, HelpCircle } from 'lucide-react';
+import { AdminDashboard } from './features/platform/AdminDashboard';
 
 // Official Print Feature Component Pages
 import { SalesInvoicePrint } from './features/print/SalesInvoicePrint';
@@ -288,6 +289,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/platform/admin" element={<AdminDashboard />} />
             
             {/* Sales Invoices & Receipts Module */}
             <Route path="/sales/invoices" element={<InvoicesPage />} />

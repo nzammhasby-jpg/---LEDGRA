@@ -3,6 +3,7 @@ import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation, Locale } from '../i18n/translations';
+import { useOrganizationSubscription } from '../hooks/useOrganizationSubscription';
 import { formatArabicDateWithLatinDigits } from '../lib/formatters';
 import { Logo } from '../components/Logo';
 import { 
@@ -31,7 +32,9 @@ import {
   User,
   CheckCircle,
   FileSpreadsheet,
-  Package
+  Package,
+  ShieldAlert,
+  MessageCircle
 } from 'lucide-react';
 
 interface AppShellProps {
@@ -47,6 +50,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     selectOrg, 
     roleInCurrentOrg 
   } = useAuth();
+  
+  const { isSuspended } = useOrganizationSubscription();
   const { t } = useTranslation('ar');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -543,7 +548,31 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         </header>
 
         {/* 4. ACTUAL PAGE DYNAMIC INJECT CHASSIS ROW */}
-        <div className="flex-grow overflow-y-auto p-4 md:p-8">
+        <div className="flex-grow overflow-y-auto p-4 md:p-8 space-y-4">
+          {isSuspended && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 px-5 py-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-pulse" dir="rtl">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="p-2 bg-rose-100 text-rose-700 rounded-xl shrink-0">
+                  <ShieldAlert className="w-5 h-5 animate-bounce" />
+                </div>
+                <div className="space-y-0.5 text-right">
+                  <h4 className="text-xs font-black">اشتراك المؤسسة موقوف مؤقتًا!</h4>
+                  <p className="text-[11px] text-rose-600 leading-relaxed">اشتراك المؤسسة موقوف مؤقتًا. تواصل مع الدعم لإعادة التفعيل وتأمين موازين الكيانات.</p>
+                </div>
+              </div>
+              <a
+                href={`https://wa.me/966500000000?text=${encodeURIComponent(
+                  `مرحبًا، اشتراك منشأتي موقوف في لِدجرا، أرجو التفعيل والمتابعة اليدوية للمنشأة: ${currentOrg?.name_ar || currentOrg?.name_en || 'غير مسماة'}.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 self-start sm:self-auto shrink-0 cursor-pointer"
+              >
+                <span>تواصل بالواتساب للتفعيل</span>
+                <MessageCircle className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          )}
           {children}
         </div>
 

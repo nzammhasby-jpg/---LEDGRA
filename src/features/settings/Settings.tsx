@@ -7,6 +7,7 @@ import { accountingService } from '../../lib/accountingService';
 import { normalizeIntegerInput } from '../../lib/formatters';
 import { organizationSettingsService } from '../../lib/organizationSettingsService';
 import { ZatcaSettingsComp } from './ZatcaSettings';
+import { useOrganizationSubscription } from '../../hooks/useOrganizationSubscription';
 import { 
   Building, 
   Users, 
@@ -28,7 +29,11 @@ import {
   Tag,
   Phone,
   Layout,
-  LayoutGrid
+  LayoutGrid,
+  Award,
+  MessageCircle,
+  Clock,
+  CreditCard
 } from 'lucide-react';
 
 interface SettingsMember {
@@ -51,7 +56,17 @@ interface RPCMemberResult {
 export const Settings: React.FC = () => {
   const { currentOrg, roleInCurrentOrg, updateOrg } = useAuth();
   const { t } = useTranslation('ar');
-  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting' | 'zatca'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting' | 'zatca' | 'subscription'>('info');
+
+  const { 
+    subscription, 
+    status: subStatus, 
+    plan: subPlan, 
+    isActive: subIsActive, 
+    isTrial: subIsTrial, 
+    isSuspended: subIsSuspended, 
+    loading: subLoading 
+  } = useOrganizationSubscription();
 
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
@@ -491,7 +506,8 @@ export const Settings: React.FC = () => {
           { id: 'users', label: t('settings.tab_users'), icon: Users },
           { id: 'branches', label: t('settings.tab_branches'), icon: MapPin },
           { id: 'accounting', label: 'الإعدادات المحاسبية والسيرفر', icon: BookOpen },
-          { id: 'zatca', label: 'الفوترة الإلكترونية (ZATCA)', icon: ShieldAlert }
+          { id: 'zatca', label: 'الفوترة الإلكترونية (ZATCA)', icon: ShieldAlert },
+          { id: 'subscription', label: 'اشتراك المؤسسة', icon: CreditCard }
         ].map((tab) => {
           const TabIcon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1487,6 +1503,134 @@ export const Settings: React.FC = () => {
         {/* Tab 5: ZATCA Compliance */}
         {activeTab === 'zatca' && (
           <ZatcaSettingsComp />
+        )}
+
+        {/* Tab 6: Subscription */}
+        {activeTab === 'subscription' && (
+          <div className="space-y-6">
+            <div className="border-b border-slate-150 pb-4">
+              <h3 className="text-base font-black text-slate-900">اشتراك المؤسسة</h3>
+              <p className="text-[11px] text-slate-500 font-medium">بيانات الباقة الحالية ومتابعة وتجديد اشتراكك السحابي مع لِدجرا.</p>
+            </div>
+
+            {subLoading ? (
+              <div className="py-12 text-center text-xs font-bold text-slate-400">جاري سحب بيانات الاشتراك الحية...</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* Subscription Details Card */}
+                <div className="md:col-span-2 space-y-4">
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-slate-900 rounded-xl text-white">
+                          <Award className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900">
+                            {subPlan?.name_ar || 'فترة تجريبية مجانية'}
+                          </h4>
+                          <span className="text-[10px] text-slate-400 font-mono">CODE: {subPlan?.code || 'free_trial'}</span>
+                        </div>
+                      </div>
+                      
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-tight ${
+                        subStatus === 'active'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                          : subStatus === 'trial'
+                          ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                          : subStatus === 'suspended'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                          : 'bg-rose-50 text-rose-700 border border-rose-100'
+                      }`}>
+                        {subStatus === 'active' && 'نشط / فعال'}
+                        {subStatus === 'trial' && 'تحت التجربة المجانية'}
+                        {subStatus === 'suspended' && 'موقوف مؤقتاً'}
+                        {subStatus === 'past_due' && 'متأخر الدفع'}
+                        {subStatus === 'cancelled' && 'ملغي'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium text-slate-700">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 block">دورة الفوترة:</span>
+                        <p className="font-bold text-slate-900">
+                          {subscription?.billing_cycle === 'monthly' && 'شهري'}
+                          {subscription?.billing_cycle === 'yearly' && 'سنوي'}
+                          {subscription?.billing_cycle === 'manual' && 'يدوي بالاتفاق'}
+                          {!subscription?.billing_cycle && 'شهري'}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 block">تاريخ انتهاء الصلاحية:</span>
+                        <p className="font-mono text-slate-900">
+                          {subStatus === 'trial' 
+                            ? subscription?.trial_ends_at ? new Date(subscription.trial_ends_at).toLocaleDateString('ar-SA') : 'منتهي'
+                            : subscription?.ends_at ? new Date(subscription.ends_at).toLocaleDateString('ar-SA') : 'مفتوح'
+                          }
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 block">تاريخ بدء الاشتراك:</span>
+                        <p className="font-mono text-slate-900">
+                          {subscription?.starts_at ? new Date(subscription.starts_at).toLocaleDateString('ar-SA') : 'غير محدد'}
+                        </p>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 block">المنشأة المستفيدة:</span>
+                        <p className="font-bold text-slate-900">
+                          {currentOrg?.name_ar || currentOrg?.name_en}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pricing Info Notice Banner */}
+                  <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 space-y-3 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-24 h-24 bg-slate-800 rounded-full blur-xl opacity-30 pointer-events-none" />
+                    <h5 className="text-xs font-black text-slate-300">طريقة التجديد والترقية اليدوية</h5>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      الاشتراك في منصة لِدجرا يتم بالكامل يدوياً وبدون سحب تلقائي للبطاقات. لتمديد صلاحية الفترة التجريبية أو تفعيل الباقة (الأساسية، الاحترافية، أو باقة الشركات)، يرجى النقر على زر التواصل لفتح محادثة فورية مع مهندس المبيعات والدعم الفني بالواتساب.
+                    </p>
+                    <div className="pt-2 text-[10px] text-slate-400">
+                      * يرجى إرفاق اسم المنشأة والبريد الضريبي المسجل لتسريع تفعيل باقتك.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Action column */}
+                <div className="space-y-4">
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-center space-y-4">
+                    <div className="w-10 h-10 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mx-auto">
+                      <MessageCircle className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h5 className="text-xs font-black text-slate-900">تفعيل أو ترقية الباقة</h5>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        لتفعيل أو ترقية الاشتراك، تواصل معنا عبر واتساب مباشرة.
+                      </p>
+                    </div>
+
+                    <a
+                      href={`https://wa.me/966500000000?text=${encodeURIComponent(
+                        `مرحبًا، أرغب في تفعيل أو ترقية باقة اشتراكي في منصة لِدجرا للمحاسبة السحابية. منشأتي: ${currentOrg?.name_ar || currentOrg?.name_en || 'غير مسماة'}.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>تواصل معنا بالواتساب</span>
+                    </a>
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
         )}
 
       </div>
