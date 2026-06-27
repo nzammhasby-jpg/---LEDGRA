@@ -9,6 +9,46 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Type-safe sanitization helper to remove secrets and prevent saving full XMLs
+function sanitizeForLog(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (typeof value === "string") {
+    // Truncate very long string values to avoid blowing up DB sizes, ensuring XMLs or big payloads are blocked or truncated
+    if (value.length > 2000) {
+      return value.substring(0, 2000) + "... [truncated]";
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeForLog(item));
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const sanitized: Record<string, unknown> = {};
+    for (const key of Object.keys(obj)) {
+      const lowerKey = key.toLowerCase();
+      if (
+        lowerKey.includes("authorization") ||
+        lowerKey.includes("token") ||
+        lowerKey.includes("secret") ||
+        lowerKey.includes("password") ||
+        lowerKey.includes("private") ||
+        lowerKey.includes("privatekey") ||
+        lowerKey.includes("certificatesecret") ||
+        lowerKey.includes("csidsecret")
+      ) {
+        sanitized[key] = "[REDACTED_SECRET]";
+      } else {
+        sanitized[key] = sanitizeForLog(obj[key]);
+      }
+    }
+    return sanitized;
+  }
+  return value;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS pre-flight OPTIONS request
   if (req.method === 'OPTIONS') {
@@ -59,9 +99,34 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (environment === 'production') {
+    // Strict validation of environment and operation prior to database reads
+    const allowedEnvironments = ['sandbox', 'simulation'];
+    const allowedOperations = ['connectivity_check', 'compliance_check', 'sandbox_invoice_test', 'simulation_invoice_test'];
+
+    if (!allowedEnvironments.includes(environment)) {
       return new Response(
-        JSON.stringify({ error: "أمنياً: بيئة الإنتاج غير مسموح بها في هذه المرحلة." }),
+        JSON.stringify({ error: "البيئة المحددة غير صالحة." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!allowedOperations.includes(operation)) {
+      return new Response(
+        JSON.stringify({ error: "العملية المطلوبة غير صالحة." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (operation === 'sandbox_invoice_test' && environment !== 'sandbox') {
+      return new Response(
+        JSON.stringify({ error: "عملية فحص Sandbox تتطلب بيئة sandbox فقط." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (operation === 'simulation_invoice_test' && environment !== 'simulation') {
+      return new Response(
+        JSON.stringify({ error: "عملية فحص Simulation تتطلب بيئة simulation فقط." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -98,35 +163,58 @@ Deno.serve(async (req) => {
     const submitFlag = environment === 'sandbox' ? enableSandboxSubmit : enableSimulationSubmit;
     const baseUrl = environment === 'sandbox' ? sandboxBaseUrl : simulationBaseUrl;
 
-    // Helper to log in DB securely (using security definer RPC context as authenticated caller)
-    // To call the RPC as the authenticated user, we can temporarily set the authorization header or just use RPC
-    const logSubmission = async (status: string, httpStatus: number | null, errMsg: string | null, extra: any = {}) => {
+    // Helper to log in DB securely (using service role client directly)
+    const logSubmission = async (
+      status: string,
+      httpStatus: number | null,
+      errorMessage: string | null,
+      extra: {
+        signingProfileId?: string | null;
+        requestUuid?: string | null;
+        xmlHash?: string | null;
+        payloadSummary?: Record<string, unknown> | null;
+        zatcaStatus?: string | null;
+        zatcaRequestId?: string | null;
+        responsePayload?: unknown;
+        warnings?: unknown;
+        errors?: unknown;
+      } = {}
+    ) => {
       try {
-        const { data, error } = await supabase.rpc('create_zatca_api_submission_log', {
-          p_org_id: organizationId,
-          p_sales_invoice_id: invoiceId || null,
-          p_artifact_id: artifactId || null,
-          p_signing_profile_id: extra.signingProfileId || null,
-          p_environment: environment,
-          p_operation: operation,
-          p_submission_status: status,
-          p_request_uuid: extra.requestUuid || null,
-          p_request_xml_hash: extra.xmlHash || null,
-          p_request_payload_summary: extra.payloadSummary ? JSON.stringify(extra.payloadSummary) : '{}',
-          p_http_status: httpStatus,
-          p_zatca_status: extra.zatcaStatus || null,
-          p_zatca_request_id: extra.zatcaRequestId || null,
-          p_zatca_response_payload: extra.responsePayload ? JSON.stringify(extra.responsePayload) : null,
-          p_zatca_warnings: extra.warnings ? JSON.stringify(extra.warnings) : '[]',
-          p_zatca_errors: extra.errors ? JSON.stringify(extra.errors) : '[]',
-          p_error_message: errMsg
-        });
-        if (error) {
-          console.error("Failed to write submission log via RPC:", error);
+        const { error: dbError } = await supabase
+          .from('zatca_api_submissions')
+          .insert({
+            organization_id: organizationId,
+            sales_invoice_id: invoiceId ?? null,
+            artifact_id: artifactId ?? null,
+            signing_profile_id: extra.signingProfileId ?? null,
+            environment,
+            operation,
+            submission_status: status,
+            request_uuid: extra.requestUuid ?? null,
+            request_xml_hash: extra.xmlHash ?? null,
+            request_payload_summary: sanitizeForLog(extra.payloadSummary) ?? {},
+            http_status: httpStatus ?? null,
+            zatca_status: extra.zatcaStatus ?? null,
+            zatca_request_id: extra.zatcaRequestId ?? null,
+            zatca_response_payload: sanitizeForLog(extra.responsePayload) ?? null,
+            zatca_warnings: sanitizeForLog(extra.warnings) ?? [],
+            zatca_errors: sanitizeForLog(extra.errors) ?? [],
+            error_message: errorMessage ?? null,
+            created_by: user.id,
+            submitted_at: ['submitted', 'accepted', 'rejected'].includes(status)
+              ? new Date().toISOString()
+              : null
+          });
+
+        if (dbError) {
+          console.error("Failed to insert submission log via service role directly.");
+          return { success: false, warning: "تم تنفيذ الفحص، لكن تعذر حفظ سجل المحاولة. راجع Edge Function logs." };
         }
-        return data;
+        return { success: true };
       } catch (err) {
-        console.error("Exception logging submission:", err);
+        console.error("Exception when saving submission log.");
+        return { success: false, warning: "تم تنفيذ الفحص، لكن تعذر حفظ سجل المحاولة. راجع Edge Function logs." };
       }
     };
 
@@ -138,13 +226,14 @@ Deno.serve(async (req) => {
         ? `بيئة الاتصال التجريبية (${environment}) مهيأة وجاهزة للفحص.`
         : `بيئة الاتصال التجريبية (${environment}) غير مهيأة. يرجى ضبط المتغيرات البيئية أولاً.`;
 
-      await logSubmission(status, null, msg);
+      const logResult = await logSubmission(status, null, msg);
 
       return new Response(
         JSON.stringify({
           success: isConfigured,
           status,
           message: msg,
+          warning: logResult?.success ? undefined : logResult?.warning,
           details: {
             environment,
             submitFlag,
@@ -201,42 +290,65 @@ Deno.serve(async (req) => {
 
       const signingProfileId = profile?.id || null;
 
+      // Manual Isolation & Security validations (Do not rely on RLS in Service Role context)
+      if (invoice.organization_id !== organizationId) {
+        return new Response(
+          JSON.stringify({ error: "غير مصرح: الفاتورة المحددة لا تنتمي لهذه المنشأة." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (artifact.organization_id !== organizationId || artifact.sales_invoice_id !== invoiceId) {
+        return new Response(
+          JSON.stringify({ error: "غير مصرح: مستند الفاتورة غير متطابق مع المنشأة أو الفاتورة المحددة." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (profile && profile.organization_id !== organizationId) {
+        return new Response(
+          JSON.stringify({ error: "غير مصرح: ملف التوقيع التعريفي لا ينتمي لهذه المنشأة." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       // Validate Readiness Checklist
       if (invoice.status !== 'approved') {
         const msg = "حالة الفاتورة ليست معتمدة (Approved). لا يمكن إرسال الفواتير المسودة.";
-        await logSubmission('blocked', null, msg, { signingProfileId });
-        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const logResult = await logSubmission('blocked', null, msg, { signingProfileId });
+        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg, warning: logResult?.success ? undefined : logResult?.warning }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       if (!artifact.xml_content || artifact.generation_status === 'invalid') {
         const msg = "ملف XML الخاص بالفاتورة غير صالح أو لم يتم توليده بنجاح بعد.";
-        await logSubmission('blocked', null, msg, { signingProfileId });
-        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const logResult = await logSubmission('blocked', null, msg, { signingProfileId });
+        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg, warning: logResult?.success ? undefined : logResult?.warning }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       // Check XML for invalid tags (undefined, null, NaN)
       if (artifact.xml_content.includes('undefined') || artifact.xml_content.includes('null') || artifact.xml_content.includes('NaN')) {
         const msg = "يحتوي ملف XML على قيم غير صالحة مثل undefined أو null أو NaN.";
-        await logSubmission('blocked', null, msg, { signingProfileId });
-        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const logResult = await logSubmission('blocked', null, msg, { signingProfileId });
+        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg, warning: logResult?.success ? undefined : logResult?.warning }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       if (artifact.sdk_validation_status !== 'passed' && artifact.sdk_validation_status !== 'needs_review') {
         const msg = "يجب فحص المستند أولاً باستخدام ZATCA SDK والتأكد من اجتيازه للفحص قبل الإرسال.";
-        await logSubmission('blocked', null, msg, { signingProfileId });
-        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const logResult = await logSubmission('blocked', null, msg, { signingProfileId });
+        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg, warning: logResult?.success ? undefined : logResult?.warning }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      if (!profile || (profile.status !== 'csid_added' && profile.status !== 'ready_for_integration')) {
+      // Check profile_status (and not profile.status)
+      if (!profile || !['csid_added', 'ready_for_integration'].includes(profile.profile_status)) {
         const msg = "الملف التعريفي للتوقيع غير جاهز للبيئة المحددة. يرجى تهيئة الملف وإضافة CSID أولاً.";
-        await logSubmission('blocked', null, msg, { signingProfileId });
-        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const logResult = await logSubmission('blocked', null, msg, { signingProfileId });
+        return new Response(JSON.stringify({ success: false, status: 'blocked', message: msg, warning: logResult?.success ? undefined : logResult?.warning }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      // STRICT RULE Check: ZATCA simulation requiring a signed XML
-      // Since we do not have signing flow fully built, we must block simulated transmission and state clearly
+      // STRICT RULE Check: ZATCA simulation/sandbox requiring a signed XML
+      // Since actual signing flow is not built yet, simulation/sandbox invoice sending must be blocked and stated clearly
       const msgNoSigning = "لا يمكن إرسال XML إلى بيئة المحاكاة قبل اكتمال متطلبات التوقيع والتشفير. هذه المرحلة جهزت طبقة الاتصال فقط.";
-      await logSubmission('blocked', null, msgNoSigning, {
+      const logResult = await logSubmission('blocked', null, msgNoSigning, {
         signingProfileId,
         xmlHash: artifact.xml_hash,
         payloadSummary: {
@@ -256,6 +368,7 @@ Deno.serve(async (req) => {
           success: false,
           status: 'blocked',
           message: msgNoSigning,
+          warning: logResult?.success ? undefined : logResult?.warning,
           details: {
             environment,
             submitFlag,
@@ -272,7 +385,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error("Unhandled Edge Function Exception:", error);
+    console.error("Unhandled Edge Function Exception.");
     return new Response(
       JSON.stringify({ error: error.message || "حدث خطأ داخلي في الخادم." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

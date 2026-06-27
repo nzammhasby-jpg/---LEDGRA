@@ -159,7 +159,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.create_zatca_api_submission_log FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.create_zatca_api_submission_log TO authenticated;
+REVOKE ALL ON FUNCTION public.create_zatca_api_submission_log FROM PUBLIC, anon, authenticated;
 
 COMMIT;
