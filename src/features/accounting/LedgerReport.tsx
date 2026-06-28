@@ -14,10 +14,15 @@ import {
   AlertCircle,
   TrendingUp,
   ArrowUpRight,
-  ArrowDownLeft
+  ArrowDownLeft,
+  Printer,
+  Eye,
+  ExternalLink,
+  FileText
 } from 'lucide-react';
 
 interface LedgerRecord {
+  entry_id?: string;
   entry_number: string;
   entry_date: string;
   entry_description: string;
@@ -25,9 +30,17 @@ interface LedgerRecord {
   debit: number;
   credit: number;
   running_balance: number;
+  source_type?: 'manual' | 'system';
+  source_id?: string | null;
+  reference?: string | null;
 }
 
-export const LedgerReport: React.FC = () => {
+interface LedgerReportProps {
+  preselectedAccountId?: string | null;
+  clearPreselectedAccount?: () => void;
+}
+
+export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId, clearPreselectedAccount }) => {
   const { currentOrg } = useAuth();
   
   // Baseline static databases
@@ -77,6 +90,35 @@ export const LedgerReport: React.FC = () => {
       setBaselineLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (preselectedAccountId && !baselineLoading && accounts.length > 0) {
+      setSelectedAccountId(preselectedAccountId);
+      const loadPreselected = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const report = await journalService.getLedgerReport(currentOrg!.id, preselectedAccountId, {
+            fiscalYearId: selectedYearId || undefined,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined
+          });
+          setReportAccount(report.account);
+          setRecords(report.records);
+        } catch (err: any) {
+          setError(getErrorMessage(err));
+          setReportAccount(null);
+          setRecords([]);
+        } finally {
+          setLoading(false);
+          if (clearPreselectedAccount) {
+            clearPreselectedAccount();
+          }
+        }
+      };
+      loadPreselected();
+    }
+  }, [preselectedAccountId, baselineLoading, accounts]);
 
   const handleGenerateReport = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -289,7 +331,20 @@ export const LedgerReport: React.FC = () => {
           <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
             <div className="px-5 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800">بيانات كشف الحركة المفصلة</span>
-              <span className="text-[10px] text-slate-400 font-bold">عدد القيود: <span className="font-mono text-slate-600 font-black">{records.length}</span></span>
+              <div className="flex items-center gap-3">
+                {records.length > 0 && selectedAccountId && (
+                  <a
+                    href={`#/print/general-ledger?accountId=${selectedAccountId}&fiscalYearId=${selectedYearId}&startDate=${startDate}&endDate=${endDate}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold text-white bg-slate-800 hover:bg-slate-755 transition cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    طباعة كشف الحساب الحالي (A4)
+                  </a>
+                )}
+                <span className="text-[10px] text-slate-400 font-bold">عدد القيود: <span className="font-mono text-slate-600 font-black">{records.length}</span></span>
+              </div>
             </div>
 
             {records.length === 0 ? (
@@ -310,36 +365,101 @@ export const LedgerReport: React.FC = () => {
                       <th className="px-4 py-3 text-center w-28">مدين (+)</th>
                       <th className="px-4 py-3 text-center w-28">دائن (-)</th>
                       <th className="px-4 py-3 text-center w-32">الرصيد المتحرك</th>
+                      <th className="px-4 py-3 text-left w-36">العمليات</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                    {records.map((rec, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-3.5 font-mono text-slate-500">
-                          {formatArabicDateWithLatinDigits(rec.entry_date)}
-                        </td>
-                        <td className="px-4 py-3.5 font-bold font-mono text-slate-900 select-all" dir="ltr">
-                          {rec.entry_number}
-                        </td>
-                        <td className="px-4 py-3.5 max-w-xs truncate text-[11px] text-slate-800 font-bold">
-                          {rec.entry_description}
-                        </td>
-                        <td className="px-4 py-3.5 max-w-xs truncate text-[11px] text-slate-500">
-                          {rec.line_description || <span className="text-slate-300">-</span>}
-                        </td>
-                        <td className="px-4 py-3.5 font-bold font-mono text-center text-slate-900 tabular-nums text-left" dir="ltr">
-                          {rec.debit > 0 ? formatNumberWithLatinDigits(rec.debit) : <span className="text-slate-300 font-normal">-</span>}
-                        </td>
-                        <td className="px-4 py-3.5 font-bold font-mono text-center text-slate-900 tabular-nums text-left" dir="ltr">
-                          {rec.credit > 0 ? formatNumberWithLatinDigits(rec.credit) : <span className="text-slate-300 font-normal">-</span>}
-                        </td>
-                        <td className="px-4 py-3.5 font-mono text-center tabular-nums text-slate-950 font-black text-left" dir="ltr">
-                          <span className={rec.running_balance < 0 ? 'text-red-650' : 'text-emerald-700'}>
-                            {formatNumberWithLatinDigits(Math.abs(rec.running_balance))} {rec.running_balance < 0 ? 'دائن' : 'مدين'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {records.map((rec, idx) => {
+                      // Custom dynamic source parser helper
+                      const getSourceDocLink = (r: any) => {
+                        const desc = r.entry_description || '';
+                        const num = r.entry_number || '';
+                        
+                        if (desc.includes('فاتورة مبيعات') || num.startsWith('INV-')) {
+                          return {
+                            type: 'فاتورة مبيعات',
+                            path: `#/print/sales-invoice/${r.source_id || ''}`
+                          };
+                        }
+                        if (desc.includes('سند قبض') || num.startsWith('RCP-')) {
+                          return {
+                            type: 'سند قبض',
+                            path: `#/print/receipt/${r.source_id || ''}`
+                          };
+                        }
+                        if (desc.includes('فاتورة مشتريات') || num.startsWith('BIL-')) {
+                          return {
+                            type: 'فاتورة مشتريات',
+                            path: `#/print/purchase-bill/${r.source_id || ''}`
+                          };
+                        }
+                        if (desc.includes('سند صرف') || num.startsWith('PAY-')) {
+                          return {
+                            type: 'سند صرف',
+                            path: `#/print/payment/${r.source_id || ''}`
+                          };
+                        }
+                        // Fallback to journal entry print
+                        return {
+                          type: 'قيد محاسبي',
+                          path: `#/print/journal-entry/${r.entry_id || ''}`
+                        };
+                      };
+
+                      const sourceDoc = getSourceDocLink(rec);
+
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-3.5 font-mono text-slate-500">
+                            {formatArabicDateWithLatinDigits(rec.entry_date)}
+                          </td>
+                          <td className="px-4 py-3.5 font-bold font-mono text-slate-900 select-all" dir="ltr">
+                            {rec.entry_number}
+                          </td>
+                          <td className="px-4 py-3.5 max-w-xs truncate text-[11px] text-slate-800 font-bold">
+                            {rec.entry_description}
+                          </td>
+                          <td className="px-4 py-3.5 max-w-xs truncate text-[11px] text-slate-500">
+                            {rec.line_description || <span className="text-slate-300">-</span>}
+                          </td>
+                          <td className="px-4 py-3.5 font-bold font-mono text-center text-slate-900 tabular-nums text-left" dir="ltr">
+                            {rec.debit > 0 ? formatNumberWithLatinDigits(rec.debit) : <span className="text-slate-300 font-normal">-</span>}
+                          </td>
+                          <td className="px-4 py-3.5 font-bold font-mono text-center text-slate-900 tabular-nums text-left" dir="ltr">
+                            {rec.credit > 0 ? formatNumberWithLatinDigits(rec.credit) : <span className="text-slate-300 font-normal">-</span>}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-center tabular-nums text-slate-950 font-black text-left" dir="ltr">
+                            <span className={rec.running_balance < 0 ? 'text-red-650' : 'text-emerald-700'}>
+                              {formatNumberWithLatinDigits(Math.abs(rec.running_balance))} {rec.running_balance < 0 ? 'دائن' : 'مدين'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-left">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <a
+                                href={sourceDoc.path}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 px-2 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/15 rounded-lg flex items-center gap-1 text-[10px] font-bold transition whitespace-nowrap"
+                                title={`معاينة ${sourceDoc.type}`}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>عرض المصدر</span>
+                              </a>
+                              <a
+                                href={`#/print/journal-entry/${rec.entry_id || ''}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 px-2 text-slate-655 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1 text-[10px] font-bold transition whitespace-nowrap"
+                                title="طباعة سند القيد اليومي"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span>طباعة</span>
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

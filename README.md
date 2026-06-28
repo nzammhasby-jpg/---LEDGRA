@@ -155,13 +155,15 @@ DO UPDATE SET role = 'super_admin', is_active = true;
 
 ## 🔒 Supabase Auth URL Configuration
 
-For the password reset and email recovery flows to function seamlessly in the production environment without falling back to local host addresses, ensure your Supabase project settings are configured as follows:
+```text
+Site URL:
+https://ledgra-nu.vercel.app
 
-- **Site URL**:
-  `https://ledgra-nu.vercel.app`
-
-- **Redirect URLs**:
-  - `https://ledgra-nu.vercel.app`
-  - `https://ledgra-nu.vercel.app/*`
-  - `https://ledgra-nu.vercel.app/#/reset-password`
-  - `https://ledgra-nu.vercel.app/#/login`
+Redirect URLs:
+https://ledgra-nu.vercel.app
+https://ledgra-nu.vercel.app/*
+https://ledgra-nu.vercel.app/auth/confirm
+https://ledgra-nu.vercel.app/#/email-verified
+https://ledgra-nu.vercel.app/#/login
+https://ledgra-nu.vercel.app/#/reset-password
+```

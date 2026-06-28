@@ -5,6 +5,7 @@ import { AppShell } from './layouts/AppShell';
 import { Login } from './features/auth/Login';
 import { Register } from './features/auth/Register';
 import { ResetPassword } from './features/auth/ResetPassword';
+import { EmailVerifiedPage } from './features/auth/EmailVerifiedPage';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { Settings } from './features/settings/Settings';
@@ -37,6 +38,8 @@ import { VendorStatementPrint } from './features/print/VendorStatementPrint';
 import { IncomeStatementPrint } from './features/print/IncomeStatementPrint';
 import { BalanceSheetPrint } from './features/print/BalanceSheetPrint';
 import { InventoryReportPrint } from './features/print/InventoryReportPrint';
+import { JournalEntryPrint } from './features/print/JournalEntryPrint';
+import { GeneralLedgerPrint } from './features/print/GeneralLedgerPrint';
 
 
 // Beautiful configuration missing notice for development when secrets are not set
@@ -358,6 +361,13 @@ export default function App() {
     return <SupabaseConfigAlert />;
   }
 
+  // Early redirect for Supabase auth confirmations
+  if (window.location.pathname === '/auth/confirm') {
+    const search = window.location.search || '';
+    window.location.replace(`${window.location.origin}/#/email-verified${search}`);
+    return null;
+  }
+
   return (
     <AuthProvider>
       <Router>
@@ -370,8 +380,9 @@ export default function App() {
             <Route path="/register" element={<Register />} />
           </Route>
 
-          {/* Independent route for resetting password */}
+          {/* Independent routes */}
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/email-verified" element={<EmailVerifiedPage />} />
 
           {/* Force Onboarding screens */}
           <Route element={<OnboardingRoute />}>
@@ -421,6 +432,8 @@ export default function App() {
             <Route path="/print/income-statement" element={<IncomeStatementPrint />} />
             <Route path="/print/balance-sheet" element={<BalanceSheetPrint />} />
             <Route path="/print/inventory-report" element={<InventoryReportPrint />} />
+            <Route path="/print/journal-entry/:id" element={<JournalEntryPrint />} />
+            <Route path="/print/general-ledger" element={<GeneralLedgerPrint />} />
           </Route>
 
           {/* Absolute Fallback Redirect */}

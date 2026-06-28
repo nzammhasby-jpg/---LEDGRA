@@ -20,7 +20,8 @@ import {
   Calendar,
   AlertTriangle,
   History,
-  Info
+  Info,
+  Printer
 } from 'lucide-react';
 
 export const JournalEntries: React.FC = () => {
@@ -1051,6 +1052,16 @@ export const JournalEntries: React.FC = () => {
               >
                 إغلاق المعاينة
               </button>
+
+              <a
+                href={`#/print/journal-entry/${selectedEntryDetails.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                طباعة السند (A4)
+              </a>
 
               {selectedEntryDetails.status === 'draft' && isPrivileged && (
                 <>

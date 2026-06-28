@@ -10,6 +10,7 @@ import { FolderTree, Calendar, Sparkles, Settings, FileText, BookOpen, Activity 
 
 export const AccountingLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'chart' | 'fiscal' | 'settings' | 'journal' | 'ledger' | 'trial'>('journal');
+  const [preselectedAccountId, setPreselectedAccountId] = useState<string | null>(null);
   const { t } = useTranslation('ar');
 
   return (
@@ -111,11 +112,17 @@ export const AccountingLayout: React.FC = () => {
         {activeTab === 'journal' ? (
           <JournalEntries />
         ) : activeTab === 'chart' ? (
-          <ChartOfAccounts />
+          <ChartOfAccounts onViewLedger={(accountId) => {
+            setPreselectedAccountId(accountId);
+            setActiveTab('ledger');
+          }} />
         ) : activeTab === 'fiscal' ? (
           <FiscalYears />
         ) : activeTab === 'ledger' ? (
-          <LedgerReport />
+          <LedgerReport 
+            preselectedAccountId={preselectedAccountId}
+            clearPreselectedAccount={() => setPreselectedAccountId(null)}
+          />
         ) : activeTab === 'trial' ? (
           <TrialBalance />
         ) : (

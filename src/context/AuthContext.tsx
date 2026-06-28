@@ -269,10 +269,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, fullName: string, phone: string): Promise<{ error: string | null, verificationRequired?: boolean }> => {
     setLoading(true);
     try {
+      const emailRedirectTo = `${window.location.origin}/auth/confirm`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo,
           data: {
             full_name: fullName,
             phone: phone,

@@ -184,7 +184,7 @@ export const journalService = {
   ) {
     let query = supabase
       .from('journal_entry_lines')
-      .select('debit, credit, description, created_at, journal_entries:journal_entries!journal_entry_lines_entry_org_fk!inner(entry_number, entry_date, description, status, fiscal_year_id)')
+      .select('debit, credit, description, created_at, journal_entries:journal_entries!journal_entry_lines_entry_org_fk!inner(id, entry_number, entry_date, description, status, fiscal_year_id, source_type, source_id, reference)')
       .eq('organization_id', orgId)
       .eq('account_id', accountId)
       .eq('journal_entries.status', 'posted');
@@ -230,13 +230,17 @@ export const journalService = {
       }
 
       return {
+        entry_id: row.journal_entries.id,
         entry_number: row.journal_entries.entry_number,
         entry_date: row.journal_entries.entry_date,
         entry_description: row.journal_entries.description,
         line_description: row.description,
         debit: db,
         credit: cr,
-        running_balance: runningBalance
+        running_balance: runningBalance,
+        source_type: row.journal_entries.source_type,
+        source_id: row.journal_entries.source_id,
+        reference: row.journal_entries.reference
       };
     });
 
