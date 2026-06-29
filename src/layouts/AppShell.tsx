@@ -54,7 +54,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   } = useAuth();
   
   const { isSuspended } = useOrganizationSubscription();
-  const { t } = useTranslation('ar');
+  const { t, currentLanguage } = useTranslation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [quickActionOpen, setQuickActionOpen] = useState<boolean>(false);
@@ -229,7 +229,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen flex bg-brand-bg select-none font-sans text-slate-800 overflow-x-hidden" dir="rtl">
+    <div className="min-h-screen flex bg-brand-bg select-none font-sans text-slate-800 overflow-x-hidden" dir={currentLanguage === 'ar' ? 'rtl' : 'ltr'}>
       
       {/* 1. Backdrop for mobile drawer */}
       {mobileMenuOpen && (
@@ -377,19 +377,29 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
           {/* User Profile Info on Bottom of Bar */}
           <div className="flex items-center justify-between gap-2">
             {!sidebarCollapsed ? (
-              <div className="flex items-center gap-2.5 truncate text-right">
+              <Link 
+                to="/settings?tab=profile" 
+                className={`flex items-center gap-2.5 truncate hover:opacity-80 transition cursor-pointer ${currentLanguage === 'ar' ? 'text-right' : 'text-left'}`}
+                title={t('common.profile')}
+              >
                 <div className="w-8 h-8 rounded-full bg-brand-blue/15 border border-brand-blue/25 text-brand-blue font-bold flex items-center justify-center text-xs shrink-0 uppercase">
                   {profile?.full_name?.charAt(0) || <User className="w-4 h-4" />}
                 </div>
                 <div className="truncate">
                   <span className="text-xs font-bold text-white block truncate">{profile?.full_name}</span>
-                  <span className="text-[10px] text-slate-400 block truncate">{roleInCurrentOrg === 'owner' ? 'مالك' : 'عضو'}</span>
+                  <span className="text-[10px] text-slate-400 block truncate">
+                    {roleInCurrentOrg === 'owner' ? (currentLanguage === 'ar' ? 'مالك' : 'Owner') : (currentLanguage === 'ar' ? 'عضو' : 'Member')}
+                  </span>
                 </div>
-              </div>
+              </Link>
             ) : (
-              <div className="w-8 h-8 rounded-full bg-brand-blue/10 text-brand-blue font-bold flex items-center justify-center text-xs shrink-0 mx-auto">
+              <Link 
+                to="/settings?tab=profile" 
+                className="w-8 h-8 rounded-full bg-brand-blue/10 text-brand-blue font-bold flex items-center justify-center text-xs shrink-0 mx-auto hover:opacity-80 transition cursor-pointer"
+                title={t('common.profile')}
+              >
                 {profile?.full_name?.charAt(0) || <User className="w-4 h-4" />}
-              </div>
+              </Link>
             )}
 
             {/* Singout Quick */}

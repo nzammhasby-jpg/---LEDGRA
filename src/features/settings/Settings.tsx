@@ -33,13 +33,21 @@ import {
   Award,
   MessageCircle,
   Clock,
-  CreditCard
+  CreditCard,
+  XCircle,
+  Activity,
+  Edit,
+  User,
+  UserPlus
 } from 'lucide-react';
+import { canInviteMoreMembers } from '../../lib/permissions';
 
 interface SettingsMember {
   id: string;
+  profile_id: string;
   name: string;
   phone: string;
+  email: string | null;
   role: string;
   status: string;
 }
@@ -49,14 +57,91 @@ interface RPCMemberResult {
   profile_id: string;
   full_name: string | null;
   phone: string | null;
+  email: string | null;
   role: string;
+  created_at: string;
+  is_active: boolean;
+}
+
+interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  expires_at: string;
   created_at: string;
 }
 
 export const Settings: React.FC = () => {
-  const { currentOrg, roleInCurrentOrg, updateOrg } = useAuth();
-  const { t } = useTranslation('ar');
-  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting' | 'zatca' | 'subscription'>('info');
+  const { currentOrg, roleInCurrentOrg, updateOrg, profile, user, refreshUserData } = useAuth();
+  const { t, i18n, currentLanguage } = useTranslation();
+  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting' | 'zatca' | 'subscription' | 'profile'>('info');
+
+  // Profile & Language editing states
+  const [profileName, setProfileName] = useState<string>('');
+  const [profilePhone, setProfilePhone] = useState<string>('');
+  const [profileSaving, setProfileSaving] = useState<boolean>(false);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // Read URL search params to see if profile tab is requested
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'profile' || tab === 'users' || tab === 'info' || tab === 'branches' || tab === 'accounting' || tab === 'zatca' || tab === 'subscription') {
+      setActiveTab(tab as any);
+    }
+  }, []);
+
+  // Sync profile data when it loads
+  useEffect(() => {
+    if (profile) {
+      setProfileName(profile.full_name || '');
+      setProfilePhone(profile.phone || '');
+    }
+  }, [profile]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setProfileSaving(true);
+    setProfileSuccess(null);
+    setProfileError(null);
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: profileName,
+          phone: profilePhone
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      await refreshUserData();
+      setProfileSuccess(currentLanguage === 'ar' ? 'تم تحديث الملف الشخصي بنجاح!' : 'Profile updated successfully!');
+    } catch (err: any) {
+      console.error('Error updating profile:', err);
+      setProfileError(err.message || (currentLanguage === 'ar' ? 'فشل تحديث الملف الشخصي.' : 'Failed to update profile.'));
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleLanguageChange = async (newLang: 'ar' | 'en') => {
+    try {
+      await i18n.changeLanguage(newLang);
+      localStorage.setItem('ledgra_lang', newLang);
+      document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+      document.documentElement.lang = newLang;
+    } catch (err) {
+      console.error('Failed to change language:', err);
+    }
+  };
 
   const { 
     subscription, 
@@ -279,6 +364,19 @@ export const Settings: React.FC = () => {
   const [branchesError, setBranchesError] = useState<string | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
 
+  // Invitations & Team states
+  const [invitationsList, setInvitationsList] = useState<Invitation[]>([]);
+  const [loadingInvitations, setLoadingInvitations] = useState<boolean>(false);
+  const [invitationEmail, setInvitationEmail] = useState<string>('');
+  const [invitationRole, setInvitationRole] = useState<string>('viewer');
+  const [invitingLoading, setInvitingLoading] = useState<boolean>(false);
+  const [invitationSuccess, setInvitationSuccess] = useState<string | null>(null);
+  const [invitationError, setInvitationError] = useState<string | null>(null);
+
+  // Members edit states
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [updatingRoleLoading, setUpdatingRoleLoading] = useState<boolean>(false);
+
   // Forms statuses
   const [newBranchSuccess, setNewBranchSuccess] = useState<string | null>(null);
   const [newBranchError, setNewBranchError] = useState<string | null>(null);
@@ -328,10 +426,12 @@ export const Settings: React.FC = () => {
       } else if (data) {
         const mapped = (data as RPCMemberResult[]).map((m: RPCMemberResult) => ({
           id: m.membership_id,
+          profile_id: m.profile_id,
           name: m.full_name || 'عضو غير معروف',
           phone: m.phone || 'غير مسجل',
+          email: m.email || null,
           role: m.role,
-          status: 'نشط'
+          status: m.is_active ? 'نشط' : 'معطل'
         }));
         setMembersList(mapped);
       }
@@ -341,6 +441,165 @@ export const Settings: React.FC = () => {
       setMembersError(err.message || 'حدث خطأ غير متوقع أثناء محاولة قراءة الأعضاء.');
     } finally {
       setLoadingMembers(false);
+    }
+  };
+
+  // Fetch pending invitations
+  const loadInvitations = async () => {
+    if (!currentOrg) return;
+    setLoadingInvitations(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('list_organization_invitations', { p_org_id: currentOrg.id });
+
+      if (error) {
+        console.error('Error loading invitations:', error);
+      } else if (data) {
+        setInvitationsList(data as Invitation[]);
+      }
+    } catch (err: any) {
+      console.error('Unexpected error loading invitations:', err);
+    } finally {
+      setLoadingInvitations(false);
+    }
+  };
+
+  // Handle invitation submission via Edge Function
+  const handleSendInvitation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentOrg) return;
+
+    setInvitationSuccess(null);
+    setInvitationError(null);
+    setInvitingLoading(true);
+
+    try {
+      // Validate subscription limit
+      const canInvite = canInviteMoreMembers(subscription, membersList.length);
+      if (!canInvite) {
+        throw new Error('تجاوزت هذه المنشأة الحد الأقصى لعدد المستخدمين المتاح في باقة الاشتراك الحالية.');
+      }
+
+      // Get current auth session to acquire the access token
+      const sessionRes = await supabase.auth.getSession();
+      const session = sessionRes.data.session;
+      if (!session) {
+        throw new Error('يجب تسجيل الدخول لإرسال دعوة من الفضاء المالي الآمن لـ LEDGRA.');
+      }
+
+      // Trigger the Edge Function securely
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-organization-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          organizationId: currentOrg.id,
+          email: invitationEmail,
+          role: invitationRole
+        })
+      });
+
+      const resJson = await response.json();
+      if (!response.ok || resJson.error) {
+        throw new Error(resJson.error || 'فشل إرسال الدعوة عبر الخادم.');
+      }
+
+      let successMsg = '';
+      if (resJson.inviteLink) {
+        successMsg = `تم إنشاء الدعوة. استخدم رابط القبول السريع التالي للتجربة:\n${resJson.inviteLink}`;
+      } else if (resJson.message) {
+        successMsg = resJson.message;
+      } else {
+        successMsg = 'تم إنشاء الدعوة بنجاح، لكن إرسال البريد يحتاج ضبط مزود بريد داخل Edge Function.';
+      }
+      setInvitationSuccess(successMsg);
+      setInvitationEmail('');
+      loadInvitations();
+    } catch (err: any) {
+      console.error('Error sending invitation:', err);
+      setInvitationError(err.message || 'فشلت عملية إصدار الدعوة بسبب عطل غير متوقع.');
+    } finally {
+      setInvitingLoading(false);
+    }
+  };
+
+  // Cancel Invitation
+  const handleCancelInvitation = async (invitationId: string) => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في إلغاء هذه الدعوة المعلقة؟')) return;
+    try {
+      const { error } = await supabase.rpc('cancel_organization_invitation', { p_invitation_id: invitationId });
+      if (error) {
+        alert('فشل إلغاء الدعوة: ' + error.message);
+      } else {
+        alert('تم إلغاء الدعوة بنجاح.');
+        loadInvitations();
+      }
+    } catch (err: any) {
+      alert('حدث خطأ غير متوقع: ' + err.message);
+    }
+  };
+
+  // Update Member Role
+  const handleUpdateMemberRole = async (memberProfileId: string, newRole: string) => {
+    setUpdatingRoleLoading(true);
+    try {
+      const { error } = await supabase.rpc('update_organization_member_role', {
+        p_org_id: currentOrg?.id,
+        p_member_user_id: memberProfileId,
+        p_role: newRole
+      });
+      if (error) {
+        alert('فشل تحديث الدور: ' + error.message);
+      } else {
+        alert('تم تحديث دور العضو بنجاح.');
+        setEditingMemberId(null);
+        loadMembers();
+      }
+    } catch (err: any) {
+      alert('حدث خطأ غير متوقع: ' + err.message);
+    } finally {
+      setUpdatingRoleLoading(false);
+    }
+  };
+
+  // Deactivate Member
+  const handleDeactivateMember = async (memberProfileId: string) => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في تعطيل صلاحيات هذا العضو؟ لن يتمكن من تسجيل الدخول إلى دفاتر هذه المنشأة.')) return;
+    try {
+      const { error } = await supabase.rpc('deactivate_organization_member', {
+        p_org_id: currentOrg?.id,
+        p_member_user_id: memberProfileId
+      });
+      if (error) {
+        alert('فشل تعطيل العضو: ' + error.message);
+      } else {
+        alert('تم تعطيل العضو بنجاح.');
+        loadMembers();
+      }
+    } catch (err: any) {
+      alert('حدث خطأ غير متوقع: ' + err.message);
+    }
+  };
+
+  // Activate Member
+  const handleActivateMember = async (memberProfileId: string) => {
+    if (!window.confirm('هل ترغب في إعادة تفعيل صلاحيات هذا العضو؟')) return;
+    try {
+      const { error } = await supabase.rpc('activate_organization_member', {
+        p_org_id: currentOrg?.id,
+        p_member_user_id: memberProfileId
+      });
+      if (error) {
+        alert('فشل تفعيل العضو: ' + error.message);
+      } else {
+        alert('تم تفعيل العضو بنجاح.');
+        loadMembers();
+      }
+    } catch (err: any) {
+      alert('حدث خطأ غير متوقع: ' + err.message);
     }
   };
 
@@ -404,6 +663,7 @@ export const Settings: React.FC = () => {
         loadBranches();
       } else if (activeTab === 'users' && isPrivileged) {
         loadMembers();
+        loadInvitations();
       } else if (activeTab === 'accounting') {
         loadAccounting();
       } else {
@@ -491,7 +751,7 @@ export const Settings: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 font-sans text-right" dir="rtl">
+    <div className={`space-y-6 font-sans ${currentLanguage === 'ar' ? 'text-right' : 'text-left'}`} dir={currentLanguage === 'ar' ? 'rtl' : 'ltr'}>
       
       {/* Page Title & description header */}
       <div className="space-y-1">
@@ -502,6 +762,7 @@ export const Settings: React.FC = () => {
       {/* Tabs selectors row */}
       <div className="flex border-b border-slate-200 gap-2 overflow-x-auto pb-px">
         {[
+          { id: 'profile', label: t('common.profile'), icon: User },
           { id: 'info', label: t('settings.tab_info'), icon: Building },
           { id: 'users', label: t('settings.tab_users'), icon: Users },
           { id: 'branches', label: t('settings.tab_branches'), icon: MapPin },
@@ -531,6 +792,132 @@ export const Settings: React.FC = () => {
       {/* Dynamic Tabs view frame */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
         
+        {/* Tab 0: User Profile & Language Settings */}
+        {activeTab === 'profile' && (
+          <div className="space-y-6">
+            <div className="border-b border-slate-150 pb-4">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <User className="w-5 h-5 text-brand-blue" />
+                <span>{currentLanguage === 'ar' ? 'الملف الشخصي وإعدادات اللغة' : 'Profile & Language Settings'}</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 font-medium">
+                {currentLanguage === 'ar' 
+                  ? 'إدارة معلوماتك الشخصية مثل الاسم ورقم الجوال، بالإضافة إلى التحكم بلغة المنصة الأساسية.' 
+                  : 'Manage your personal profile details such as name and phone number, and control the main interface language.'}
+              </p>
+            </div>
+
+            {profileSuccess && (
+              <div className="bg-emerald-50 border-r-4 border-emerald-500 p-3.5 rounded-xl text-emerald-800 text-xs font-semibold">
+                {profileSuccess}
+              </div>
+            )}
+
+            {profileError && (
+              <div className="bg-red-50 border-r-4 border-red-500 p-3.5 rounded-xl text-red-800 text-xs font-semibold">
+                {profileError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Column: Language Selection */}
+              <div className="lg:col-span-1 space-y-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200/60 pb-2">
+                    <Globe className="w-4 h-4 text-brand-blue" />
+                    <span>{currentLanguage === 'ar' ? 'لغة واجهة النظام' : 'System Interface Language'}</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {currentLanguage === 'ar'
+                      ? 'اختر اللغة المفضلة لتصفح واستخدام نظام لِدجرا. ستنعكس التغييرات فوراً على جميع القوائم واللوحات.'
+                      : 'Choose your preferred language for navigating LEDGRA. Changes are instantly applied to all menus and dashboards.'}
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleLanguageChange('ar')}
+                      className={`py-3 px-4 rounded-xl text-xs font-extrabold flex flex-col items-center justify-center gap-1.5 transition border cursor-pointer ${
+                        currentLanguage === 'ar'
+                          ? 'bg-brand-blue/10 border-brand-blue text-brand-blue font-black'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="text-sm">🇸🇦</span>
+                      <span>العربية</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleLanguageChange('en')}
+                      className={`py-3 px-4 rounded-xl text-xs font-extrabold flex flex-col items-center justify-center gap-1.5 transition border cursor-pointer ${
+                        currentLanguage === 'en'
+                          ? 'bg-brand-blue/10 border-brand-blue text-brand-blue font-black'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="text-sm">🇬🇧</span>
+                      <span>English</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Personal Information Form */}
+              <div className="lg:col-span-2">
+                <form onSubmit={handleSaveProfile} className="bg-white border border-slate-150 rounded-2xl p-6 shadow-sm space-y-5">
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2.5">
+                    <User className="w-4 h-4 text-brand-blue" />
+                    <span>{currentLanguage === 'ar' ? 'المعلومات الشخصية للفريد الشريك' : 'Personal Counterparty Information'}</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 block">
+                        {currentLanguage === 'ar' ? 'الاسم الكامل' : 'Full Name'}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={profileName}
+                        onChange={(e) => setProfileName(e.target.value)}
+                        placeholder={currentLanguage === 'ar' ? 'أدخل اسمك الكامل' : 'Enter your full name'}
+                        className="w-full bg-slate-50 text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-blue focus:bg-white transition text-right"
+                        style={{ textAlign: currentLanguage === 'ar' ? 'right' : 'left' }}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-500 block">
+                        {currentLanguage === 'ar' ? 'رقم الهاتف الجوال' : 'Mobile Number'}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={profilePhone}
+                        onChange={(e) => setProfilePhone(e.target.value)}
+                        placeholder="05xxxxxxxx"
+                        className="w-full bg-slate-50 text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-blue focus:bg-white transition font-mono"
+                        style={{ direction: 'ltr', textAlign: 'right' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-3 border-t border-slate-100">
+                    <button
+                      type="submit"
+                      disabled={profileSaving}
+                      className="bg-brand-blue hover:bg-brand-blue/90 disabled:bg-slate-300 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition flex items-center gap-2 shadow-sm cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>{profileSaving ? (currentLanguage === 'ar' ? 'جاري الحفظ...' : 'Saving...') : (currentLanguage === 'ar' ? 'حفظ التعديلات' : 'Save Changes')}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tab 1: Organization & VAT profiles */}
         {activeTab === 'info' && (
           <form onSubmit={handleSaveSettings} className="space-y-8">
@@ -1006,14 +1393,14 @@ export const Settings: React.FC = () => {
 
         {/* Tab 2: Users & permissions memberships */}
         {activeTab === 'users' && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                   <Users className="w-5 h-5 text-brand-purple" />
-                  <span>دليل المستخدمين وصلاحيات الارتباط</span>
+                  <span>إدارة فريق العمل والصلاحيات السحابية</span>
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-1">توضح هذه القائمة الأفراد المصرح لهم بالدخول وصلاحية استخدام دفاتر المنشأة بناءً على الرول المخول لهم من المالك.</p>
+                <p className="text-[11px] text-slate-400 mt-1">تتيح لك هذه اللوحة دعوة الموظفين والزملاء للعمل التعاوني المشترك وإسناد الصلاحيات المالية والمحاسبية المناسبة لكل فرد.</p>
               </div>
             </div>
 
@@ -1023,80 +1410,283 @@ export const Settings: React.FC = () => {
                 <span>عذراً، هذا التبويب وصلاحيات دليل المستخدمين متاح فقط لمالك المنشأة والمشرفين المعتمدين عليها.</span>
               </div>
             ) : (
-              <>
-                {membersError && (
-                  <div className="bg-red-50 border-r-4 border-red-500 p-3 rounded-lg text-xs text-red-800 font-semibold flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                    <span>خطأ في مزامنة الأعضاء: {membersError}</span>
-                  </div>
-                )}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                {/* Right/Top Side: Invite Form */}
+                <div className="lg:col-span-1 space-y-6">
+                  <div className="bg-white border border-slate-150 rounded-2xl p-5 shadow-sm space-y-4">
+                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                      <UserPlus className="w-4 h-4 text-brand-purple" />
+                      <span>إرسال دعوة انضمام جديدة</span>
+                    </h4>
 
-                {/* Simulated Add user form - Protected per guidelines */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                  <h4 className="text-xs font-bold text-slate-800 mb-2">دعوة الزملاء والانضمام كعضو</h4>
-                  
-                  <div className="bg-amber-50 border-r-4 border-amber-500 p-3 rounded-xl flex items-start gap-2 text-amber-900 text-xs leading-relaxed">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                    <div>
-                      <h5 className="font-bold text-amber-950">دعوة الزملاء بالبريد الإلكتروني تطلب تهيئة Edge Functions</h5>
-                      <p className="text-[10px] mt-0.5">
-                        التحايل عبر كتابة الـ Service Role Key داخل التطبيق ممنوع برمجياً لحماية الأمن المالي. تم إخفاء نموذج الدعوات مؤقتاً لحين ربط وتفعيل الدوال السحابية الآمنة لـ Supabase Edge Functions.
-                      </p>
+                    {invitationSuccess && (
+                      <div className="bg-emerald-50 border-r-4 border-emerald-500 p-3 rounded-lg text-emerald-800 text-[10px] font-semibold leading-relaxed whitespace-pre-wrap">
+                        {invitationSuccess}
+                      </div>
+                    )}
+
+                    {invitationError && (
+                      <div className="bg-red-50 border-r-4 border-red-500 p-3 rounded-lg text-red-800 text-[10px] font-semibold">
+                        {invitationError}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSendInvitation} className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 block">البريد الإلكتروني للزميل</label>
+                        <input
+                          type="email"
+                          required
+                          value={invitationEmail}
+                          onChange={(e) => setInvitationEmail(e.target.value)}
+                          placeholder="name@example.com"
+                          className="w-full bg-slate-50 text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-purple focus:bg-white transition"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 block">الدور الوظيفي والصلاحيات</label>
+                        <select
+                          value={invitationRole}
+                          onChange={(e) => setInvitationRole(e.target.value)}
+                          className="w-full bg-slate-50 text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-purple focus:bg-white transition"
+                        >
+                          <option value="viewer">مستعرض فقط (Viewer)</option>
+                          <option value="sales">مسؤول مبيعات (Sales)</option>
+                          <option value="accountant">محاسب مالي مرخص (Accountant)</option>
+                          <option value="admin">مدير نظام معتمد (Admin)</option>
+                        </select>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={invitingLoading}
+                        className="w-full bg-brand-purple hover:bg-brand-purple/95 text-white text-xs font-bold py-2.5 rounded-xl shadow transition disabled:bg-slate-300 flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Mail className="w-4 h-4" />
+                        <span>{invitingLoading ? 'جاري إرسال الدعوة...' : 'إرسال دعوة بالبريد'}</span>
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Permission Matrix Preview */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
+                    <h5 className="text-[11px] font-bold text-slate-700">مصفوفة توزيع الأدوار التقديرية</h5>
+                    <div className="space-y-2 text-[10px] text-slate-500 leading-relaxed">
+                      <p>● <strong className="text-amber-800">المالك (Owner):</strong> صلاحيات غير مقيدة وتعديل إعدادات المنشأة والهوية المالية.</p>
+                      <p>● <strong className="text-blue-800">مدير النظام (Admin):</strong> دعوة الزملاء، تعديل الأدوار، تعطيل الصلاحيات، وإدارة التكوينات الأساسية.</p>
+                      <p>● <strong className="text-purple-800">المحاسب (Accountant):</strong> إدارة العمليات المالية والقيود والفواتير وتقارير الإقرارات والامتثال لـ ZATCA.</p>
+                      <p>● <strong className="text-emerald-800">المبيعات (Sales):</strong> إصدار وتصحيح فواتير وعروض المبيعات والمستندات والعملاء دون الوصول للدفاتر العامة.</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Listing table */}
-                <div className="overflow-x-auto pt-2">
-                  {loadingMembers ? (
-                    <div className="text-center py-6 text-xs text-slate-400">جاري مطابقة الأعضاء...</div>
-                  ) : (
-                    <table className="w-full text-xs text-right border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-slate-400">
-                          <th className="pb-2 font-bold">{t('settings.user_name')}</th>
-                          <th className="pb-2 font-bold text-right">رقم الهاتف الشريك</th>
-                          <th className="pb-2 font-bold text-center">{t('settings.user_role')}</th>
-                          <th className="pb-2 font-bold text-left">حالة الاتصال</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {membersList.map((u) => (
-                          <tr key={u.id} className="hover:bg-slate-50/50 transition">
-                            <td className="py-3 font-semibold text-slate-800 flex items-center gap-2">
-                              <UserCheck className="w-4 h-4 text-brand-purple shrink-0" />
-                              <span>{u.name}</span>
-                            </td>
-                            <td className="py-3 font-mono text-slate-500 tracking-wide" style={{ direction: 'ltr', textAlign: 'right' }}>{u.phone}</td>
-                            <td className="py-3 text-center">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                u.role === 'owner' 
-                                  ? 'bg-amber-100 text-amber-800' 
-                                  : u.role === 'admin'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : u.role === 'accountant'
-                                  ? 'bg-purple-100 text-brand-purple'
-                                  : 'bg-indigo-50 text-indigo-700'
-                              }`}>
-                                {u.role === 'owner' && 'المالك والمؤسس'}
-                                {u.role === 'admin' && 'مدير نظام معتمد'}
-                                {u.role === 'accountant' && 'محاسب مالي مرخص'}
-                                {u.role === 'sales' && 'مسؤول مبيعات'}
-                                {u.role === 'viewer' && 'مستعرض فقط'}
-                              </span>
-                            </td>
-                            <td className="py-3 text-left">
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-800">
-                                {u.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
+                {/* Left Side: Users List & Active Invitations */}
+                <div className="lg:col-span-2 space-y-8">
+                  
+                  {/* Section A: Members List */}
+                  <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
+                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                      <Activity className="w-4 h-4 text-brand-purple" />
+                      <span>دليل الموظفين النشطين</span>
+                    </h4>
+
+                    {loadingMembers ? (
+                      <div className="text-center py-6 text-xs text-slate-400">جاري مطابقة الأعضاء والتحقق من التراخيص السحابية...</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-right border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-slate-400">
+                              <th className="pb-2 font-bold text-right">الموظف / الشريك</th>
+                              <th className="pb-2 font-bold text-right">البريد الإلكتروني</th>
+                              <th className="pb-2 font-bold text-right">رقم الهاتف</th>
+                              <th className="pb-2 font-bold text-center">الدور الممنوح</th>
+                              <th className="pb-2 font-bold text-center">الحالة</th>
+                              <th className="pb-2 font-bold text-left">العمليات</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {membersList.map((u) => (
+                              <tr key={u.id} className="hover:bg-slate-50/40 transition">
+                                <td className="py-3 font-semibold text-slate-800">
+                                  <div className="flex items-center gap-2">
+                                    <UserCheck className="w-4 h-4 text-brand-purple shrink-0" />
+                                    <span>{u.name}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 font-mono text-slate-500 text-right" style={{ direction: 'ltr' }}>
+                                  {u.email || 'غير مسجل'}
+                                </td>
+                                <td className="py-3 font-mono text-slate-500 tracking-wide" style={{ direction: 'ltr', textAlign: 'right' }}>
+                                  {u.phone}
+                                </td>
+                                <td className="py-3 text-center">
+                                  {editingMemberId === u.id ? (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <select
+                                        defaultValue={u.role}
+                                        onChange={(e) => handleUpdateMemberRole(u.profile_id, e.target.value)}
+                                        disabled={updatingRoleLoading}
+                                        className="bg-slate-50 text-[10px] px-2 py-1 rounded-lg border border-slate-200 focus:outline-none"
+                                      >
+                                        <option value="viewer">مستعرض فقط</option>
+                                        <option value="sales">مسؤول مبيعات</option>
+                                        <option value="accountant">محاسب مالي</option>
+                                        <option value="admin">مدير نظام</option>
+                                      </select>
+                                      <button 
+                                        onClick={() => setEditingMemberId(null)}
+                                        className="text-[9px] text-slate-400 hover:text-slate-600 px-1"
+                                      >
+                                        إلغاء
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold ${
+                                        u.role === 'owner' 
+                                          ? 'bg-amber-100 text-amber-800' 
+                                          : u.role === 'admin'
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : u.role === 'accountant'
+                                          ? 'bg-purple-100 text-brand-purple'
+                                          : u.role === 'sales'
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : 'bg-slate-100 text-slate-600'
+                                      }`}>
+                                        {u.role === 'owner' && 'المالك والمؤسس'}
+                                        {u.role === 'admin' && 'مدير نظام معتمد'}
+                                        {u.role === 'accountant' && 'محاسب مالي مرخص'}
+                                        {u.role === 'sales' && 'مسؤول مبيعات'}
+                                        {u.role === 'viewer' && 'مستعرض فقط'}
+                                      </span>
+                                      {u.role !== 'owner' && (
+                                        <button 
+                                          onClick={() => setEditingMemberId(u.id)}
+                                          className="text-slate-400 hover:text-brand-purple transition"
+                                          title="تعديل الدور"
+                                        >
+                                          <Edit className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                    u.status === 'نشط' 
+                                      ? 'bg-emerald-50 text-emerald-800' 
+                                      : 'bg-red-50 text-red-800'
+                                  }`}>
+                                    {u.status}
+                                  </span>
+                                </td>
+                                <td className="py-3 text-left">
+                                  {u.role !== 'owner' && (
+                                    u.status === 'نشط' ? (
+                                      <button
+                                        onClick={() => handleDeactivateMember(u.profile_id)}
+                                        className="text-[10px] text-red-600 hover:text-red-800 font-semibold hover:underline"
+                                      >
+                                        تعطيل الصلاحية
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleActivateMember(u.profile_id)}
+                                        className="text-[10px] text-emerald-600 hover:text-emerald-800 font-semibold hover:underline"
+                                      >
+                                        إعادة تفعيل
+                                      </button>
+                                    )
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section B: Active/Pending Invitations */}
+                  <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
+                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                      <Mail className="w-4 h-4 text-brand-purple" />
+                      <span>الدعوات المرسلة والمعلقة</span>
+                    </h4>
+
+                    {loadingInvitations ? (
+                      <div className="text-center py-4 text-xs text-slate-400">جاري قراءة الدعوات المعلقة...</div>
+                    ) : invitationsList.length === 0 ? (
+                      <div className="text-center py-6 text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl bg-slate-50">
+                        لا توجد أي دعوات معلقة أو منتهية حالياً.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-right border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-slate-400">
+                              <th className="pb-2 font-bold text-right">البريد الإلكتروني</th>
+                              <th className="pb-2 font-bold text-center">الدور المقترح</th>
+                              <th className="pb-2 font-bold text-center">تاريخ الصلاحية</th>
+                              <th className="pb-2 font-bold text-center">الحالة</th>
+                              <th className="pb-2 font-bold text-left">التحكم</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {invitationsList.map((inv) => (
+                              <tr key={inv.id} className="hover:bg-slate-50/30 transition">
+                                <td className="py-3 font-semibold text-slate-700">{inv.email}</td>
+                                <td className="py-3 text-center">
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700">
+                                    {inv.role === 'admin' && 'مدير نظام'}
+                                    {inv.role === 'accountant' && 'محاسب مالي'}
+                                    {inv.role === 'sales' && 'مسؤول مبيعات'}
+                                    {inv.role === 'viewer' && 'مستعرض'}
+                                  </span>
+                                </td>
+                                <td className="py-3 text-center text-slate-400 font-mono text-[10px]">
+                                  {new Date(inv.expires_at).toLocaleDateString('ar-SA')}
+                                </td>
+                                <td className="py-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                    inv.status === 'pending'
+                                      ? 'bg-amber-50 text-amber-800 animate-pulse'
+                                      : inv.status === 'accepted'
+                                      ? 'bg-emerald-50 text-emerald-800'
+                                      : inv.status === 'expired'
+                                      ? 'bg-red-50 text-red-800'
+                                      : 'bg-slate-50 text-slate-400'
+                                  }`}>
+                                    {inv.status === 'pending' && 'معلقة'}
+                                    {inv.status === 'accepted' && 'مقبولة'}
+                                    {inv.status === 'expired' && 'منتهية'}
+                                    {inv.status === 'cancelled' && 'ملغاة'}
+                                  </span>
+                                </td>
+                                <td className="py-3 text-left">
+                                  {inv.status === 'pending' && (
+                                    <button
+                                      onClick={() => handleCancelInvitation(inv.id)}
+                                      className="text-red-500 hover:text-red-700 hover:underline text-[10px]"
+                                    >
+                                      إلغاء الدعوة
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
                 </div>
-              </>
+
+              </div>
             )}
           </div>
         )}

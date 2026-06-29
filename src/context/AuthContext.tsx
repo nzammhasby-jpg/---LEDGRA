@@ -83,7 +83,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(profileData as Profile);
 
       // Fetch member organizations
-      const { data: memberData, error: memberErr } = await supabase
+      let memberData: any = null;
+      let memberErr: any = null;
+
+      const firstAttempt = await supabase
         .from('organization_members')
         .select(`
           organization_id,
@@ -116,7 +119,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             created_at
           )
         `)
-        .eq('profile_id', userId);
+        .eq('profile_id', userId)
+        .eq('is_active', true);
+
+      if (firstAttempt.error && (firstAttempt.error.message.includes('is_active') || firstAttempt.error.message.includes('column') || firstAttempt.error.code === 'PGRST116')) {
+        const secondAttempt = await supabase
+          .from('organization_members')
+          .select(`
+            organization_id,
+            role,
+            organizations (
+              id,
+              name_ar,
+              name_en,
+              activity_type,
+              country_code,
+              city,
+              phone,
+              email,
+              logo_url,
+              legal_type,
+              vat_number,
+              is_vat_registered,
+              fiscal_year_start,
+              currency_code,
+              primary_language,
+              onboarding_completed,
+              onboarding_step,
+              setup_completed_at,
+              cr_number,
+              created_by,
+              system_start_date,
+              accounting_mode,
+              starting_balances_later,
+              updated_at,
+              created_at
+            )
+          `)
+          .eq('profile_id', userId);
+        memberData = secondAttempt.data;
+        memberErr = secondAttempt.error;
+      } else {
+        memberData = firstAttempt.data;
+        memberErr = firstAttempt.error;
+      }
 
       if (memberErr) {
         console.error('Failed to load organization memberships due to database error:', memberErr);

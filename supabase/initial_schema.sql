@@ -150,6 +150,7 @@ AS $$
         FROM public.organization_members
         WHERE organization_id = p_organization_id
           AND profile_id = auth.uid()
+          AND COALESCE(is_active, true) = true
     );
 $$;
 
@@ -167,6 +168,7 @@ AS $$
         WHERE organization_id = p_organization_id
           AND profile_id = auth.uid()
           AND role IN ('owner', 'admin')
+          AND COALESCE(is_active, true) = true
     );
 $$;
 
@@ -432,8 +434,10 @@ RETURNS TABLE (
     profile_id uuid,
     full_name text,
     phone text,
+    email text,
     role text,
-    created_at timestamp with time zone
+    created_at timestamp with time zone,
+    is_active boolean
 )
 LANGUAGE plpgsql
 STABLE
@@ -452,10 +456,13 @@ BEGIN
         m.profile_id AS profile_id,
         COALESCE(p.full_name, 'عضو غير معروف') AS full_name,
         COALESCE(p.phone, 'غير مسجل') AS phone,
+        u.email::text AS email,
         m.role AS role,
-        m.created_at AS created_at
+        m.created_at AS created_at,
+        m.is_active AS is_active
     FROM public.organization_members m
     JOIN public.profiles p ON m.profile_id = p.id
+    LEFT JOIN auth.users u ON m.profile_id = u.id
     WHERE m.organization_id = p_organization_id;
 END;
 $$;

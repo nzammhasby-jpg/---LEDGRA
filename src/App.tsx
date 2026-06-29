@@ -6,6 +6,7 @@ import { Login } from './features/auth/Login';
 import { Register } from './features/auth/Register';
 import { ResetPassword } from './features/auth/ResetPassword';
 import { EmailVerifiedPage } from './features/auth/EmailVerifiedPage';
+import { AcceptInvitePage } from './features/auth/AcceptInvitePage';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { Settings } from './features/settings/Settings';
@@ -383,6 +384,7 @@ export default function App() {
           {/* Independent routes */}
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/email-verified" element={<EmailVerifiedPage />} />
+          <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
           {/* Force Onboarding screens */}
           <Route element={<OnboardingRoute />}>

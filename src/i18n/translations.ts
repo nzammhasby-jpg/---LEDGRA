@@ -316,28 +316,13 @@ export const translations = {
   }
 } as const;
 
-export function useTranslation(lang: Locale = 'ar') {
+import { useTranslation as useI18n } from 'react-i18next';
+
+export function useTranslation(_lang?: Locale) {
+  const { t, i18n } = useI18n();
   return {
-    t: (key: string): string => {
-      const parts = key.split('.');
-      let current: any = translations[lang];
-      for (const part of parts) {
-        if (current && part in current) {
-          current = current[part];
-        } else {
-          // Fallback to Arabic of same key
-          let arCurrent: any = translations['ar'];
-          for (const arPart of parts) {
-            if (arCurrent && arPart in arCurrent) {
-              arCurrent = arCurrent[arPart];
-            } else {
-              return key;
-            }
-          }
-          return typeof arCurrent === 'string' ? arCurrent : key;
-        }
-      }
-      return typeof current === 'string' ? current : key;
-    }
+    t: (key: string): string => t(key),
+    i18n,
+    currentLanguage: i18n.language as Locale
   };
 }
