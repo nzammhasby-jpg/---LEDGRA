@@ -331,5 +331,101 @@ export const journalService = {
     });
 
     return trialBalanceRows;
+  },
+
+  async resolveJournalEntrySource(orgId: string, entryId: string): Promise<{
+    type: 'sales_invoice' | 'receipt' | 'purchase_bill' | 'payment' | 'journal_entry';
+    id: string;
+    label: string;
+    printPath: string;
+  }> {
+    if (!entryId) {
+      return {
+        type: 'journal_entry',
+        id: '',
+        label: 'قيد محاسبي',
+        printPath: '#/print/journal-entry/'
+      };
+    }
+
+    try {
+      // 1. Check sales_invoices
+      const { data: invoice } = await supabase
+        .from('sales_invoices')
+        .select('id, invoice_number')
+        .eq('organization_id', orgId)
+        .eq('journal_entry_id', entryId)
+        .maybeSingle();
+
+      if (invoice) {
+        return {
+          type: 'sales_invoice',
+          id: invoice.id,
+          label: `فاتورة مبيعات رقم ${invoice.invoice_number || invoice.id}`,
+          printPath: `#/print/sales-invoice/${invoice.id}`
+        };
+      }
+
+      // 2. Check receipts
+      const { data: receipt } = await supabase
+        .from('receipts')
+        .select('id, receipt_number')
+        .eq('organization_id', orgId)
+        .eq('journal_entry_id', entryId)
+        .maybeSingle();
+
+      if (receipt) {
+        return {
+          type: 'receipt',
+          id: receipt.id,
+          label: `سند قبض رقم ${receipt.receipt_number || receipt.id}`,
+          printPath: `#/print/receipt/${receipt.id}`
+        };
+      }
+
+      // 3. Check purchase_bills
+      const { data: bill } = await supabase
+        .from('purchase_bills')
+        .select('id, bill_number')
+        .eq('organization_id', orgId)
+        .eq('journal_entry_id', entryId)
+        .maybeSingle();
+
+      if (bill) {
+        return {
+          type: 'purchase_bill',
+          id: bill.id,
+          label: `فاتورة مشتريات رقم ${bill.bill_number || bill.id}`,
+          printPath: `#/print/purchase-bill/${bill.id}`
+        };
+      }
+
+      // 4. Check payments
+      const { data: payment } = await supabase
+        .from('payments')
+        .select('id, payment_number')
+        .eq('organization_id', orgId)
+        .eq('journal_entry_id', entryId)
+        .maybeSingle();
+
+      if (payment) {
+        return {
+          type: 'payment',
+          id: payment.id,
+          label: `سند صرف رقم ${payment.payment_number || payment.id}`,
+          printPath: `#/print/payment/${payment.id}`
+        };
+      }
+    } catch (err) {
+      console.error('Error resolving journal entry source:', err);
+    }
+
+    // Fallback if not found in any
+    return {
+      type: 'journal_entry',
+      id: entryId,
+      label: 'قيد محاسبي',
+      printPath: `#/print/journal-entry/${entryId}`
+    };
   }
 };

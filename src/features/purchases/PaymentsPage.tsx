@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { purchaseService, CreatePaymentInput } from '../../lib/purchaseService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
+import { auditService } from '../../lib/auditService';
 import { 
   Payment, 
   Vendor, 
@@ -37,16 +38,21 @@ import {
   Calendar,
   ArrowRight,
   Calculator,
-  FileText
+  FileText,
+  Edit,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 
 export const PaymentsPage: React.FC = () => {
-  const { currentOrg, roleInCurrentOrg } = useAuth();
+  const { currentOrg, roleInCurrentOrg, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
   // Checking permissions: Owner, admin, accountant can approve/cancel.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
+
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
 
   // Data State
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -185,6 +191,7 @@ export const PaymentsPage: React.FC = () => {
   const totalAllocated = getTotalAllocated();
 
   const handleAddNewPayment = useCallback(() => {
+    setEditingPayment(null);
     setVendorId('');
     setPaymentDate(new Date().toISOString().split('T')[0]);
     setAmount('0');
@@ -202,6 +209,69 @@ export const PaymentsPage: React.FC = () => {
       setBankAccountId(settings.default_bank_account_id);
     }
   }, [settings]);
+
+  const handleStartEditPayment = useCallback((payment: Payment) => {
+    setEditingPayment(payment);
+    setVendorId(payment.vendor_id);
+    setPaymentDate(payment.payment_date);
+    setAmount(String(payment.amount));
+    setPaymentMethod(payment.payment_method);
+    setCashAccountId(payment.cash_account_id || '');
+    setBankAccountId(payment.bank_account_id || '');
+    setReference(payment.reference || '');
+    setNotes(payment.notes || '');
+    const allocMap: Record<string, string> = {};
+    (payment.allocations || []).forEach(al => {
+      allocMap[al.purchase_bill_id] = String(al.allocated_amount);
+    });
+    setAllocations(allocMap);
+    setFormError(null);
+    setViewState('add');
+  }, []);
+
+  const handleCreateCorrectionCopy = useCallback(async (oldPayment: Payment) => {
+    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من سند الصرف رقم ${oldPayment.payment_number}؟`)) return;
+    setSaveLoading(true);
+    setFormError(null);
+    try {
+      const copyPayload: CreatePaymentInput = {
+        vendor_id: oldPayment.vendor_id,
+        payment_date: new Date().toISOString().split('T')[0],
+        amount: oldPayment.amount,
+        payment_method: oldPayment.payment_method,
+        cash_account_id: oldPayment.cash_account_id || undefined,
+        bank_account_id: oldPayment.bank_account_id || undefined,
+        reference: oldPayment.reference || undefined,
+        notes: `نسخة تصحيحية من سند الصرف: ${oldPayment.payment_number}` + (oldPayment.notes ? `\n\n${oldPayment.notes}` : ''),
+        allocations: (oldPayment.allocations || []).map(al => ({
+          purchase_bill_id: al.purchase_bill_id,
+          allocated_amount: al.allocated_amount
+        }))
+      };
+
+      const newId = await purchaseService.createPayment(currentOrg!.id, copyPayload);
+      
+      await auditService.logAction(currentOrg!.id, profile?.id || null, 'correction_copy_created', {
+        source_type: 'payment',
+        original_id: oldPayment.id,
+        original_number: oldPayment.payment_number,
+        new_draft_id: newId
+      });
+
+      // Reload list
+      const updatedList = await purchaseService.getPayments(currentOrg!.id);
+      setPayments(updatedList);
+
+      // Open in edit mode immediately
+      const newPayment = updatedList.find(p => p.id === newId) || await purchaseService.getPayment(currentOrg!.id, newId);
+      handleStartEditPayment(newPayment);
+    } catch (err: any) {
+      setFormError(getErrorMessage(err));
+      alert(`فشل إنشاء النسخة التصحيحية: ${getErrorMessage(err)}`);
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [currentOrg, profile, handleStartEditPayment]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -285,8 +355,20 @@ export const PaymentsPage: React.FC = () => {
         allocations: processedAllocations
       };
 
-      await purchaseService.createPayment(currentOrg!.id, input);
+      if (editingPayment) {
+        await purchaseService.updatePayment(currentOrg!.id, editingPayment.id, input);
+        
+        await auditService.logAction(currentOrg!.id, profile?.id || null, 'draft_updated', {
+          source_type: 'payment',
+          payment_id: editingPayment.id,
+          payment_number: editingPayment.payment_number
+        });
+      } else {
+        await purchaseService.createPayment(currentOrg!.id, input);
+      }
+
       setViewState('list');
+      setEditingPayment(null);
       loadData();
     } catch (err: any) {
       setFormError(getErrorMessage(err));
@@ -548,6 +630,28 @@ export const PaymentsPage: React.FC = () => {
                             <Printer className="w-3.5 h-3.5" />
                           </a>
 
+                          {/* Edit option if draft */}
+                          {p.status === 'draft' && (
+                            <button
+                              onClick={() => handleStartEditPayment(p)}
+                              className="bg-purple-50 hover:bg-purple-100 text-purple-600 p-2 rounded-lg transition cursor-pointer"
+                              title="تعديل السند المسودة"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {/* Correction copy option if approved */}
+                          {p.status === 'approved' && (
+                            <button
+                              onClick={() => handleCreateCorrectionCopy(p)}
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 p-2 rounded-lg transition cursor-pointer"
+                              title="إنشاء نسخة تصحيحية من هذا السند المعتمد"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           {p.status === 'draft' && (
                             <>
                               {canApproveOrCancel && (
@@ -607,6 +711,44 @@ export const PaymentsPage: React.FC = () => {
       {viewState === 'add' && (
         <form onSubmit={handleSavePayment} className="space-y-6">
           
+          {editingPayment && editingPayment.status !== 'draft' && (
+            <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-sans">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="text-xs font-bold leading-relaxed">
+                  لا يمكن تعديل عملية معتمدة أو مرحّلة مباشرة. استخدم إنشاء نسخة تصحيحية أو إلغاء للحفاظ على سلامة الدفاتر.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPayment(editingPayment);
+                    setViewState('view');
+                  }}
+                  className="px-3 py-1.5 bg-white border border-slate-250 text-slate-700 text-[10px] font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  عرض العملية
+                </button>
+                <a
+                  href={`#/print/payment/${editingPayment.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-white border border-slate-250 text-slate-700 text-[10px] font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  طباعة
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCreateCorrectionCopy(editingPayment)}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
+                >
+                  إنشاء نسخة تصحيحية
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Header card page */}
           <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             <div className="flex items-center gap-3">
@@ -618,8 +760,12 @@ export const PaymentsPage: React.FC = () => {
                 <ArrowRight className="w-4 h-4" />
               </button>
               <div>
-                <h1 className="text-base font-bold text-slate-800 font-sans">إصدار سند صرف مالي جديد لمورد</h1>
-                <p className="text-[11px] text-slate-400 mt-0.5">صرف دفعات نقدية أو بنكية، وتوزيعها وإطفاؤها على فواتير الشراء المسجلة.</p>
+                <h1 className="text-base font-bold text-slate-800 font-sans">
+                  {editingPayment ? `تعديل سند صرف مسودة: ${editingPayment.payment_number}` : 'إصدار سند صرف مالي جديد لمورد'}
+                </h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {editingPayment ? 'تعديل وتحديث بيانات سند الصرف المعلق قبل الاعتماد المحاسبي.' : 'صرف دفعات نقدية أو بنكية، وتوزيعها وإطفاؤها على فواتير الشراء المسجلة.'}
+                </p>
               </div>
             </div>
 
@@ -633,7 +779,7 @@ export const PaymentsPage: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={saveLoading}
+                disabled={saveLoading || (editingPayment !== null && editingPayment.status !== 'draft')}
                 className="flex items-center gap-1.5 px-5 py-2 bg-brand-navy hover:bg-brand-navy/95 text-white text-xs font-bold rounded-xl transition shadow disabled:opacity-50 cursor-pointer"
               >
                 {saveLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -885,6 +1031,28 @@ export const PaymentsPage: React.FC = () => {
                 <Printer className="w-4 h-4 text-slate-500" />
                 <span>تحضير وطباعة السند A4</span>
               </a>
+
+              {/* Edit option if draft */}
+              {selectedPayment.status === 'draft' && (
+                <button
+                  onClick={() => handleStartEditPayment(selectedPayment)}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>تعديل السند</span>
+                </button>
+              )}
+
+              {/* Correction copy option if approved */}
+              {selectedPayment.status === 'approved' && (
+                <button
+                  onClick={() => handleCreateCorrectionCopy(selectedPayment)}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>نسخة تصحيحية</span>
+                </button>
+              )}
 
               {selectedPayment.status === 'draft' && canApproveOrCancel && (
                 <button

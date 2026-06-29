@@ -23,12 +23,17 @@ import {
   X
 } from 'lucide-react';
 
-export const ChartOfAccounts: React.FC = () => {
+interface ChartOfAccountsProps {
+  onViewLedger?: (accountId: string) => void;
+}
+
+export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }) => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -507,7 +512,7 @@ export const ChartOfAccounts: React.FC = () => {
           </div>
 
           {/* Action Tools */}
-          <div className="flex items-center gap-1 shrink-0 opacity-100 md:opacity-20 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1.5 shrink-0 opacity-100 md:opacity-20 group-hover:opacity-100 transition-opacity">
             {/* Nature indicator */}
             <span className="text-[10px] font-bold py-1 px-2.5 rounded-full border hidden sm:inline ml-2 select-none font-mono text-slate-400 bg-slate-50 border-slate-200">
               {node.nature === 'debit' ? 'مدين + ' : 'دائن - '}
@@ -517,6 +522,34 @@ export const ChartOfAccounts: React.FC = () => {
             <span className={`text-[10px] font-bold py-1 px-2.5 rounded-full border hidden lg:inline ml-2 select-none uppercase ${styles.bg}`}>
               {getClassificationLabel(node.classification).split(' ')[0]}
             </span>
+
+            {/* Details Button */}
+            <button
+              onClick={() => setSelectedAccount(node)}
+              className="flex items-center gap-1 text-[10px] font-bold py-1 px-2.5 rounded-lg border text-slate-600 bg-slate-50 border-slate-250 hover:bg-slate-100 transition cursor-pointer font-sans"
+              title="عرض تفاصيل الحساب"
+            >
+              <span>تفاصيل</span>
+            </button>
+
+            {/* View Ledger Button */}
+            {node.allow_direct_posting ? (
+              <button
+                onClick={() => onViewLedger?.(node.id)}
+                className="flex items-center gap-1 text-[10px] font-bold py-1 px-2.5 rounded-lg border text-brand-blue bg-brand-blue/5 border-brand-blue/20 hover:bg-brand-blue/15 transition cursor-pointer font-sans"
+                title="عرض دفتر الأستاذ"
+              >
+                <span>عرض دفتر الأستاذ</span>
+              </button>
+            ) : (
+              <button
+                disabled
+                className="flex items-center gap-1 text-[10px] font-bold py-1 px-2.5 rounded-lg border text-slate-400 bg-slate-50 border-slate-200 transition cursor-not-allowed select-none font-sans"
+                title="هذا حساب تجميعي لا يحتوي قيود مباشرة."
+              >
+                <span>هذا حساب تجميعي لا يحتوي قيود مباشرة.</span>
+              </button>
+            )}
 
             {isPrivileged && (
               <>
@@ -992,6 +1025,163 @@ export const ChartOfAccounts: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer: ACCOUNT DETAILS */}
+      {selectedAccount && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex justify-end z-50 animate-fadeIn" dir="rtl">
+          {/* Overlay click to close */}
+          <div className="absolute inset-0" onClick={() => setSelectedAccount(null)}></div>
+          
+          <div className="relative bg-white w-full max-w-md h-full shadow-2xl flex flex-col animate-slideLeft">
+            
+            {/* Drawer Header */}
+            <div className="px-6 py-5 border-b border-slate-150 flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                <FileText className="w-4.5 h-4.5 text-brand-blue" />
+                <span>تفاصيل الحساب المحاسبي</span>
+              </h3>
+              <button 
+                onClick={() => setSelectedAccount(null)}
+                className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Drawer Body (Scrollable) */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-right font-sans">
+              
+              <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4.5 space-y-1.5">
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider">رمز الحساب</span>
+                <span className="text-base font-black text-slate-800 font-mono" dir="ltr">{selectedAccount.code}</span>
+              </div>
+
+              <div className="space-y-4 divide-y divide-slate-100">
+                <div className="pt-3.5 first:pt-0">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">اسم الحساب العربي</span>
+                  <p className="text-xs font-bold text-slate-800">{selectedAccount.name_ar}</p>
+                </div>
+
+                <div className="pt-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">اسم الحساب الإنجليزي</span>
+                  <p className="text-xs font-mono text-slate-800" dir="ltr">
+                    {selectedAccount.name_en || <span className="text-slate-300 font-sans italic">غير متوفر</span>}
+                  </p>
+                </div>
+
+                <div className="pt-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">تصنيف الحساب</span>
+                  <span className={`inline-block text-[10px] font-black py-1 px-3 rounded-full border uppercase ${getClassificationStyles(selectedAccount.classification).bg}`}>
+                    {getClassificationLabel(selectedAccount.classification)}
+                  </span>
+                </div>
+
+                <div className="pt-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">طبيعة الحساب</span>
+                  <span className="text-xs font-bold text-slate-700">
+                    {selectedAccount.nature === 'debit' ? 'مدين (Debit)' : 'دائن (Credit)'}
+                  </span>
+                </div>
+
+                <div className="pt-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">الحساب الأب</span>
+                  <p className="text-xs text-slate-700">
+                    {selectedAccount.parent_id ? (
+                      <>
+                        <span className="font-mono font-bold text-slate-850" dir="ltr">
+                          {accounts.find(a => a.id === selectedAccount.parent_id)?.code}
+                        </span>
+                        {' - '}
+                        <span className="font-bold">
+                          {accounts.find(a => a.id === selectedAccount.parent_id)?.name_ar}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400 italic">لا يوجد (حساب جذر رئيسي)</span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="pt-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">المستوى في الشجرة المحاسبية</span>
+                  <span className="text-xs font-black text-slate-800 font-mono">الـمـسـتـوى {selectedAccount.level}</span>
+                </div>
+
+                <div className="pt-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">نوع ترحيل الحساب</span>
+                  <span className={`inline-block text-[10px] font-black py-1 px-3 rounded-full border ${
+                    selectedAccount.allow_direct_posting 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {selectedAccount.allow_direct_posting ? 'يقبل القيود والترحيل المباشر' : 'حساب تجميعي لا يقبل قيود مباشرة'}
+                  </span>
+                </div>
+
+                <div className="pt-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">حالة الحساب</span>
+                  <span className={`inline-block text-[10px] font-black py-1 px-3 rounded-full border ${
+                    selectedAccount.is_active 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                      : 'bg-red-50 text-red-700 border-red-200'
+                  }`}>
+                    {selectedAccount.is_active ? 'نشط ومتاح' : 'معطل ومغلق'}
+                  </span>
+                </div>
+
+                <div className="pt-3.5">
+                  <span className="text-[10px] font-bold text-slate-400 block mb-1">مصدر الحساب</span>
+                  <span className={`inline-block text-[10px] font-black py-1 px-3 rounded-full border ${
+                    selectedAccount.is_system 
+                      ? 'bg-slate-100 text-slate-600 border-slate-200' 
+                      : 'bg-purple-50 text-purple-700 border-purple-200'
+                  }`}>
+                    {selectedAccount.is_system ? 'حساب نظامي افتراضي ومحمي' : 'حساب مخصص للمنشأة'}
+                  </span>
+                </div>
+
+                {selectedAccount.description && (
+                  <div className="pt-3.5">
+                    <span className="text-[10px] font-bold text-slate-400 block mb-1">الوصف والملاحظات التفصيلية</span>
+                    <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">
+                      {selectedAccount.description}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Drawer Footer Actions */}
+            <div className="p-6 border-t border-slate-150 bg-slate-50/50 flex flex-col gap-3">
+              {selectedAccount.allow_direct_posting ? (
+                <button
+                  onClick={() => {
+                    onViewLedger?.(selectedAccount.id);
+                    setSelectedAccount(null);
+                  }}
+                  className="w-full py-3 bg-brand-blue hover:bg-brand-blue-deep text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 font-sans"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>عرض دفتر الأستاذ العام</span>
+                </button>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-800 text-[10px] font-bold text-right leading-relaxed font-sans">
+                  هذا حساب تجميعي، اختر حسابًا فرعيًا يقبل القيود المباشرة لعرض دفتر الأستاذ.
+                </div>
+              )}
+              
+              <button
+                onClick={() => setSelectedAccount(null)}
+                className="w-full py-3 bg-slate-150 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer font-sans"
+              >
+                إغلاق التفاصيل
+              </button>
+            </div>
+
           </div>
         </div>
       )}

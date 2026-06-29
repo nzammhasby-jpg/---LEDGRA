@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { salesService, CreateReceiptInput } from '../../lib/salesService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
+import { auditService } from '../../lib/auditService';
 import { 
   Receipt, 
   Customer, 
@@ -38,14 +39,19 @@ import {
   ArrowRight,
   TrendingDown,
   Percent,
-  CheckCircle2
+  CheckCircle2,
+  Edit,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 
 export const ReceiptsPage: React.FC = () => {
-  const { currentOrg, roleInCurrentOrg } = useAuth();
+  const { currentOrg, roleInCurrentOrg, profile } = useAuth();
   
   // Checking permissions: Owner, admin, accountant can approve/cancel; Sales can only create drafts.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
+
+  const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null);
 
   // Data State
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -184,6 +190,7 @@ export const ReceiptsPage: React.FC = () => {
   const totalAllocated = getTotalAllocated();
 
   const handleAddNewReceipt = () => {
+    setEditingReceipt(null);
     setCustomerId('');
     setReceiptDate(new Date().toISOString().split('T')[0]);
     setAmount('0');
@@ -200,6 +207,69 @@ export const ReceiptsPage: React.FC = () => {
     setFormError(null);
     setViewState('add');
   };
+
+  const handleStartEditReceipt = useCallback((receipt: Receipt) => {
+    setEditingReceipt(receipt);
+    setCustomerId(receipt.customer_id);
+    setReceiptDate(receipt.receipt_date);
+    setAmount(String(receipt.amount));
+    setPaymentMethod(receipt.payment_method);
+    setCashAccountId(receipt.cash_account_id || '');
+    setBankAccountId(receipt.bank_account_id || '');
+    setReference(receipt.reference || '');
+    setNotes(receipt.notes || '');
+    const allocMap: Record<string, string> = {};
+    (receipt.allocations || []).forEach(al => {
+      allocMap[al.sales_invoice_id] = String(al.allocated_amount);
+    });
+    setAllocations(allocMap);
+    setFormError(null);
+    setViewState('add');
+  }, []);
+
+  const handleCreateCorrectionCopy = useCallback(async (oldReceipt: Receipt) => {
+    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من السند رقم ${oldReceipt.receipt_number}؟`)) return;
+    setSaveLoading(true);
+    setFormError(null);
+    try {
+      const copyPayload: CreateReceiptInput = {
+        customer_id: oldReceipt.customer_id,
+        receipt_date: new Date().toISOString().split('T')[0],
+        amount: oldReceipt.amount,
+        payment_method: oldReceipt.payment_method,
+        cash_account_id: oldReceipt.cash_account_id || undefined,
+        bank_account_id: oldReceipt.bank_account_id || undefined,
+        reference: oldReceipt.reference || undefined,
+        notes: `نسخة تصحيحية من السند: ${oldReceipt.receipt_number}` + (oldReceipt.notes ? `\n\n${oldReceipt.notes}` : ''),
+        allocations: (oldReceipt.allocations || []).map(al => ({
+          sales_invoice_id: al.sales_invoice_id,
+          allocated_amount: al.allocated_amount
+        }))
+      };
+
+      const newId = await salesService.createReceipt(currentOrg!.id, copyPayload);
+      
+      await auditService.logAction(currentOrg!.id, profile?.id || null, 'correction_copy_created', {
+        source_type: 'receipt',
+        original_id: oldReceipt.id,
+        original_number: oldReceipt.receipt_number,
+        new_draft_id: newId
+      });
+
+      // Reload lists
+      const updatedList = await salesService.getReceipts(currentOrg!.id);
+      setReceipts(updatedList);
+
+      // Open in edit mode immediately
+      const newReceipt = updatedList.find(r => r.id === newId) || await salesService.getReceipt(currentOrg!.id, newId);
+      handleStartEditReceipt(newReceipt);
+    } catch (err: any) {
+      setFormError(getErrorMessage(err));
+      alert(`فشل إنشاء النسخة التصحيحية: ${getErrorMessage(err)}`);
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [currentOrg, profile, handleStartEditReceipt]);
 
   // Submit Receipt draft
   const handleSubmitReceipt = async (e: React.FormEvent) => {
@@ -268,15 +338,29 @@ export const ReceiptsPage: React.FC = () => {
         allocations: allocationPayload
       };
 
-      const newId = await salesService.createReceipt(currentOrg!.id, receiptPayload);
+      let activeId = '';
+      if (editingReceipt) {
+        await salesService.updateReceipt(currentOrg!.id, editingReceipt.id, receiptPayload);
+        activeId = editingReceipt.id;
+        
+        await auditService.logAction(currentOrg!.id, profile?.id || null, 'draft_updated', {
+          source_type: 'receipt',
+          receipt_id: editingReceipt.id,
+          receipt_number: editingReceipt.receipt_number
+        });
+      } else {
+        const newId = await salesService.createReceipt(currentOrg!.id, receiptPayload);
+        activeId = newId;
+      }
 
       // Reload lists
       const updatedList = await salesService.getReceipts(currentOrg!.id);
       setReceipts(updatedList);
 
-      // Fetch newly created details and open details view
-      const fullDetails = await salesService.getReceipt(currentOrg!.id, newId);
+      // Fetch newly saved details and open details view
+      const fullDetails = await salesService.getReceipt(currentOrg!.id, activeId);
       setSelectedReceipt(fullDetails);
+      setEditingReceipt(null);
       setViewState('view');
     } catch (err: any) {
       setFormError(getErrorMessage(err));
@@ -580,6 +664,30 @@ export const ReceiptsPage: React.FC = () => {
                               <span>طباعة A4</span>
                             </a>
 
+                            {/* Edit option if draft */}
+                            {rc.status === 'draft' && (
+                              <button
+                                onClick={() => handleStartEditReceipt(rc)}
+                                className="p-1 px-1.5 text-purple-600 hover:bg-purple-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                title="تعديل السند المسودة"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                <span>تعديل</span>
+                              </button>
+                            )}
+
+                            {/* Correction copy option if approved */}
+                            {rc.status === 'approved' && (
+                              <button
+                                onClick={() => handleCreateCorrectionCopy(rc)}
+                                className="p-1 px-1.5 text-amber-600 hover:bg-amber-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                title="إنشاء نسخة تصحيحية من هذا السند المعتمد"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>نسخة تصحيحية</span>
+                              </button>
+                            )}
+
                             {/* Approve option if draft */}
                             {rc.status === 'draft' && canApproveOrCancel && (
                               <button
@@ -633,6 +741,44 @@ export const ReceiptsPage: React.FC = () => {
       {viewState === 'add' && (
         <form onSubmit={handleSubmitReceipt} className="space-y-6 animate-fade-in">
           
+          {editingReceipt && editingReceipt.status !== 'draft' && (
+            <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-sans">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="text-xs font-bold leading-relaxed">
+                  لا يمكن تعديل عملية معتمدة أو مرحّلة مباشرة. استخدم إنشاء نسخة تصحيحية أو عكس القيد للحفاظ على سلامة الدفاتر.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedReceipt(editingReceipt);
+                    setViewState('view');
+                  }}
+                  className="px-3 py-1.5 bg-white border border-slate-250 text-slate-700 text-[10px] font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  عرض العملية
+                </button>
+                <a
+                  href={`#/print/receipt/${editingReceipt.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-white border border-slate-250 text-slate-700 text-[10px] font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  طباعة
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCreateCorrectionCopy(editingReceipt)}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
+                >
+                  إنشاء نسخة تصحيحية
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Header Action bar */}
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2">
@@ -644,8 +790,12 @@ export const ReceiptsPage: React.FC = () => {
                 <ArrowRight className="w-4.5 h-4.5" />
               </button>
               <div>
-                <h1 className="text-md font-bold text-slate-800">تسجيل سند كشف قبض وتوزيع (مسودة)</h1>
-                <p className="text-[10px] text-slate-400">تسجيل مدفوعات العملاء نقداً أو بالبنك، وتخصيصها لتخفيض الصافي لفواتير المبيعات المطلوبة.</p>
+                <h1 className="text-md font-bold text-slate-800">
+                  {editingReceipt ? `تعديل سند قبض مسودة: ${editingReceipt.receipt_number}` : 'تسجيل سند كشف قبض وتوزيع (مسودة)'}
+                </h1>
+                <p className="text-[10px] text-slate-400">
+                  {editingReceipt ? 'تعديل وتحديث بيانات سند القبض المعلق قبل الاعتماد المحاسبي.' : 'تسجيل مدفوعات العملاء نقداً أو بالبنك، وتخصيصها لتخفيض الصافي لفواتير المبيعات المطلوبة.'}
+                </p>
               </div>
             </div>
 
@@ -659,7 +809,7 @@ export const ReceiptsPage: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={saveLoading}
+                disabled={saveLoading || (editingReceipt !== null && editingReceipt.status !== 'draft')}
                 className="px-5 py-2.25 bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-bold rounded-xl shadow-lg cursor-pointer transition flex items-center justify-center gap-2"
               >
                 {saveLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -978,6 +1128,28 @@ export const ReceiptsPage: React.FC = () => {
                 <div className="text-[11px] bg-slate-100 text-slate-700 font-bold p-2 rounded-xl border border-slate-150 font-sans">
                   قيد المقبوضات: #{selectedReceipt.journal_entry_id.substring(0, 8)}
                 </div>
+              )}
+
+              {/* Edit option if draft */}
+              {selectedReceipt.status === 'draft' && (
+                <button
+                  onClick={() => handleStartEditReceipt(selectedReceipt)}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>تعديل المسودة</span>
+                </button>
+              )}
+
+              {/* Correction Copy option if approved */}
+              {selectedReceipt.status === 'approved' && (
+                <button
+                  onClick={() => handleCreateCorrectionCopy(selectedReceipt)}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>إنشاء نسخة تصحيحية</span>
+                </button>
               )}
 
               {selectedReceipt.status === 'draft' && canApproveOrCancel && (

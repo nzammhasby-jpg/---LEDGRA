@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { journalService } from '../../lib/journalService';
 import { accountingService } from '../../lib/accountingService';
@@ -61,6 +61,40 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
   const [baselineLoading, setBaselineLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // New inline filters
+  const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
+  const [referenceFilter, setReferenceFilter] = useState('');
+  const [descriptionFilter, setDescriptionFilter] = useState('');
+
+  // Source links resolution state
+  interface ResolvedSource {
+    type: 'sales_invoice' | 'receipt' | 'purchase_bill' | 'payment' | 'journal_entry';
+    id: string;
+    label: string;
+    printPath: string;
+  }
+  const [sourceLinks, setSourceLinks] = useState<Record<string, ResolvedSource>>({});
+
+  const resolveSources = async (ledgerRecords: LedgerRecord[]) => {
+    if (!currentOrg || ledgerRecords.length === 0) return;
+    
+    // Find unique entry IDs
+    const uniqueEntryIds = Array.from(new Set(ledgerRecords.map(r => r.entry_id).filter(Boolean))) as string[];
+    
+    try {
+      const resolved: Record<string, ResolvedSource> = {};
+      await Promise.all(
+        uniqueEntryIds.map(async (entryId) => {
+          const res = await journalService.resolveJournalEntrySource(currentOrg.id, entryId);
+          resolved[entryId] = res;
+        })
+      );
+      setSourceLinks(resolved);
+    } catch (err) {
+      console.error('Error resolving source links:', err);
+    }
+  };
+
   useEffect(() => {
     if (currentOrg) {
       loadBaselineOptions();
@@ -105,6 +139,7 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
           });
           setReportAccount(report.account);
           setRecords(report.records);
+          await resolveSources(report.records);
         } catch (err: any) {
           setError(getErrorMessage(err));
           setReportAccount(null);
@@ -139,6 +174,7 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
 
       setReportAccount(report.account);
       setRecords(report.records);
+      await resolveSources(report.records);
     } catch (err: any) {
       setError(getErrorMessage(err));
       setReportAccount(null);
@@ -157,15 +193,65 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
     setRecords([]);
     setReportAccount(null);
     setError(null);
+    setSourceTypeFilter('all');
+    setReferenceFilter('');
+    setDescriptionFilter('');
+    setSourceLinks({});
   };
 
   // Only direct leaf accounts allow posting and ledger records
   const leafAccounts = accounts.filter(a => a.allow_direct_posting && a.is_active);
 
+  // Compute filtered records in memory
+  const filteredRecords = useMemo(() => {
+    return records.filter(rec => {
+      // 1. Source type filter
+      if (sourceTypeFilter !== 'all') {
+        const resolved = sourceLinks[rec.entry_id || ''];
+        const type = resolved ? resolved.type : 'journal_entry';
+        
+        // Custom manual check as fallback if not resolved yet
+        // Value mapping: 'manual', 'sales_invoice', 'receipt', 'purchase_bill', 'payment', 'journal_entry', 'reversal'
+        if (sourceTypeFilter === 'manual' || sourceTypeFilter === 'journal_entry') {
+          if (type !== 'journal_entry') return false;
+        } else if (sourceTypeFilter === 'reversal') {
+          const desc = (rec.entry_description || '').toLowerCase();
+          const num = (rec.entry_number || '').toLowerCase();
+          const isRev = desc.includes('عكس') || num.startsWith('rev');
+          if (!isRev) return false;
+        } else {
+          if (type !== sourceTypeFilter) return false;
+        }
+      }
+
+      // 2. Reference filter
+      if (referenceFilter.trim()) {
+        const ref = (rec.reference || '').toLowerCase();
+        const num = (rec.entry_number || '').toLowerCase();
+        const search = referenceFilter.trim().toLowerCase();
+        if (!ref.includes(search) && !num.includes(search)) {
+          return false;
+        }
+      }
+
+      // 3. Description filter
+      if (descriptionFilter.trim()) {
+        const desc = (rec.entry_description || '').toLowerCase();
+        const lineDesc = (rec.line_description || '').toLowerCase();
+        const search = descriptionFilter.trim().toLowerCase();
+        if (!desc.includes(search) && !lineDesc.includes(search)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [records, sourceTypeFilter, referenceFilter, descriptionFilter, sourceLinks]);
+
   // Compute sums
-  const totalDebit = records.reduce((sum, r) => sum + r.debit, 0);
-  const totalCredit = records.reduce((sum, r) => sum + r.credit, 0);
-  const finalBalance = records.length > 0 ? records[records.length - 1].running_balance : 0;
+  const totalDebit = filteredRecords.reduce((sum, r) => sum + r.debit, 0);
+  const totalCredit = filteredRecords.reduce((sum, r) => sum + r.credit, 0);
+  const finalBalance = filteredRecords.length > 0 ? filteredRecords[filteredRecords.length - 1].running_balance : 0;
 
   return (
     <div className="space-y-6">
@@ -327,12 +413,74 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
             </div>
           </div>
 
+          {/* Real-time Inline Results Filtering */}
+          <div className="bg-slate-50 border border-slate-150 rounded-2xl p-4.5 flex flex-col md:flex-row items-stretch md:items-end gap-3.5 font-sans">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Source Type filter */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-slate-500">فلترة حسب نوع المصدر</label>
+                <select
+                  value={sourceTypeFilter}
+                  onChange={(e) => setSourceTypeFilter(e.target.value)}
+                  className="w-full text-xs font-bold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                >
+                  <option value="all">كل المصادر</option>
+                  <option value="manual">قيود يومية يدوية</option>
+                  <option value="sales_invoice">فواتير مبيعات</option>
+                  <option value="receipt">سندات قبض</option>
+                  <option value="purchase_bill">فواتير مشتريات</option>
+                  <option value="payment">سندات صرف</option>
+                  <option value="reversal">قيود عكسية</option>
+                </select>
+              </div>
+
+              {/* Reference filter */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-slate-500">بحث برقم المرجع أو رقم القيد</label>
+                <input
+                  type="text"
+                  placeholder="مثال: REF-12345 أو القيد..."
+                  value={referenceFilter}
+                  onChange={(e) => setReferenceFilter(e.target.value)}
+                  className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                />
+              </div>
+
+              {/* Description filter */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-slate-500">بحث في البيان أو الشرح التفصيلي</label>
+                <input
+                  type="text"
+                  placeholder="اكتب شرح البند أو البيان..."
+                  value={descriptionFilter}
+                  onChange={(e) => setDescriptionFilter(e.target.value)}
+                  className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-800 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Clear Filters Button */}
+            {(sourceTypeFilter !== 'all' || referenceFilter !== '' || descriptionFilter !== '') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSourceTypeFilter('all');
+                  setReferenceFilter('');
+                  setDescriptionFilter('');
+                }}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-250 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer shrink-0 font-sans"
+              >
+                تفريغ الفلاتر الفرعية
+              </button>
+            )}
+          </div>
+
           {/* Ledger Table List of entries */}
           <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
             <div className="px-5 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800">بيانات كشف الحركة المفصلة</span>
               <div className="flex items-center gap-3">
-                {records.length > 0 && selectedAccountId && (
+                {filteredRecords.length > 0 && selectedAccountId && (
                   <a
                     href={`#/print/general-ledger?accountId=${selectedAccountId}&fiscalYearId=${selectedYearId}&startDate=${startDate}&endDate=${endDate}`}
                     target="_blank"
@@ -343,15 +491,17 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
                     طباعة كشف الحساب الحالي (A4)
                   </a>
                 )}
-                <span className="text-[10px] text-slate-400 font-bold">عدد القيود: <span className="font-mono text-slate-600 font-black">{records.length}</span></span>
+                <span className="text-[10px] text-slate-400 font-bold">
+                  عدد القيود المعروضة: <span className="font-mono text-slate-600 font-black">{filteredRecords.length}</span> من أصل <span className="font-mono text-slate-400 font-bold">{records.length}</span>
+                </span>
               </div>
             </div>
 
-            {records.length === 0 ? (
+            {filteredRecords.length === 0 ? (
               <div className="py-16 text-center text-slate-400 flex flex-col items-center justify-center">
                 <TrendingUp className="w-10 h-10 text-slate-200 mb-3" />
-                <span className="font-bold text-xs text-slate-600">لا يوجد حركات قيود مرحلة على هذا الحساب</span>
-                <p className="text-[10px] text-slate-400 mt-1 max-w-sm">لم تسجل أي قيود يومية مرحلة ومؤثرة مالياً على هذا الحساب ضمن الفترة المالية المحددة.</p>
+                <span className="font-bold text-xs text-slate-600">لا يوجد حركات قيود مطابقة للفلاتر</span>
+                <p className="text-[10px] text-slate-400 mt-1 max-w-sm">لم تسجل أي قيود يومية مطابقة لخيارات الفلترة الحالية على هذا الحساب.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -369,37 +519,48 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                    {records.map((rec, idx) => {
+                    {filteredRecords.map((rec, idx) => {
                       // Custom dynamic source parser helper
                       const getSourceDocLink = (r: any) => {
+                        const resolved = sourceLinks[r.entry_id || ''];
+                        if (resolved && resolved.id) {
+                          return {
+                            type: resolved.label,
+                            path: resolved.printPath
+                          };
+                        }
+                        
+                        // Fallback parsing just in case it is still loading or resolving
                         const desc = r.entry_description || '';
                         const num = r.entry_number || '';
+                        const sId = r.source_id;
                         
-                        if (desc.includes('فاتورة مبيعات') || num.startsWith('INV-')) {
+                        if (sId && (desc.includes('فاتورة مبيعات') || num.startsWith('INV-'))) {
                           return {
                             type: 'فاتورة مبيعات',
-                            path: `#/print/sales-invoice/${r.source_id || ''}`
+                            path: `#/print/sales-invoice/${sId}`
                           };
                         }
-                        if (desc.includes('سند قبض') || num.startsWith('RCP-')) {
+                        if (sId && (desc.includes('سند قبض') || num.startsWith('RCP-'))) {
                           return {
                             type: 'سند قبض',
-                            path: `#/print/receipt/${r.source_id || ''}`
+                            path: `#/print/receipt/${sId}`
                           };
                         }
-                        if (desc.includes('فاتورة مشتريات') || num.startsWith('BIL-')) {
+                        if (sId && (desc.includes('فاتورة مشتريات') || num.startsWith('BIL-'))) {
                           return {
                             type: 'فاتورة مشتريات',
-                            path: `#/print/purchase-bill/${r.source_id || ''}`
+                            path: `#/print/purchase-bill/${sId}`
                           };
                         }
-                        if (desc.includes('سند صرف') || num.startsWith('PAY-')) {
+                        if (sId && (desc.includes('سند صرف') || num.startsWith('PAY-'))) {
                           return {
                             type: 'سند صرف',
-                            path: `#/print/payment/${r.source_id || ''}`
+                            path: `#/print/payment/${sId}`
                           };
                         }
-                        // Fallback to journal entry print
+
+                        // Absolute fallback to journal entry print
                         return {
                           type: 'قيد محاسبي',
                           path: `#/print/journal-entry/${r.entry_id || ''}`

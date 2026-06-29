@@ -6,6 +6,7 @@ import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
 import { zatcaService } from '../../lib/zatcaService';
 import { supabase } from '../../lib/supabase';
+import { auditService } from '../../lib/auditService';
 import { 
   SalesInvoice, 
   Customer, 
@@ -49,12 +50,14 @@ import {
 } from 'lucide-react';
 
 export const InvoicesPage: React.FC = () => {
-  const { currentOrg, roleInCurrentOrg } = useAuth();
+  const { currentOrg, roleInCurrentOrg, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
   // Checking permissions: Owner, admin, accountant can approve/cancel; Sales can only create drafts.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
+
+  const [editingInvoice, setEditingInvoice] = useState<SalesInvoice | null>(null);
 
   // Data State
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
@@ -187,6 +190,7 @@ export const InvoicesPage: React.FC = () => {
 
   // Initialize a new draft invoice form
   const handleAddNewInvoice = useCallback(() => {
+    setEditingInvoice(null);
     setCustomerId('');
     setInvoiceDate(new Date().toISOString().split('T')[0]);
     // default due date: today + 30 days
@@ -209,6 +213,71 @@ export const InvoicesPage: React.FC = () => {
     setFormError(null);
     setViewState('add');
   }, []);
+
+  const handleStartEditInvoice = useCallback((invoice: SalesInvoice) => {
+    setEditingInvoice(invoice);
+    setCustomerId(invoice.customer_id);
+    setInvoiceDate(invoice.invoice_date);
+    setDueDate(invoice.due_date);
+    setNotes(invoice.notes || '');
+    setLines((invoice.lines || []).map(l => ({
+      uuid: Math.random().toString(),
+      item_id: l.item_id,
+      description: l.description || '',
+      quantity: String(l.quantity),
+      unit_price: String(l.unit_price),
+      discount_amount: String(l.discount_amount),
+      tax_rate: l.tax_rate,
+      revenue_account_id: l.revenue_account_id
+    })));
+    setFormError(null);
+    setViewState('add');
+  }, []);
+
+  const handleCreateCorrectionCopy = useCallback(async (oldInvoice: SalesInvoice) => {
+    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من الفاتورة رقم ${oldInvoice.invoice_number}؟`)) return;
+    setSaveLoading(true);
+    setFormError(null);
+    try {
+      const copyPayload: CreateInvoiceInput = {
+        customer_id: oldInvoice.customer_id,
+        invoice_date: new Date().toISOString().split('T')[0],
+        due_date: new Date().toISOString().split('T')[0],
+        notes: `نسخة تصحيحية من: ${oldInvoice.invoice_number}` + (oldInvoice.notes ? `\n\n${oldInvoice.notes}` : ''),
+        lines: (oldInvoice.lines || []).map(l => ({
+          item_id: l.item_id,
+          description: l.description || undefined,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          discount_amount: l.discount_amount,
+          tax_rate: l.tax_rate,
+          revenue_account_id: l.revenue_account_id
+        }))
+      };
+
+      const newId = await salesService.createSalesInvoice(currentOrg!.id, copyPayload);
+      
+      await auditService.logAction(currentOrg!.id, profile?.id || null, 'correction_copy_created', {
+        source_type: 'sales_invoice',
+        original_id: oldInvoice.id,
+        original_number: oldInvoice.invoice_number,
+        new_draft_id: newId
+      });
+
+      // Reload invoices
+      const updatedList = await salesService.getSalesInvoices(currentOrg!.id);
+      setInvoices(updatedList);
+
+      // Open in edit mode immediately
+      const newInvoice = updatedList.find(i => i.id === newId) || await salesService.getSalesInvoice(currentOrg!.id, newId);
+      handleStartEditInvoice(newInvoice);
+    } catch (err: any) {
+      setFormError(getErrorMessage(err));
+      alert(`فشل إنشاء النسخة التصحيحية: ${getErrorMessage(err)}`);
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [currentOrg, profile, handleStartEditInvoice]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -331,15 +400,29 @@ export const InvoicesPage: React.FC = () => {
         }))
       };
 
-      const newId = await salesService.createSalesInvoice(currentOrg!.id, invoicePayload);
+      let activeId = '';
+      if (editingInvoice) {
+        await salesService.updateSalesInvoice(currentOrg!.id, editingInvoice.id, invoicePayload);
+        activeId = editingInvoice.id;
+        
+        await auditService.logAction(currentOrg!.id, profile?.id || null, 'draft_updated', {
+          source_type: 'sales_invoice',
+          invoice_id: editingInvoice.id,
+          invoice_number: editingInvoice.invoice_number
+        });
+      } else {
+        const newId = await salesService.createSalesInvoice(currentOrg!.id, invoicePayload);
+        activeId = newId;
+      }
       
       // Reload invoices
       const updatedList = await salesService.getSalesInvoices(currentOrg!.id);
       setInvoices(updatedList);
 
-      // Select newly created invoice and open viewer
-      const fullInv = await salesService.getSalesInvoice(currentOrg!.id, newId);
+      // Select newly saved invoice and open viewer
+      const fullInv = await salesService.getSalesInvoice(currentOrg!.id, activeId);
       setSelectedInvoice(fullInv);
+      setEditingInvoice(null);
       setViewState('view');
     } catch (err: any) {
       setFormError(getErrorMessage(err));
@@ -847,6 +930,30 @@ export const InvoicesPage: React.FC = () => {
                               <span>طباعة A4</span>
                             </a>
 
+                            {/* Edit option if draft */}
+                            {inv.status === 'draft' && (
+                              <button
+                                onClick={() => handleStartEditInvoice(inv)}
+                                className="p-1 px-1.5 text-purple-600 hover:bg-purple-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                title="تعديل الفاتورة المسودة"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                <span>تعديل</span>
+                              </button>
+                            )}
+
+                            {/* Correction copy option if approved */}
+                            {inv.status === 'approved' && (
+                              <button
+                                onClick={() => handleCreateCorrectionCopy(inv)}
+                                className="p-1 px-1.5 text-amber-600 hover:bg-amber-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                title="إنشاء نسخة تصحيحية من هذه الفاتورة المعتمدة"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>نسخة تصحيحية</span>
+                              </button>
+                            )}
+
                             {/* Approve option if draft */}
                             {inv.status === 'draft' && canApproveOrCancel && (
                               <button
@@ -900,6 +1007,44 @@ export const InvoicesPage: React.FC = () => {
       {viewState === 'add' && (
         <form onSubmit={handleSubmitInvoice} className="space-y-6 animate-fade-in">
           
+          {editingInvoice && editingInvoice.status !== 'draft' && (
+            <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-sans">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="text-xs font-bold leading-relaxed">
+                  لا يمكن تعديل عملية معتمدة أو مرحّلة مباشرة. استخدم إنشاء نسخة تصحيحية أو عكس القيد للحفاظ على سلامة الدفاتر.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedInvoice(editingInvoice);
+                    setViewState('view');
+                  }}
+                  className="px-3 py-1.5 bg-white border border-slate-250 text-slate-700 text-[10px] font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  عرض العملية
+                </button>
+                <a
+                  href={`#/print/sales-invoice/${editingInvoice.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-white border border-slate-250 text-slate-700 text-[10px] font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  طباعة
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCreateCorrectionCopy(editingInvoice)}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
+                >
+                  إنشاء نسخة تصحيحية
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Header Action bar */}
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center gap-2">
@@ -911,8 +1056,12 @@ export const InvoicesPage: React.FC = () => {
                 <ArrowRight className="w-4.5 h-4.5" />
               </button>
               <div>
-                <h1 className="text-md font-bold text-slate-800">إنشاء فاتورة مبيعات جديدة (مسودة)</h1>
-                <p className="text-[10px] text-slate-400">قم بتسجيل تفاصيل الفاتورة لتوليد القيد المحاسبي بعد الاعتماد.</p>
+                <h1 className="text-md font-bold text-slate-800">
+                  {editingInvoice ? `تعديل فاتورة مبيعات مسودة: ${editingInvoice.invoice_number}` : 'إنشاء فاتورة مبيعات جديدة (مسودة)'}
+                </h1>
+                <p className="text-[10px] text-slate-400">
+                  {editingInvoice ? 'تعديل بيانات الفاتورة المسودة قبل الاعتماد النهائي.' : 'قم بتسجيل تفاصيل الفاتورة لتوليد القيد المحاسبي بعد الاعتماد.'}
+                </p>
               </div>
             </div>
 
@@ -926,7 +1075,7 @@ export const InvoicesPage: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={saveLoading}
+                disabled={saveLoading || (editingInvoice !== null && editingInvoice.status !== 'draft')}
                 className="px-5 py-22 bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-bold rounded-xl shadow-lg cursor-pointer transition flex items-center justify-center gap-2"
               >
                 {saveLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -1316,6 +1465,28 @@ export const InvoicesPage: React.FC = () => {
                 <div className="text-[11px] bg-slate-100 text-slate-700 font-bold p-2 rounded-xl border border-slate-150 font-sans">
                   قيد اليومية الصادر: #{selectedInvoice.journal_entry_id.substring(0, 8)}
                 </div>
+              )}
+
+              {/* Edit option if draft */}
+              {selectedInvoice.status === 'draft' && (
+                <button
+                  onClick={() => handleStartEditInvoice(selectedInvoice)}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>تعديل المسودة</span>
+                </button>
+              )}
+
+              {/* Correction Copy option if approved */}
+              {selectedInvoice.status === 'approved' && (
+                <button
+                  onClick={() => handleCreateCorrectionCopy(selectedInvoice)}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>إنشاء نسخة تصحيحية</span>
+                </button>
               )}
 
               {/* Approved/Reversed Status messages inside header */}

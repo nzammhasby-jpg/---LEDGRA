@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { purchaseService, CreatePurchaseBillInput } from '../../lib/purchaseService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
+import { auditService } from '../../lib/auditService';
 import { 
   PurchaseBill, 
   Vendor, 
@@ -35,14 +36,18 @@ import {
   Loader2,
   Calendar,
   AlertTriangle,
-  ArrowRight
+  ArrowRight,
+  Edit,
+  RefreshCw
 } from 'lucide-react';
 
 export const PurchaseBillsPage: React.FC = () => {
-  const { currentOrg, roleInCurrentOrg } = useAuth();
+  const { currentOrg, roleInCurrentOrg, profile } = useAuth();
   
   // Checking permissions: Owner, admin, accountant can approve/cancel; viewers cannot edit.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
+
+  const [editingBill, setEditingBill] = useState<PurchaseBill | null>(null);
 
   // Data State
   const [bills, setBills] = useState<PurchaseBill[]>([]);
@@ -154,6 +159,7 @@ export const PurchaseBillsPage: React.FC = () => {
 
   // Initialize a new draft bill form
   const handleAddNewBill = () => {
+    setEditingBill(null);
     setVendorId('');
     setVendorInvoiceNumber('');
     setBillDate(new Date().toISOString().split('T')[0]);
@@ -178,6 +184,75 @@ export const PurchaseBillsPage: React.FC = () => {
     setFormError(null);
     setViewState('add');
   };
+
+  const handleStartEditBill = useCallback((bill: PurchaseBill) => {
+    setEditingBill(bill);
+    setVendorId(bill.vendor_id);
+    setVendorInvoiceNumber(bill.vendor_invoice_number || '');
+    setBillDate(bill.bill_date);
+    setDueDate(bill.due_date);
+    setNotes(bill.notes || '');
+    setLines((bill.lines || []).map(l => ({
+      uuid: Math.random().toString(),
+      item_id: l.item_id,
+      description: l.description || '',
+      quantity: String(l.quantity),
+      unit_cost: String(l.unit_cost),
+      discount_amount: String(l.discount_amount),
+      tax_rate: l.tax_rate,
+      expense_account_id: l.expense_account_id || '',
+      inventory_account_id: l.inventory_account_id || ''
+    })));
+    setFormError(null);
+    setViewState('add');
+  }, []);
+
+  const handleCreateCorrectionCopy = useCallback(async (oldBill: PurchaseBill) => {
+    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من الفاتورة رقم ${oldBill.bill_number}؟`)) return;
+    setSaveLoading(true);
+    setFormError(null);
+    try {
+      const copyPayload: CreatePurchaseBillInput = {
+        vendor_id: oldBill.vendor_id,
+        vendor_invoice_number: oldBill.vendor_invoice_number ? `${oldBill.vendor_invoice_number}-CORR` : undefined,
+        bill_date: new Date().toISOString().split('T')[0],
+        due_date: new Date().toISOString().split('T')[0],
+        notes: `نسخة تصحيحية من الفاتورة: ${oldBill.bill_number}` + (oldBill.notes ? `\n\n${oldBill.notes}` : ''),
+        lines: (oldBill.lines || []).map(l => ({
+          item_id: l.item_id,
+          description: l.description || undefined,
+          quantity: l.quantity,
+          unit_cost: l.unit_cost,
+          discount_amount: l.discount_amount,
+          tax_rate: l.tax_rate,
+          expense_account_id: l.expense_account_id || undefined,
+          inventory_account_id: l.inventory_account_id || undefined
+        }))
+      };
+
+      const newId = await purchaseService.createPurchaseBill(currentOrg!.id, copyPayload);
+      
+      await auditService.logAction(currentOrg!.id, profile?.id || null, 'correction_copy_created', {
+        source_type: 'purchase_bill',
+        original_id: oldBill.id,
+        original_number: oldBill.bill_number,
+        new_draft_id: newId
+      });
+
+      // Reload bills
+      const updatedList = await purchaseService.getPurchaseBills(currentOrg!.id);
+      setBills(updatedList);
+
+      // Open in edit mode immediately
+      const newBill = updatedList.find(b => b.id === newId) || await purchaseService.getPurchaseBill(currentOrg!.id, newId);
+      handleStartEditBill(newBill);
+    } catch (err: any) {
+      setFormError(getErrorMessage(err));
+      alert(`فشل إنشاء النسخة التصحيحية: ${getErrorMessage(err)}`);
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [currentOrg, profile, handleStartEditBill]);
 
   // Handle item change in row to auto-populate description, cost, tax rate, and accounts
   const handleLineItemChange = (index: number, itemId: string) => {
@@ -311,8 +386,20 @@ export const PurchaseBillsPage: React.FC = () => {
         lines: processedLines
       };
 
-      await purchaseService.createPurchaseBill(currentOrg!.id, input);
+      if (editingBill) {
+        await purchaseService.updatePurchaseBill(currentOrg!.id, editingBill.id, input);
+        
+        await auditService.logAction(currentOrg!.id, profile?.id || null, 'draft_updated', {
+          source_type: 'purchase_bill',
+          bill_id: editingBill.id,
+          bill_number: editingBill.bill_number
+        });
+      } else {
+        await purchaseService.createPurchaseBill(currentOrg!.id, input);
+      }
+      
       setViewState('list');
+      setEditingBill(null);
       loadData();
     } catch (err: any) {
       setFormError(getErrorMessage(err));
@@ -607,6 +694,28 @@ export const PurchaseBillsPage: React.FC = () => {
                             <Printer className="w-3.5 h-3.5" />
                           </a>
                           
+                          {/* Edit option if draft */}
+                          {b.status === 'draft' && (
+                            <button
+                              onClick={() => handleStartEditBill(b)}
+                              className="bg-purple-50 hover:bg-purple-100 text-purple-600 p-2 rounded-lg transition cursor-pointer"
+                              title="تعديل الفاتورة المسودة"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {/* Correction copy option if approved */}
+                          {b.status === 'approved' && (
+                            <button
+                              onClick={() => handleCreateCorrectionCopy(b)}
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 p-2 rounded-lg transition cursor-pointer"
+                              title="إنشاء نسخة تصحيحية من هذه الفاتورة المعتمدة"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           {b.status === 'draft' && (
                             <>
                               {canApproveOrCancel && (
@@ -665,6 +774,44 @@ export const PurchaseBillsPage: React.FC = () => {
       {viewState === 'add' && (
         <form onSubmit={handleSaveBill} className="space-y-6">
           
+          {editingBill && editingBill.status !== 'draft' && (
+            <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 font-sans">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                <span className="text-xs font-bold leading-relaxed">
+                  لا يمكن تعديل عملية معتمدة أو مرحّلة مباشرة. استخدم إنشاء نسخة تصحيحية أو إلغاء للحفاظ على سلامة الدفاتر.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedBill(editingBill);
+                    setViewState('view');
+                  }}
+                  className="px-3 py-1.5 bg-white border border-slate-250 text-slate-700 text-[10px] font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  عرض العملية
+                </button>
+                <a
+                  href={`#/print/purchase-bill/${editingBill.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-white border border-slate-250 text-slate-700 text-[10px] font-bold rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                >
+                  طباعة
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCreateCorrectionCopy(editingBill)}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
+                >
+                  إنشاء نسخة تصحيحية
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Header page block */}
           <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             <div className="flex items-center gap-3">
@@ -676,8 +823,12 @@ export const PurchaseBillsPage: React.FC = () => {
                 <ArrowRight className="w-4 h-4" />
               </button>
               <div>
-                <h1 className="text-base font-bold text-slate-800">فاتورة مشتريات جديدة (مسودة)</h1>
-                <p className="text-[11px] text-slate-400 mt-0.5">ستقوم بحفظ الفاتورة كمسودة، ثم مراجعتها تمهيداً لاعتمادها ترحيلياً.</p>
+                <h1 className="text-base font-bold text-slate-800">
+                  {editingBill ? `تعديل فاتورة مشتريات مسودة: ${editingBill.bill_number}` : 'فاتورة مشتريات جديدة (مسودة)'}
+                </h1>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {editingBill ? 'تعديل وتحديث بيانات الفاتورة المعلقة قبل الاعتماد المحاسبي والترحيل.' : 'ستقوم بحفظ الفاتورة كمسودة، ثم مراجعتها تمهيداً لاعتمادها ترحيلياً.'}
+                </p>
               </div>
             </div>
             
@@ -691,7 +842,7 @@ export const PurchaseBillsPage: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={saveLoading}
+                disabled={saveLoading || (editingBill !== null && editingBill.status !== 'draft')}
                 className="flex items-center gap-1.5 px-5 py-2 bg-brand-navy hover:bg-brand-navy/95 text-white text-xs font-bold rounded-xl transition shadow disabled:opacity-50 cursor-pointer"
               >
                 {saveLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -1027,6 +1178,28 @@ export const PurchaseBillsPage: React.FC = () => {
                 <Printer className="w-4 h-4 text-slate-500" />
                 <span>تحضير وطباعة الفاتورة A4</span>
               </a>
+
+              {/* Edit option if draft */}
+              {selectedBill.status === 'draft' && (
+                <button
+                  onClick={() => handleStartEditBill(selectedBill)}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>تعديل الفاتورة</span>
+                </button>
+              )}
+
+              {/* Correction copy option if approved */}
+              {selectedBill.status === 'approved' && (
+                <button
+                  onClick={() => handleCreateCorrectionCopy(selectedBill)}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>نسخة تصحيحية</span>
+                </button>
+              )}
               
               {selectedBill.status === 'draft' && canApproveOrCancel && (
                 <button
