@@ -372,6 +372,7 @@ export const Settings: React.FC = () => {
   const [invitingLoading, setInvitingLoading] = useState<boolean>(false);
   const [invitationSuccess, setInvitationSuccess] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
+  const [invitationActionMessage, setInvitationActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Members edit states
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
@@ -528,17 +529,19 @@ export const Settings: React.FC = () => {
 
   // Cancel Invitation
   const handleCancelInvitation = async (invitationId: string) => {
-    if (!window.confirm('هل أنت متأكد من رغبتك في إلغاء هذه الدعوة المعلقة؟')) return;
+    setInvitationActionMessage(null);
+    if (!window.confirm('هل أنت متأكد من رغبتك في إلغاء وحذف هذه الدعوة المعلقة؟')) return;
     try {
       const { error } = await supabase.rpc('cancel_organization_invitation', { p_invitation_id: invitationId });
       if (error) {
-        alert('فشل إلغاء الدعوة: ' + error.message);
+        setInvitationActionMessage({ type: 'error', text: 'فشل إلغاء وحذف الدعوة: ' + error.message });
       } else {
-        alert('تم إلغاء الدعوة بنجاح.');
+        setInvitationActionMessage({ type: 'success', text: 'تم إلغاء وحذف الدعوة بنجاح.' });
         loadInvitations();
+        setTimeout(() => setInvitationActionMessage(null), 6000);
       }
     } catch (err: any) {
-      alert('حدث خطأ غير متوقع: ' + err.message);
+      setInvitationActionMessage({ type: 'error', text: 'حدث خطأ غير متوقع: ' + err.message });
     }
   };
 
@@ -1410,7 +1413,56 @@ export const Settings: React.FC = () => {
                 <span>عذراً، هذا التبويب وصلاحيات دليل المستخدمين متاح فقط لمالك المنشأة والمشرفين المعتمدين عليها.</span>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="space-y-6">
+                {/* Team & Invitations Overview Status Bar */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Card 1: Active Team Members */}
+                  <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-sm flex items-center gap-4">
+                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                      <Users className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 block">أعضاء الفريق والشركاء</span>
+                      <span className="text-sm font-black text-slate-800">
+                        {membersList.filter(m => m.status === 'نشط').length} أعضاء نشطين
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Pending Invitations */}
+                  <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-sm flex items-center gap-4 relative overflow-hidden">
+                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 relative">
+                      <Clock className="w-5 h-5 text-amber-600" />
+                      {invitationsList.some(inv => inv.status === 'pending') && (
+                        <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 block">الدعوات المعلقة (Pending)</span>
+                      <span className="text-sm font-black text-slate-800 flex items-center gap-2">
+                        {invitationsList.filter(inv => inv.status === 'pending').length} قيد الانتظار
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Total Sent Invitations */}
+                  <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-sm flex items-center gap-4">
+                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                      <UserCheck className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 block">إجمالي سجل الدعوات</span>
+                      <span className="text-sm font-black text-slate-800">
+                        {invitationsList.length} دعوة مسجلة
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
                 {/* Right/Top Side: Invite Form */}
                 <div className="lg:col-span-1 space-y-6">
@@ -1617,6 +1669,16 @@ export const Settings: React.FC = () => {
                       <span>الدعوات المرسلة والمعلقة</span>
                     </h4>
 
+                    {invitationActionMessage && (
+                      <div className={`p-3 rounded-xl text-[10px] font-bold leading-relaxed border-r-4 ${
+                        invitationActionMessage.type === 'success' 
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-500' 
+                          : 'bg-red-50 text-red-800 border-red-500'
+                      }`}>
+                        {invitationActionMessage.text}
+                      </div>
+                    )}
+
                     {loadingInvitations ? (
                       <div className="text-center py-4 text-xs text-slate-400">جاري قراءة الدعوات المعلقة...</div>
                     ) : invitationsList.length === 0 ? (
@@ -1651,28 +1713,50 @@ export const Settings: React.FC = () => {
                                   {new Date(inv.expires_at).toLocaleDateString('ar-SA')}
                                 </td>
                                 <td className="py-3 text-center">
-                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold inline-flex items-center gap-1 ${
                                     inv.status === 'pending'
-                                      ? 'bg-amber-50 text-amber-800 animate-pulse'
+                                      ? 'bg-amber-50 text-amber-800 border border-amber-200 animate-pulse'
                                       : inv.status === 'accepted'
-                                      ? 'bg-emerald-50 text-emerald-800'
+                                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                                       : inv.status === 'expired'
-                                      ? 'bg-red-50 text-red-800'
-                                      : 'bg-slate-50 text-slate-400'
+                                      ? 'bg-red-50 text-red-800 border border-red-200'
+                                      : 'bg-slate-50 text-slate-400 border border-slate-200'
                                   }`}>
-                                    {inv.status === 'pending' && 'معلقة'}
-                                    {inv.status === 'accepted' && 'مقبولة'}
-                                    {inv.status === 'expired' && 'منتهية'}
-                                    {inv.status === 'cancelled' && 'ملغاة'}
+                                    {inv.status === 'pending' && (
+                                      <>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                        <span>بانتظار القبول</span>
+                                      </>
+                                    )}
+                                    {inv.status === 'accepted' && (
+                                      <>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                        <span>مقبولة ومفعلة</span>
+                                      </>
+                                    )}
+                                    {inv.status === 'expired' && (
+                                      <>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                        <span>منتهية الصلاحية</span>
+                                      </>
+                                    )}
+                                    {inv.status === 'cancelled' && (
+                                      <>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                        <span>ملغاة</span>
+                                      </>
+                                    )}
                                   </span>
                                 </td>
                                 <td className="py-3 text-left">
                                   {inv.status === 'pending' && (
                                     <button
                                       onClick={() => handleCancelInvitation(inv.id)}
-                                      className="text-red-500 hover:text-red-700 hover:underline text-[10px]"
+                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors duration-200 inline-flex items-center gap-1 text-[10px] font-bold border border-transparent hover:border-red-100 cursor-pointer"
+                                      title="إلغاء وحذف الدعوة المعلقة"
                                     >
-                                      إلغاء الدعوة
+                                      <Trash2 className="w-3 h-3 text-red-500" />
+                                      <span>حذف الدعوة</span>
                                     </button>
                                   )}
                                 </td>
@@ -1686,6 +1770,7 @@ export const Settings: React.FC = () => {
 
                 </div>
 
+              </div>
               </div>
             )}
           </div>
