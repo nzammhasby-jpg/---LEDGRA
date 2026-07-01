@@ -69,6 +69,51 @@ export const accountingService = {
     if (error) throw error;
   },
 
+  async closeFiscalPeriod(orgId: string, periodId: string): Promise<void> {
+    const { error } = await supabase.rpc('close_fiscal_period', {
+      p_org_id: orgId,
+      p_period_id: periodId
+    });
+    if (error) throw error;
+  },
+
+  async reopenFiscalPeriod(orgId: string, periodId: string): Promise<void> {
+    const { error } = await supabase.rpc('reopen_fiscal_period', {
+      p_org_id: orgId,
+      p_period_id: periodId
+    });
+    if (error) throw error;
+  },
+
+  async closeFiscalYear(orgId: string, fiscalYearId: string, notes?: string): Promise<any> {
+    const { data, error } = await supabase.rpc('close_fiscal_year', {
+      p_org_id: orgId,
+      p_fiscal_year_id: fiscalYearId,
+      p_close_notes: notes || null
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async reopenFiscalYear(orgId: string, fiscalYearId: string, reason: string): Promise<any> {
+    const { data, error } = await supabase.rpc('reopen_fiscal_year', {
+      p_org_id: orgId,
+      p_fiscal_year_id: fiscalYearId,
+      p_reason: reason
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async getFiscalYearClosingSummary(orgId: string, fiscalYearId: string): Promise<any> {
+    const { data, error } = await supabase.rpc('get_fiscal_year_closing_summary', {
+      p_org_id: orgId,
+      p_fiscal_year_id: fiscalYearId
+    });
+    if (error) throw error;
+    return data;
+  },
+
 
 
 

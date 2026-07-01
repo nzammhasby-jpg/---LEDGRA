@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { accountingService } from '../../lib/accountingService';
+import { supabase } from '../../lib/supabase';
 import { FiscalYear, FiscalPeriod } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatArabicDateWithLatinDigits, normalizeInputDigits } from '../../lib/formatters';
@@ -43,7 +44,31 @@ export const FiscalYears: React.FC = () => {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const isPrivileged = ['owner', 'admin', 'accountant'].includes(roleInCurrentOrg || '');
+  // Action Confirm Modal State
+  const [showActionConfirmModal, setShowActionConfirmModal] = useState<boolean>(false);
+  const [confirmActionType, setConfirmActionType] = useState<'close' | 'reopen' | null>(null);
+  const [confirmPeriod, setConfirmPeriod] = useState<FiscalPeriod | null>(null);
+  const [confirmYearId, setConfirmYearId] = useState<string | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState<boolean>(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  // Fiscal Year Closing Modals State
+  const [showCloseYearModal, setShowCloseYearModal] = useState<boolean>(false);
+  const [showReopenYearModal, setShowReopenYearModal] = useState<boolean>(false);
+  const [closingYearId, setClosingYearId] = useState<string | null>(null);
+  const [reopeningYearId, setReopeningYearId] = useState<string | null>(null);
+  const [closingNotes, setClosingNotes] = useState<string>('');
+  const [reopenReason, setReopenReason] = useState<string>('');
+  
+  const [closingSummary, setClosingSummary] = useState<any | null>(null);
+  const [closingSummaryLoading, setClosingSummaryLoading] = useState<boolean>(false);
+  const [closingSummaryError, setClosingSummaryError] = useState<string | null>(null);
+  const [closingActionLoading, setClosingActionLoading] = useState<boolean>(false);
+  const [reopeningActionLoading, setReopeningActionLoading] = useState<boolean>(false);
+
+  const canManageFiscalYears = ['owner', 'admin'].includes(roleInCurrentOrg || '');
+  const canClosePeriod = ['owner', 'admin'].includes(roleInCurrentOrg || '');
+  const canReopenPeriod = roleInCurrentOrg === 'owner';
 
   // Load Years list
   const loadYearsData = async () => {
@@ -64,12 +89,143 @@ export const FiscalYears: React.FC = () => {
       if (profile?.id) {
         map[profile.id] = profile.full_name || 'المستخدم الحالي';
       }
+
+      // Load organization profiles to resolve "closed_by" names
+      try {
+        const { data: members, error: membersError } = await supabase
+          .from('organization_members')
+          .select('profile_id, profiles (full_name)')
+          .eq('organization_id', currentOrg.id);
+        if (!membersError && members) {
+          members.forEach((m: any) => {
+            if (m.profile_id && m.profiles) {
+              const prof = m.profiles as any;
+              map[m.profile_id] = prof.full_name || 'مستخدم مخول';
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load profile names:', err);
+      }
+      
       setProfilesMap(map);
     } catch (err) {
       console.error(err);
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenConfirmAction = (period: FiscalPeriod, yearId: string, actionType: 'close' | 'reopen') => {
+    setConfirmPeriod(period);
+    setConfirmYearId(yearId);
+    setConfirmActionType(actionType);
+    setConfirmError(null);
+    setConfirmLoading(false);
+    setShowActionConfirmModal(true);
+  };
+
+  const handleExecuteAction = async () => {
+    if (!currentOrg || !confirmPeriod || !confirmActionType || !confirmYearId || confirmLoading) return;
+
+    setConfirmLoading(true);
+    setConfirmError(null);
+    try {
+      if (confirmActionType === 'close') {
+        await accountingService.closeFiscalPeriod(currentOrg.id, confirmPeriod.id);
+        setSuccess(`تم إغلاق الفترة المالية "${confirmPeriod.name}" بنجاح وجرى قفل عملياتها.`);
+      } else {
+        await accountingService.reopenFiscalPeriod(currentOrg.id, confirmPeriod.id);
+        setSuccess(`تم إعادة فتح الفترة المالية "${confirmPeriod.name}" بنجاح.`);
+      }
+      setShowActionConfirmModal(false);
+      
+      // Refresh periods and years list
+      await loadPeriodsForYear(confirmYearId);
+      await loadYearsData();
+    } catch (err) {
+      console.error(err);
+      setConfirmError(getErrorMessage(err));
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
+
+  const handleOpenCloseYear = async (yearId: string) => {
+    setClosingYearId(yearId);
+    setClosingNotes('');
+    setClosingSummary(null);
+    setClosingSummaryError(null);
+    setClosingSummaryLoading(true);
+    setShowCloseYearModal(true);
+    
+    try {
+      if (!currentOrg) return;
+      const summary = await accountingService.getFiscalYearClosingSummary(currentOrg.id, yearId);
+      setClosingSummary(summary);
+    } catch (err) {
+      console.error(err);
+      setClosingSummaryError(getErrorMessage(err));
+    } finally {
+      setClosingSummaryLoading(false);
+    }
+  };
+
+  const handleExecuteCloseYear = async () => {
+    if (!currentOrg || !closingYearId || closingActionLoading) return;
+    
+    setClosingActionLoading(true);
+    setClosingSummaryError(null);
+    try {
+      const result = await accountingService.closeFiscalYear(currentOrg.id, closingYearId, closingNotes);
+      if (result?.status === 'closed_no_activity') {
+        setSuccess('تم إقفال السنة المالية بنجاح (لم يتم تسجيل أي نشاط مالي في حسابات الأرباح والخسائر للعام، تم قفل الفترات مباشرة).');
+      } else {
+        setSuccess('تم إقفال السنة المالية بنجاح بالكامل وتصفير حسابات الإيرادات والمصروفات وترحيل الأرباح/الخسائر الختامية.');
+      }
+      setShowCloseYearModal(false);
+      await loadYearsData();
+      if (selectedPeriods[closingYearId]) {
+        await loadPeriodsForYear(closingYearId);
+      }
+    } catch (err) {
+      console.error(err);
+      setClosingSummaryError(getErrorMessage(err));
+    } finally {
+      setClosingActionLoading(false);
+    }
+  };
+
+  const handleOpenReopenYear = (yearId: string) => {
+    setReopeningYearId(yearId);
+    setReopenReason('');
+    setClosingSummaryError(null);
+    setShowReopenYearModal(true);
+  };
+
+  const handleExecuteReopenYear = async () => {
+    if (!currentOrg || !reopeningYearId || reopeningActionLoading) return;
+    if (!reopenReason.trim()) {
+      setClosingSummaryError('يرجى كتابة سبب معقول لإعادة فتح السنة المالية أولاً.');
+      return;
+    }
+
+    setReopeningActionLoading(true);
+    setClosingSummaryError(null);
+    try {
+      await accountingService.reopenFiscalYear(currentOrg.id, reopeningYearId, reopenReason);
+      setSuccess('تم إعادة فتح السنة المالية بنجاح وإلغاء قفل الفترات التابعة لها محاسبياً وعكس قيد الإقفال.');
+      setShowReopenYearModal(false);
+      await loadYearsData();
+      if (selectedPeriods[reopeningYearId]) {
+        await loadPeriodsForYear(reopeningYearId);
+      }
+    } catch (err) {
+      console.error(err);
+      setClosingSummaryError(getErrorMessage(err));
+    } finally {
+      setReopeningActionLoading(false);
     }
   };
 
@@ -99,7 +255,7 @@ export const FiscalYears: React.FC = () => {
 
   // Switch year status to Current Active
   const handleSetCurrentYear = async (year: FiscalYear) => {
-    if (!currentOrg || !isPrivileged) return;
+    if (!currentOrg || !canManageFiscalYears) return;
     if (year.is_current) return;
 
     if (!window.confirm(`هل ترغب فعلاً بتعيين "${year.name}" كالسنة المالية الحالية والنشطة للنظام؟ سيتم إلغاء التنشيط تلقائياً عن السنوات الأخرى.`)) {
@@ -121,7 +277,7 @@ export const FiscalYears: React.FC = () => {
 
   // Open modal with smart date suggestions
   const handleOpenAddModal = () => {
-    if (!isPrivileged) return;
+    if (!canManageFiscalYears) return;
     setFormError(null);
     
     // Suggest year start date
@@ -219,10 +375,10 @@ export const FiscalYears: React.FC = () => {
       <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 font-sans text-right">
         <div>
           <h3 className="text-sm font-extrabold text-slate-800">الحفاظ على الفترات والسنوات المالية</h3>
-          <p className="text-[11px] text-slate-400 mt-1">أنشئ السنوات المالية وفتراتها الشهرية وحدد السنة التشغيلية الحالية. سيتم تفعيل الإقفال والترحيل بعد بناء محرك القيود اليومية.</p>
+          <p className="text-[11px] text-slate-400 mt-1">أنشئ السنوات المالية وفتراتها الشهرية، وأغلق الفترات المكتملة لمنع أي عمليات مالية جديدة داخلها.</p>
         </div>
         
-        {isPrivileged && (
+        {canManageFiscalYears && (
           <button
             onClick={handleOpenAddModal}
             className="text-xs bg-brand-blue hover:bg-brand-blue-deep text-white font-extrabold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm shadow-brand-blue/15"
@@ -245,7 +401,7 @@ export const FiscalYears: React.FC = () => {
             <h4 className="text-sm font-bold text-slate-800">لا توجد سنوات مالية مسجلة</h4>
             <p className="text-xs text-slate-400">لم تقم بتسجيل أي دورات مالية معتمدة لمنشأتك حتى الآن. يرجى إنشاء السنة الحالية لتتبع الأرصدة.</p>
           </div>
-          {isPrivileged && (
+          {canManageFiscalYears && (
             <button 
               onClick={handleOpenAddModal}
               className="text-xs bg-brand-blue hover:bg-brand-blue-deep text-white font-extrabold px-5 py-3 rounded-xl transition cursor-pointer"
@@ -303,10 +459,10 @@ export const FiscalYears: React.FC = () => {
                           year.status === 'open' 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
                             : year.status === 'closed'
-                            ? 'bg-red-50 text-red-700 border-red-100'
+                            ? 'bg-red-50 text-red-700 border-red-150 font-extrabold'
                             : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}>
-                          {year.status === 'open' ? 'دورة محاسبية مفتوحة' : year.status === 'closed' ? 'مغلقة كلياً' : 'مسودة'}
+                          {year.status === 'open' ? 'سنة مالية مفتوحة' : year.status === 'closed' ? 'سنة مغلقة محاسبياً ومقيدة' : 'مسودة'}
                         </span>
                       </div>
 
@@ -321,6 +477,32 @@ export const FiscalYears: React.FC = () => {
                           <strong className="text-slate-600">{formatArabicDateWithLatinDigits(year.end_date)}</strong>
                         </span>
                       </div>
+
+                      {year.status === 'closed' && (
+                        <div className="mt-2 bg-slate-900 text-slate-100 p-3 rounded-2xl text-[11px] font-sans space-y-1.5 leading-relaxed max-w-xl text-right">
+                          <div className="flex items-center gap-1.5 font-bold text-amber-400">
+                            <Lock className="w-4 h-4 shrink-0 text-amber-400" />
+                            <span>تم إقفال هذه السنة المالية وحماية جميع سجلاتها وقيودها بالكامل</span>
+                          </div>
+                          {year.closed_at && (
+                            <div className="text-[10px] text-slate-300">
+                              <span>أغلقت بواسطة: <strong>{year.closed_by ? (profilesMap[year.closed_by] || 'مالك المنشأة') : 'النظام'}</strong></span>
+                              <span className="mx-2">•</span>
+                              <span>بتاريخ: <strong>{formatArabicDateWithLatinDigits(year.closed_at, { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong></span>
+                            </div>
+                          )}
+                          {year.closing_entry_id && (
+                            <div className="text-[10px] text-slate-300">
+                              <span>رقم القيد الختامي للإقفال: <strong>{year.closing_entry_id}</strong></span>
+                            </div>
+                          )}
+                          {year.close_notes && (
+                            <div className="text-[10px] bg-slate-800 p-2 rounded-xl text-slate-300 border border-slate-700 mt-1 font-sans">
+                              ملاحظات الإقفال: "{year.close_notes}"
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -338,7 +520,39 @@ export const FiscalYears: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {!year.is_current && isPrivileged && (
+                      {year.status === 'open' && canManageFiscalYears && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenCloseYear(year.id);
+                          }}
+                          className="text-[10px] bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>إقفال السنة</span>
+                        </button>
+                      )}
+
+                      {year.status === 'closed' && roleInCurrentOrg === 'owner' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenReopenYear(year.id);
+                          }}
+                          className="text-[10px] bg-blue-50 hover:bg-blue-100 text-brand-blue border border-blue-200 font-extrabold px-3 py-2 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
+                        >
+                          <Unlock className="w-3.5 h-3.5" />
+                          <span>إعادة فتح السنة</span>
+                        </button>
+                      )}
+
+                      {year.status === 'closed' && roleInCurrentOrg !== 'owner' && (
+                        <span className="text-[9px] text-slate-400 border border-slate-100 bg-slate-50 px-2.5 py-1.5 rounded-lg select-none" title="إعادة فتح السنة المالية مغلق لمالك المنشأة حصراً">
+                          مغلقة (إعادة فتح للمالك)
+                        </span>
+                      )}
+
+                      {!year.is_current && year.status === 'open' && canManageFiscalYears && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -371,48 +585,116 @@ export const FiscalYears: React.FC = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                         {periods.map(period => {
                           const isOpen = period.status === 'open';
+                          const isClosed = period.status === 'closed';
+                          const isLocked = period.status === 'locked';
+
+                          // Owner or Admin can close an open period
+                          const canClose = isOpen && canClosePeriod;
+                          // ONLY Owner can reopen a closed period
+                          const canReopen = isClosed && canReopenPeriod;
+
+                          const closedByName = period.closed_by ? (profilesMap[period.closed_by] || 'مستخدم مخول') : '';
+                          const closedAtFormatted = period.closed_at ? formatArabicDateWithLatinDigits(period.closed_at, { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
                           return (
                             <div 
                               key={period.id}
-                              className={`p-3.5 rounded-2xl border bg-white transition flex items-center justify-between gap-3 text-right ${
+                              className={`p-3.5 rounded-2xl border bg-white transition flex flex-col justify-between gap-3 text-right ${
                                 isOpen 
                                   ? 'border-slate-100 shadow-xs' 
+                                  : isClosed
+                                  ? 'border-amber-200 bg-amber-50/[0.02]'
                                   : 'border-slate-200 bg-slate-50/50'
                               }`}
                             >
-                              <div className="truncate space-y-1 shrink min-w-0">
-                                <span className={`text-[11px] font-extrabold block truncate ${isOpen ? 'text-slate-700' : 'text-slate-400 line-through'}`}>
-                                  {period.name}
-                                </span>
-                                <div className="text-[9.5px] font-mono text-slate-400">
-                                  <span>{formatArabicDateWithLatinDigits(period.start_date)}</span>
-                                  <span className="mx-1 font-bold">إلى</span>
-                                  <span>{formatArabicDateWithLatinDigits(period.end_date)}</span>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="truncate space-y-1 shrink min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className={`text-[11px] font-extrabold truncate ${isOpen ? 'text-slate-700' : 'text-slate-500'}`}>
+                                      {period.name}
+                                    </span>
+                                    <span className={`text-[8.5px] font-extrabold px-1.5 py-0.5 rounded ${
+                                      isOpen
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                        : isClosed
+                                        ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                        : 'bg-red-50 text-red-700 border border-red-100'
+                                    }`}>
+                                      {isOpen ? 'مفتوحة' : isClosed ? 'مغلقة' : 'مقفلة'}
+                                    </span>
+                                  </div>
+                                  <div className="text-[9.5px] font-mono text-slate-400">
+                                    <span>{formatArabicDateWithLatinDigits(period.start_date)}</span>
+                                    <span className="mx-1 font-bold">إلى</span>
+                                    <span>{formatArabicDateWithLatinDigits(period.end_date)}</span>
+                                  </div>
                                 </div>
+
+                                {/* Action Buttons */}
+                                {isOpen ? (
+                                  <button
+                                    onClick={() => handleOpenConfirmAction(period, year.id, 'close')}
+                                    disabled={!canClose}
+                                    className={`p-2 rounded-xl border shrink-0 transition ${
+                                      canClose
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-pointer'
+                                        : 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed opacity-50'
+                                    }`}
+                                    title={canClose ? 'إغلاق الفترة المالية ومنع المعاملات اليومية' : 'إغلاق الفترة يتطلب صلاحية المالك أو المدير'}
+                                  >
+                                    <Unlock className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : isClosed ? (
+                                  <button
+                                    onClick={() => handleOpenConfirmAction(period, year.id, 'reopen')}
+                                    disabled={!canReopen}
+                                    className={`p-2 rounded-xl border shrink-0 transition ${
+                                      canReopen
+                                        ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-pointer'
+                                        : 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed opacity-50'
+                                    }`}
+                                    title={canReopen ? 'إعادة فتح الفترة المالية المغلقة' : 'إعادة فتح الفترة يتطلب صلاحية المالك حصرياً'}
+                                  >
+                                    <Lock className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    disabled={true}
+                                    className="p-2 rounded-xl border shrink-0 bg-red-50 text-red-400 border-red-100 opacity-55 cursor-not-allowed transition"
+                                    title="الفترة مقفلة بالكامل بقرار إداري ولا يمكن إعادة فتحها"
+                                  >
+                                    <Lock className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
 
-                              {/* Toggle active / toggle closed - Grayed out & disabled for upcoming Phase 3 */}
-                              <button
-                                disabled={true}
-                                className="p-2 rounded-xl border shrink-0 bg-slate-50 text-slate-400 border-slate-100 opacity-55 cursor-not-allowed transition"
-                                title="سيتم تمكين فتح وإغلاق الفترات مع تفعيل محرك اليومية العامة."
-                              >
-                                {isOpen ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                              </button>
+                              {/* Details of closed/locked periods */}
+                              {!isOpen && period.closed_by && (
+                                <div className="text-[9px] text-slate-500 mt-1 flex flex-col gap-0.5 border-t border-slate-100 pt-1.5 font-sans leading-relaxed">
+                                  <span className="flex items-center gap-1">
+                                    <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span>أغلقت بواسطة: <strong>{closedByName}</strong></span>
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span>بتاريخ: <strong>{closedAtFormatted}</strong></span>
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
                         
-                        {/* Explanatory roadmap banner block */}
+                        {/* Explanatory control description banner block */}
                         <div className="col-span-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-right flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-slate-500">
                           <div className="flex items-center gap-2.5">
-                            <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                            <Lock className="w-4 h-4 text-brand-blue shrink-0" />
                             <span className="text-[10.5px] font-semibold text-slate-500">
-                              سيتم تفعيل ميزة إقفال وفتح الفترات الدورية الفرعية يدوياً فور إطلاق محرك قيود اليومية العامة في التحديث القادم لضمان سلامة العمليات المحاسبية وسجلات الترحيل.
+                              نظام مراقبة وإقفال الفترات المالية نشط لحماية قيود منشأتك. يمكن للمالك والمدراء قفل الفترات لمنع ترحيل المعاملات الخاطئة، بينما يستطيع مالك المنشأة حصراً إعادة فتحها عند الحاجة الاستثنائية.
                             </span>
                           </div>
-                          <span className="text-[9px] font-bold bg-amber-500/10 text-amber-600 px-2.5 py-1 rounded-md shrink-0">
-                            مجدول للمرحلة التالية
+                          <span className="text-[9px] font-bold bg-brand-blue/10 text-brand-blue px-2.5 py-1 rounded-md shrink-0">
+                            حماية الدورة المالية نشطة
                           </span>
                         </div>
                       </div>
@@ -522,6 +804,324 @@ export const FiscalYears: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dialog: LOCK/UNLOCK FISCAL PERIOD */}
+      {showActionConfirmModal && confirmPeriod && confirmActionType && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md shadow-2xl p-6 text-right space-y-6 font-sans">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <button 
+                onClick={() => setShowActionConfirmModal(false)}
+                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <h3 className="text-sm font-extrabold text-slate-800">
+                {confirmActionType === 'close' ? 'تأكيد إغلاق الفترة المالية' : 'تأكيد إعادة فتح الفترة المالية'}
+              </h3>
+            </div>
+
+            {confirmError && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-800 text-[11px] font-bold flex items-start gap-2">
+                <AlertOctagon className="w-4.5 h-4.5 shrink-0 text-red-600 mt-0.5" />
+                <div className="flex-1">{confirmError}</div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 text-slate-700 space-y-2">
+                <div className="text-xs">
+                  <span>اسم الفترة: </span>
+                  <strong className="text-slate-900">{confirmPeriod.name}</strong>
+                </div>
+                <div className="text-xs font-mono">
+                  <span>نطاق التاريخ: </span>
+                  <strong className="text-slate-900">
+                    {formatArabicDateWithLatinDigits(confirmPeriod.start_date)} إلى {formatArabicDateWithLatinDigits(confirmPeriod.end_date)}
+                  </strong>
+                </div>
+              </div>
+
+              {confirmActionType === 'close' ? (
+                <div className="space-y-3">
+                  <div className="text-xs text-slate-600 leading-relaxed">
+                    أنت بصدد إغلاق هذه الفترة المالية. هذا الإجراء سيقوم بما يلي:
+                  </div>
+                  <ul className="text-[11px] text-slate-500 list-disc list-inside space-y-1.5 leading-relaxed pr-2">
+                    <li>منع إنشاء قيود يومية جديدة أو فواتير أو سندات تقع تواريخها ضمن هذه الفترة.</li>
+                    <li>منع تعديل أو اعتماد أو حذف أي معاملات مسجلة مسبقاً في هذه الفترة.</li>
+                    <li>حماية البيانات التاريخية للتقارير الختامية من أي تغييرات غير مقصودة.</li>
+                  </ul>
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-amber-800 text-[10px] leading-relaxed flex gap-2">
+                    <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+                    <div>
+                      <strong>تنبيه قبل الإغلاق:</strong>
+                      <p className="mt-0.5">يرجى التأكد من اعتماد أو حذف جميع المسودات والقيود المعلقة في هذه الفترة أولاً، حيث سيتحقق النظام منها لمنع إغلاق الفترات غير المكتملة.</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-xs text-slate-600 leading-relaxed">
+                    أنت بصدد إعادة فتح هذه الفترة المالية. هذا الإجراء سيقوم بما يلي:
+                  </div>
+                  <ul className="text-[11px] text-slate-500 list-disc list-inside space-y-1.5 leading-relaxed pr-2">
+                    <li>السماح للمستخدمين المخولين بإضافة وتعديل وحذف العمليات المالية ضمن هذا التاريخ مجدداً.</li>
+                    <li>قد يؤثر على توازن ومطابقة التقارير والقوائم المالية المصدرة سابقاً.</li>
+                    <li>يتطلب هذا الإجراء صلاحية مالك المنشأة حصرياً.</li>
+                  </ul>
+                  <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-amber-800 text-[10px] leading-relaxed flex gap-2">
+                    <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+                    <div>
+                      <strong>تنبيه للمالك:</strong>
+                      <p className="mt-0.5">يرجى إبقاء الفترة مفتوحة فقط للمدة المطلوبة لتصحيح القيود، ثم إعادة إغلاقها فوراً لضمان أمان النظام وسلامة الحسابات.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-start gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                disabled={confirmLoading}
+                onClick={handleExecuteAction}
+                className={`text-xs font-extrabold px-5 py-2.5 rounded-xl transition cursor-pointer text-white ${
+                  confirmActionType === 'close'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-brand-blue hover:bg-brand-blue-deep'
+                }`}
+              >
+                {confirmLoading ? 'جاري المعالجة...' : confirmActionType === 'close' ? 'إغلاق الفترة الآن' : 'إعادة فتح الفترة الآن'}
+              </button>
+              <button
+                type="button"
+                disabled={confirmLoading}
+                onClick={() => setShowActionConfirmModal(false)}
+                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl cursor-pointer"
+              >
+                تراجع
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dialog: CLOSE FISCAL YEAR */}
+      {showCloseYearModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg shadow-2xl p-6 text-right space-y-6 font-sans">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <button 
+                onClick={() => setShowCloseYearModal(false)}
+                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <h3 className="text-sm font-extrabold text-slate-800">إقفال السنة المالية بالكامل (Year-End Close)</h3>
+            </div>
+
+            {closingSummaryError && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-800 text-[11px] font-bold flex items-start gap-2">
+                <AlertOctagon className="w-4.5 h-4.5 shrink-0 text-red-600 mt-0.5" />
+                <div className="flex-1">{closingSummaryError}</div>
+              </div>
+            )}
+
+            {closingSummaryLoading ? (
+              <div className="p-12 text-center space-y-3 flex flex-col items-center justify-center">
+                <div className="w-7 h-7 border-3 border-amber-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-xs font-bold text-slate-400">جاري احتساب ومطابقة الأرصدة وحساب الأرباح الختامية...</p>
+              </div>
+            ) : closingSummary ? (
+              <div className="space-y-4">
+                
+                {/* Visual balance summary cards */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-50 border border-slate-150 rounded-2xl p-3.5 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 block">إجمالي الإيرادات السنوية</span>
+                    <strong className="text-xs font-mono text-slate-700">
+                      {formatArabicDateWithLatinDigits(closingSummary.total_revenue.toLocaleString('en-US', { minimumFractionDigits: 2 }))} ر.س
+                    </strong>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-150 rounded-2xl p-3.5 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 block">إجمالي المصروفات السنوية</span>
+                    <strong className="text-xs font-mono text-slate-700">
+                      {formatArabicDateWithLatinDigits(closingSummary.total_expenses.toLocaleString('en-US', { minimumFractionDigits: 2 }))} ر.س
+                    </strong>
+                  </div>
+
+                  <div className="col-span-2 bg-slate-50 border border-slate-150 rounded-2xl p-4 space-y-1 flex justify-between items-center">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 block">صافي الربح / الخسارة الختامي</span>
+                      <strong className={`text-sm font-mono font-bold block mt-0.5 ${closingSummary.net_profit_or_loss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {formatArabicDateWithLatinDigits(closingSummary.net_profit_or_loss.toLocaleString('en-US', { minimumFractionDigits: 2 }))} ر.س
+                      </strong>
+                    </div>
+                    <span className={`text-[9px] font-extrabold px-2.5 py-1 rounded-md ${closingSummary.net_profit_or_loss >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                      {closingSummary.net_profit_or_loss >= 0 ? 'صافي أرباح سنوية' : 'صافي خسائر سنوية'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Retained earnings account details */}
+                <div className="bg-slate-50 border border-slate-150 rounded-2xl p-3.5 text-xs text-slate-700 flex justify-between items-center">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block">الحساب المعتمد لترحيل صافي الدورة</span>
+                    <strong className="text-slate-800 mt-1 block">
+                      {closingSummary.retained_earnings_account_name || 'غير محدد'}
+                    </strong>
+                  </div>
+                  <span className="text-[9px] bg-blue-50 text-brand-blue px-2 py-0.5 rounded-md font-bold">حقوق ملكية (Equity)</span>
+                </div>
+
+                {/* Blocking Validations Check block */}
+                {(!closingSummary.all_periods_closed || closingSummary.has_draft_entries || closingSummary.has_draft_invoices || closingSummary.has_draft_bills) && (
+                  <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-red-800 text-xs space-y-2 leading-relaxed">
+                    <div className="flex items-center gap-1.5 font-bold text-red-700">
+                      <AlertOctagon className="w-4.5 h-4.5 text-red-600" />
+                      <span>لا يمكن إقفال السنة المالية للأسباب التالية:</span>
+                    </div>
+                    <ul className="list-disc list-inside pr-1 text-[11px] space-y-1 text-red-600 font-medium">
+                      {!closingSummary.all_periods_closed && (
+                        <li>توجد فترات مالية شهرية لا تزال "مفتوحة". يرجى إغلاق جميع الفترات أولاً.</li>
+                      )}
+                      {(closingSummary.has_draft_entries || closingSummary.has_draft_invoices || closingSummary.has_draft_bills) && (
+                        <li>توجد مستندات مسودة (قيود، فواتير مبيعات، أو فواتير مشتريات) غير معتمدة داخل السنة.</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Close notes text field */}
+                {closingSummary.all_periods_closed && !closingSummary.has_draft_entries && !closingSummary.has_draft_invoices && !closingSummary.has_draft_bills && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 block">ملاحظات أو مستند مرجع الإقفال السنوي</label>
+                    <textarea
+                      value={closingNotes}
+                      onChange={(e) => setClosingNotes(e.target.value)}
+                      placeholder="أضف أي ملاحظات أو قرارات إدارية لعملية الإقفال السنوي لتوثيقها محاسبياً..."
+                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 outline-none min-h-[70px] resize-none"
+                    />
+                  </div>
+                )}
+
+                {/* Accounting safety guidelines notification */}
+                <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-amber-800 text-[10px] leading-relaxed flex gap-2">
+                  <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+                  <div>
+                    <strong>قواعد الإغلاق الآمن للمنشأة:</strong>
+                    <p className="mt-0.5">سيقوم النظام بإنشاء قيد ترحيل ختامي متوازن لتصفير جميع حسابات الإيرادات والمصروفات وترحيل الأرباح/الخسائر المتبقية تلقائياً لحساب الأرباح المبقاة، تليها قفل دائم للفترات المحاسبية لمنع أي عبث تاريخي.</p>
+                  </div>
+                </div>
+
+              </div>
+            ) : null}
+
+            <div className="flex justify-start gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                disabled={
+                  closingActionLoading || 
+                  closingSummaryLoading || 
+                  !closingSummary || 
+                  !closingSummary.all_periods_closed || 
+                  closingSummary.has_draft_entries || 
+                  closingSummary.has_draft_invoices || 
+                  closingSummary.has_draft_bills
+                }
+                onClick={handleExecuteCloseYear}
+                className="text-xs font-extrabold px-5 py-2.5 rounded-xl text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+              >
+                {closingActionLoading ? 'جاري تصفير الحسابات وترحيل القيد...' : 'تأكيد وإقفال السنة المالية بالكامل'}
+              </button>
+              <button
+                type="button"
+                disabled={closingActionLoading}
+                onClick={() => setShowCloseYearModal(false)}
+                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl cursor-pointer"
+              >
+                إلغاء الأمر
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dialog: REOPEN FISCAL YEAR */}
+      {showReopenYearModal && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md shadow-2xl p-6 text-right space-y-6 font-sans">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <button 
+                onClick={() => setShowReopenYearModal(false)}
+                className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <h3 className="text-sm font-extrabold text-slate-800 text-red-700 flex items-center gap-1">
+                <AlertOctagon className="w-5 h-5 text-red-600" />
+                <span>إعادة فتح سنة مالية مغلقة</span>
+              </h3>
+            </div>
+
+            {closingSummaryError && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-800 text-[11px] font-bold flex items-start gap-2">
+                <AlertOctagon className="w-4.5 h-4.5 shrink-0 text-red-600 mt-0.5" />
+                <div className="flex-1">{closingSummaryError}</div>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-amber-800 text-[10.5px] leading-relaxed space-y-1">
+                <div className="font-bold text-amber-900 flex items-center gap-1">
+                  <AlertTriangle className="w-4.5 h-4.5 shrink-0 text-amber-600" />
+                  <span>تنبيه خطير وحساس لمالك المنشأة:</span>
+                </div>
+                <p>إعادة فتح السنة المالية المغلقة محاسبياً هو إجراء استثنائي سيقوم بالآتي تلقائياً:</p>
+                <ul className="list-disc list-inside pr-1 space-y-1 mt-1 text-amber-950 font-medium">
+                  <li>إنشاء قيد يومية عكسي متوازن (Reversal Entry) لإلغاء مفعول قيد الإقفال بالكامل.</li>
+                  <li>إعادة فتح السنة المالية، وإرجاع كافة فتراتها الـ 12 المقفلة لتصبح بحالة "مغلقة" فقط (ليتسنى لك فتح فترات معينة بمرونة وتعديل القيود).</li>
+                </ul>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 block">سبب إعادة الفتح (مطلوب محاسبياً لمالك المنشأة)</label>
+                <textarea
+                  value={reopenReason}
+                  onChange={(e) => setReopenReason(e.target.value)}
+                  placeholder="يرجى توضيح الداعي لطلب إعادة فتح هذه السنة والقيود المراد مراجعتها..."
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 outline-none min-h-[80px] resize-none"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-start gap-3 border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                disabled={reopeningActionLoading || !reopenReason.trim()}
+                onClick={handleExecuteReopenYear}
+                className="text-xs font-extrabold px-5 py-2.5 rounded-xl text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+              >
+                {reopeningActionLoading ? 'جاري إلغاء الإقفال وإدراج قيد العكس...' : 'تأكيد وإعادة الفتح الآن'}
+              </button>
+              <button
+                type="button"
+                disabled={reopeningActionLoading}
+                onClick={() => setShowReopenYearModal(false)}
+                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl cursor-pointer"
+              >
+                تراجع
+              </button>
+            </div>
           </div>
         </div>
       )}

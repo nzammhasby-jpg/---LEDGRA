@@ -112,10 +112,13 @@ export const AccountingLayout: React.FC = () => {
         {activeTab === 'journal' ? (
           <JournalEntries />
         ) : activeTab === 'chart' ? (
-          <ChartOfAccounts onViewLedger={(accountId) => {
-            setPreselectedAccountId(accountId);
-            setActiveTab('ledger');
-          }} />
+          <ChartOfAccounts 
+            onViewLedger={(accountId) => {
+              setPreselectedAccountId(accountId);
+              setActiveTab('ledger');
+            }} 
+            onViewSettings={() => setActiveTab('settings')}
+          />
         ) : activeTab === 'fiscal' ? (
           <FiscalYears />
         ) : activeTab === 'ledger' ? (

@@ -135,8 +135,13 @@ export interface FiscalYear {
   name: string;
   start_date: string;
   end_date: string;
-  status: 'draft' | 'open' | 'closed';
+  status: 'draft' | 'open' | 'closed' | 'locked';
   is_current: boolean;
+  closed_at?: string | null;
+  closed_by?: string | null;
+  closing_entry_id?: string | null;
+  close_notes?: string | null;
+  updated_at?: string | null;
   created_at: string;
   created_by: string | null;
 }
@@ -149,7 +154,11 @@ export interface FiscalPeriod {
   name: string;
   start_date: string;
   end_date: string;
-  status: 'open' | 'closed';
+  status: 'open' | 'closed' | 'locked';
+  closed_at?: string | null;
+  closed_by?: string | null;
+  locked_reason?: string | null;
+  updated_at?: string | null;
   created_at: string;
 }
 

@@ -315,7 +315,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, fullName: string, phone: string): Promise<{ error: string | null, verificationRequired?: boolean }> => {
     setLoading(true);
     try {
-      const emailRedirectTo = `${window.location.origin}/auth/confirm`;
+      const emailRedirectTo = `${window.location.origin}/auth/verified`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -334,13 +334,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        if (!data.session) {
-          setLoading(false);
-          return { error: null, verificationRequired: true };
+        // Even if data.session is returned, we sign out to ensure the user is not logged in directly.
+        if (data.session) {
+          await supabase.auth.signOut();
         }
-        setUser(data.user);
-        loadedUserIdRef.current = data.user.id;
-        await loadRealUserData(data.user.id);
+        setLoading(false);
+        return { error: null, verificationRequired: true };
       }
       return { error: null, verificationRequired: false };
     } catch (e: unknown) {

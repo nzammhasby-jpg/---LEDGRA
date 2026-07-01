@@ -27,9 +27,10 @@ import {
 
 interface ChartOfAccountsProps {
   onViewLedger?: (accountId: string) => void;
+  onViewSettings?: () => void;
 }
 
-export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }) => {
+export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger, onViewSettings }) => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -958,6 +959,17 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
               <ChevronsUpDown className="w-4 h-4" />
               <span>طي الكل</span>
             </button>
+
+            {onViewSettings && (
+              <button 
+                onClick={onViewSettings}
+                className="text-xs bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 text-slate-600 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer font-sans w-1/2 sm:w-auto justify-center"
+                title="ربط الحسابات الافتراضية"
+              >
+                <Lock className="w-4 h-4 text-brand-blue" />
+                <span>ربط الحسابات الافتراضية</span>
+              </button>
+            )}
           </div>
 
           {canManage && (

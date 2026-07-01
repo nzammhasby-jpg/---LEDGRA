@@ -58,11 +58,13 @@ export const Register: React.FC = () => {
       if (response.error) {
         const errorMsg = response.error.toLowerCase();
         if (errorMsg.includes('already exists') || errorMsg.includes('already registered') || errorMsg.includes('مسجل مسبق')) {
-          setApiError('هذا البريد مستخدم مسبقًا. جرّب تسجيل الدخول بدلًا من إنشاء حساب جديد.');
+          setApiError('هذا البريد الإلكتروني مسجل مسبقاً في النظام. يرجى محاولة تسجيل الدخول أو استعادة كلمة المرور.');
         } else if (errorMsg.includes('password should be') || errorMsg.includes('weak') || errorMsg.includes('خانات أو أكثر') || errorMsg.includes('ضعيفة')) {
-          setApiError('كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل.');
+          setApiError('كلمة المرور المدخلة ضعيفة جداً. يجب أن تحتوي كلمة المرور على 6 خانات أو أكثر لتأمين الحساب بشكل صحيح.');
+        } else if (errorMsg.includes('rate limit') || errorMsg.includes('too many requests')) {
+          setApiError('تم تجاوز الحد المسموح به لطلبات تسجيل الحساب مؤقتاً. يرجى الانتظار بضع دقائق والمحاولة مجدداً.');
         } else {
-          setApiError('تعذر إنشاء الحساب حاليًا. حاول مرة أخرى.');
+          setApiError(`تعذر إنشاء الحساب: ${response.error}. يرجى التحقق من المدخلات والمحاولة لاحقاً.`);
         }
       } else {
         setApiSuccess(true);
@@ -366,9 +368,9 @@ export const Register: React.FC = () => {
               <div className="bg-emerald-50 text-emerald-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">تحقق من بريدك الإلكتروني</h3>
+              <h3 className="text-base font-bold text-slate-900">تم إرسال رابط تأكيد إلى بريدك الإلكتروني</h3>
               <p className="text-slate-600 text-xs leading-relaxed">
-                تم إنشاء حسابك بنجاح. أرسلنا رسالة تأكيد إلى بريدك الإلكتروني. افتح الرسالة واضغط رابط التفعيل، ثم ارجع لتسجيل الدخول.
+                افتح بريدك واضغط على رابط التفعيل لإكمال إنشاء الحساب
               </p>
               
               <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl text-xs text-slate-700 font-semibold">
@@ -381,7 +383,7 @@ export const Register: React.FC = () => {
                   to="/login"
                   className="inline-block w-full py-2.5 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-xs shadow-sm transition text-center"
                 >
-                  الانتقال إلى تسجيل الدخول
+                  العودة لتسجيل الدخول
                 </Link>
               </div>
 

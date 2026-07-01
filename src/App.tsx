@@ -6,6 +6,7 @@ import { Login } from './features/auth/Login';
 import { Register } from './features/auth/Register';
 import { ResetPassword } from './features/auth/ResetPassword';
 import { EmailVerifiedPage } from './features/auth/EmailVerifiedPage';
+import { AuthVerified } from './features/auth/AuthVerified';
 import { AcceptInvitePage } from './features/auth/AcceptInvitePage';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { Dashboard } from './features/dashboard/Dashboard';
@@ -369,6 +370,12 @@ export default function App() {
     return null;
   }
 
+  if (window.location.pathname === '/auth/verified') {
+    const search = window.location.search || '';
+    window.location.replace(`${window.location.origin}/#/auth/verified${search}`);
+    return null;
+  }
+
   return (
     <AuthProvider>
       <Router>
@@ -384,6 +391,7 @@ export default function App() {
           {/* Independent routes */}
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/email-verified" element={<EmailVerifiedPage />} />
+          <Route path="/auth/verified" element={<AuthVerified />} />
           <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
           {/* Force Onboarding screens */}
