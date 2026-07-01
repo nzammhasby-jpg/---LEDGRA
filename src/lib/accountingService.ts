@@ -246,5 +246,24 @@ export const accountingService = {
 
     if (error) throw error;
     return data;
+  },
+
+  // ==========================================
+  // INDUSTRY COA TEMPLATES (COA PHASE 2A)
+  // ==========================================
+  async getAvailableCoaTemplates(): Promise<any[]> {
+    const { data, error } = await supabase.rpc('get_available_coa_templates');
+    if (error) throw error;
+    return data || [];
+  },
+
+  async seedIndustryChartOfAccounts(orgId: string, industryType: string): Promise<{ status: string; inserted_accounts?: number; industry_type?: string }> {
+    const { data, error } = await supabase.rpc('seed_industry_chart_of_accounts', {
+      p_org_id: orgId,
+      p_industry_type: industryType
+    });
+
+    if (error) throw error;
+    return data;
   }
 };

@@ -20,11 +20,14 @@ import {
   ArrowLeft,
   ChevronLeft,
   Coins,
-  Globe2
+  Globe2,
+  ShieldCheck
 } from 'lucide-react';
 
 // Unified schema for the entire wizard
 import { normalizeIntegerInput, normalizeInputDigits } from '../../lib/formatters';
+import { supabase } from '../../lib/supabase';
+import { CoaTemplateSelector } from '../accounting/CoaTemplateSelector';
 
 const onboardingSchema = z.object({
   // Step 1
@@ -104,12 +107,33 @@ const activityTypeOptions = [
 const cityOptions = ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'بريدة', 'أبها', 'تبوك'];
 
 export const Onboarding: React.FC = () => {
-  const { createOrg, updateOrg, currentOrg, profile, signOut, user, orgsList } = useAuth();
+  const { createOrg, updateOrg, currentOrg, profile, signOut, user, orgsList, roleInCurrentOrg } = useAuth();
   const { t } = useTranslation('ar');
   const navigate = useNavigate();
   const [step, setStep] = useState<number>(1);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [hasAccounts, setHasAccounts] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    const checkAccounts = async () => {
+      if (currentOrg?.id) {
+        try {
+          const { count, error } = await supabase
+            .from('accounts')
+            .select('*', { count: 'exact', head: true })
+            .eq('organization_id', currentOrg.id);
+          
+          if (!error && count !== null) {
+            setHasAccounts(count > 0);
+          }
+        } catch (err) {
+          console.error('Error checking accounts for onboarding:', err);
+        }
+      }
+    };
+    checkAccounts();
+  }, [currentOrg]);
 
   const methods = useForm<OnboardingFields>({
     resolver: zodResolver(onboardingSchema) as any,
@@ -174,6 +198,8 @@ export const Onboarding: React.FC = () => {
       fieldsToValidate = ['name_ar', 'name_en', 'activity_type', 'city', 'phone', 'email'];
     } else if (step === 2) {
       fieldsToValidate = ['legal_type', 'cr_number', 'vat_number', 'fiscal_year_start'];
+    } else if (step === 3) {
+      fieldsToValidate = ['use_system_start'];
     }
 
     const isStepValid = await trigger(fieldsToValidate);
@@ -251,6 +277,24 @@ export const Onboarding: React.FC = () => {
               return;
             }
           }
+        } else if (step === 3) {
+          const draftOrg = (currentOrg && !currentOrg.onboarding_completed)
+            ? currentOrg
+            : orgsList.find(o => !o.onboarding_completed);
+
+          if (draftOrg) {
+            // Update draft with step 3 values
+            const response = await updateOrg(draftOrg.id, {
+              system_start_date: vals.use_system_start || new Date().toISOString().split('T')[0],
+              accounting_mode: vals.accounting_mode || 'pro',
+              starting_balances_later: vals.starting_balances_later ?? true,
+              onboarding_step: 4
+            });
+            if (response.error) {
+              setApiError(response.error);
+              return;
+            }
+          }
         }
         
         setStep((prev) => prev + 1);
@@ -299,7 +343,7 @@ export const Onboarding: React.FC = () => {
           accounting_mode: data.accounting_mode,
           starting_balances_later: data.starting_balances_later ?? true,
           onboarding_completed: true,
-          onboarding_step: 3,
+          onboarding_step: 4,
           setup_completed_at: new Date().toISOString()
         });
       } else {
@@ -321,7 +365,7 @@ export const Onboarding: React.FC = () => {
           accounting_mode: data.accounting_mode,
           starting_balances_later: data.starting_balances_later ?? true,
           onboarding_completed: true,
-          onboarding_step: 3
+          onboarding_step: 4
         });
       }
 
@@ -391,7 +435,8 @@ export const Onboarding: React.FC = () => {
               {[
                 { num: 1, title: 'معلومات المنشأة', icon: Building2 },
                 { num: 2, title: 'المعلومات الضريبية والقانونية', icon: Receipt },
-                { num: 3, title: 'الإعداد المحاسبي والبدء', icon: Settings2 }
+                { num: 3, title: 'الإعداد المحاسبي والبدء', icon: Settings2 },
+                { num: 4, title: 'التأسيس المالي لقطاعك', icon: ShieldCheck }
               ].map((s) => {
                 const isActive = step === s.num;
                 const isCompleted = step > s.num;
@@ -754,6 +799,24 @@ export const Onboarding: React.FC = () => {
                       </div>
                     )}
 
+                    {/* STEP 4: Financial setup & COA Template Selection */}
+                    {step === 4 && currentOrg && (
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">التأسيس المالي للهيكل المحاسبي</h4>
+                          <p className="text-xs text-slate-500 mt-1 font-sans">تجهيز شجرة الحسابات والدليل المحاسبي ليكون مهيئاً ومطابقاً لقطاع أعمالك مباشرة.</p>
+                        </div>
+                        
+                        <CoaTemplateSelector 
+                          orgId={currentOrg.id}
+                          hasAccountsAlready={hasAccounts}
+                          onSuccess={() => {
+                            setHasAccounts(true);
+                          }}
+                        />
+                      </div>
+                    )}
+
                   </motion.div>
                 </AnimatePresence>
 
@@ -773,7 +836,7 @@ export const Onboarding: React.FC = () => {
                     <div />
                   )}
 
-                  {step < 3 ? (
+                  {step < 4 ? (
                     <button
                       type="button"
                       id="onboarding-next-btn"
@@ -794,24 +857,33 @@ export const Onboarding: React.FC = () => {
                       )}
                     </button>
                   ) : (
-                    <button
-                      id="onboarding-submit-btn"
-                      type="submit"
-                      disabled={isSaving || isSubmitting}
-                      className="px-6 py-2.5 bg-brand-turquoise hover:bg-brand-turquoise/90 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-55"
-                    >
-                      {isSaving || isSubmitting ? (
-                        <>
-                          <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                          <span>جاري الحفظ والإنهاء...</span>
-                        </>
-                      ) : (
-                        <>
-                          <BadgeCheck className="w-4 h-4" />
-                          <span>{t('common.finish')}</span>
-                        </>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <button
+                        id="onboarding-submit-btn"
+                        type="submit"
+                        disabled={isSaving || isSubmitting || !hasAccounts}
+                        className="px-6 py-2.5 bg-brand-turquoise hover:bg-brand-turquoise/90 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-md disabled:opacity-55"
+                      >
+                        {isSaving || isSubmitting ? (
+                          <>
+                            <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                            <span>جاري الحفظ والإنهاء...</span>
+                          </>
+                        ) : (
+                          <>
+                            <BadgeCheck className="w-4 h-4" />
+                            <span>{t('common.finish')}</span>
+                          </>
+                        )}
+                      </button>
+                      {!hasAccounts && (
+                        roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' ? (
+                          <span className="text-[10px] text-amber-600 font-sans font-bold">يرجى تأسيس دليل الحسابات أولاً لإتمام التسجيل</span>
+                        ) : (
+                          <span className="text-[10px] text-red-600 font-sans font-bold">لا يمكن إكمال إعداد المنشأة قبل تأسيس دليل الحسابات. يرجى التواصل مع المالك أو المدير.</span>
+                        )
                       )}
-                    </button>
+                    </div>
                   )}
                 </div>
 

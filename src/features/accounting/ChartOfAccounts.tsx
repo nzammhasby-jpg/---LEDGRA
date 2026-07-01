@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { accountingService } from '../../lib/accountingService';
+import { CoaTemplateSelector } from './CoaTemplateSelector';
 import { Account, AccountClassification, AccountNature } from '../../types';
 import { normalizeIntegerInput, normalizeInputDigits } from '../../lib/formatters';
 import { 
@@ -20,7 +21,8 @@ import {
   CheckCircle2,
   AlertOctagon,
   ChevronsUpDown,
-  X
+  X,
+  Lock
 } from 'lucide-react';
 
 interface ChartOfAccountsProps {
@@ -38,7 +40,12 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterClassification, setFilterClassification] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterType, setFilterType] = useState<string>('all');
   const [collapsedNodes, setCollapsedNodes] = useState<{ [id: string]: boolean }>({});
+  
+  // Custom dialog state for disabling accounts
+  const [confirmDisableAccount, setConfirmDisableAccount] = useState<Account | null>(null);
 
   // CRUD Dialog Modals
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -59,7 +66,126 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // COA Phase 2A - Industry Templates State
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('general_trading');
+  const [loadingTemplates, setLoadingTemplates] = useState<boolean>(false);
+
+  const canManage = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin';
   const isPrivileged = ['owner', 'admin', 'accountant'].includes(roleInCurrentOrg || '');
+
+  // Set of all parent account IDs
+  const parentIdsSet = useMemo(() => {
+    return new Set(accounts.map(a => a.parent_id).filter(Boolean));
+  }, [accounts]);
+
+  // Compute stats
+  const stats = useMemo(() => {
+    const total = accounts.length;
+    const active = accounts.filter(a => a.is_active).length;
+    const inactive = accounts.filter(a => !a.is_active).length;
+    const system = accounts.filter(a => a.is_system).length;
+    const postable = accounts.filter(a => a.allow_direct_posting && !parentIdsSet.has(a.id) && a.is_active).length;
+
+    return { total, active, inactive, system, postable };
+  }, [accounts, parentIdsSet]);
+
+  // Custom translation helper for database and RPC errors
+  const translateRPCError = (err: any): string => {
+    const msg = err?.message || '';
+    if (msg.includes('in use') || msg.includes('has transactions') || msg.includes('لديه قيود') || msg.includes('violates foreign key constraint') || msg.includes('foreign key')) {
+      return 'لا يمكن حذف الحساب أو تعديله لأنه يحتوي على قيود مالية مسجلة.';
+    }
+    if (msg.includes('system') || msg.includes('نظامي')) {
+      return 'لا يمكن تعديل أو تعطيل الحساب لأنه حساب نظامي محمي.';
+    }
+    if (msg.includes('parent') || msg.includes('تجميعي')) {
+      return 'لا يمكن استخدام حساب تجميعي في تسجيل القيود المالية المباشرة.';
+    }
+    if (msg.includes('permission') || msg.includes('صلاحية') || msg.includes('unauthorized') || msg.includes('غير مصرح')) {
+      return 'ليس لديك صلاحية كافية لإدارة دليل الحسابات.';
+    }
+    if (msg.includes('linked') || msg.includes('مرتبط') || msg.includes('setting')) {
+      return 'لا يمكن تعطيل أو تعديل هذا الحساب لأنه مرتبط بالإعدادات المحاسبية والضريبية للمنشأة.';
+    }
+    return 'فشلت العملية المحاسبية. يرجى التحقق من المدخلات والمحاولة لاحقاً.';
+  };
+
+  const hasActiveChildren = (accountId: string): boolean => {
+    return accounts.some(a => a.parent_id === accountId && a.is_active);
+  };
+
+  const handleToggleActive = async (account: Account, newStatus: boolean) => {
+    if (!currentOrg) return;
+    
+    if (!newStatus) {
+      // Disabling safety checks
+      if (account.is_system) {
+        alert('لا يمكن تعطيل حساب نظامي محمي.');
+        return;
+      }
+      if (hasActiveChildren(account.id)) {
+        alert('لا يمكن تعطيل حساب تجميعي يحتوي على حسابات فرعية نشطة.');
+        return;
+      }
+      setConfirmDisableAccount(account);
+    } else {
+      // Enabling
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      try {
+        await accountingService.updateAccount(currentOrg.id, account.id, {
+          code: account.code,
+          name_ar: account.name_ar,
+          name_en: account.name_en,
+          classification: account.classification,
+          nature: account.nature,
+          parent_id: account.parent_id,
+          allow_direct_posting: account.allow_direct_posting,
+          is_active: true,
+          description: account.description
+        });
+        setSuccess(`تم إعادة تفعيل الحساب المحاسبي "${account.name_ar}" بنجاح.`);
+        await loadAccounts();
+      } catch (err: any) {
+        console.error('Error re-activating account:', err);
+        setError(translateRPCError(err));
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleConfirmDisable = async () => {
+    if (!currentOrg || !confirmDisableAccount) return;
+    
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const act = confirmDisableAccount;
+      await accountingService.updateAccount(currentOrg.id, act.id, {
+        code: act.code,
+        name_ar: act.name_ar,
+        name_en: act.name_en,
+        classification: act.classification,
+        nature: act.nature,
+        parent_id: act.parent_id,
+        allow_direct_posting: act.allow_direct_posting,
+        is_active: false,
+        description: act.description
+      });
+      setSuccess(`تم تعطيل الحساب المحاسبي "${act.name_ar}" بنجاح.`);
+      setConfirmDisableAccount(null);
+      await loadAccounts();
+    } catch (err: any) {
+      console.error('Error disabling account:', err);
+      setError(translateRPCError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch Accounts list
   const loadAccounts = async () => {
@@ -77,9 +203,44 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
     }
   };
 
+  const loadTemplates = async () => {
+    setLoadingTemplates(true);
+    try {
+      const data = await accountingService.getAvailableCoaTemplates();
+      setTemplates(data || []);
+      if (data && data.length > 0) {
+        const hasGeneral = data.some(t => t.industry_type === 'general_trading');
+        setSelectedTemplate(hasGeneral ? 'general_trading' : data[0].industry_type);
+      }
+    } catch (err) {
+      console.error('Error loading COA templates:', err);
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
   useEffect(() => {
     loadAccounts();
   }, [currentOrg]);
+
+  useEffect(() => {
+    if (accounts.length === 0 && currentOrg) {
+      loadTemplates();
+    }
+  }, [accounts, currentOrg]);
+
+  const getTemplateLabel = (type: string): string => {
+    switch (type) {
+      case 'general_trading': return 'التجارة العامة والتجزئة';
+      case 'services': return 'الخدمات والحلول المهنية';
+      case 'real_estate': return 'التسويق والتطوير العقاري';
+      case 'contracting': return 'المقاولات والإنشاءات';
+      case 'ecommerce': return 'التجارة الإلكترونية والمنصات';
+      case 'restaurant': return 'المطاعم والأغذية والمقاهي';
+      case 'simple_establishment': return 'المؤسسات والمنشآت البسيطة';
+      default: return type;
+    }
+  };
 
   // Seed default Chart Of Accounts
   const handleSeedCOA = async () => {
@@ -97,6 +258,29 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
     } catch (err: any) {
       console.error('Error seeding COA:', err);
       setError(err.message || 'فشلت عملية تأسيس الشجرة الافتراضية.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Seed industry-specific Chart Of Accounts
+  const handleSeedIndustryCOA = async (industryType: string) => {
+    if (!currentOrg) return;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await accountingService.seedIndustryChartOfAccounts(currentOrg.id, industryType);
+      if (res && (res.status === 'success' || res.status === 'created')) {
+        const count = res.inserted_accounts || 0;
+        setSuccess(`تم تأسيس الدليل المحاسبي لقطاع (${getTemplateLabel(industryType)}) بنجاح! تم إنشاء ${count} حساباً وتأمين الحسابات النظامية والضريبية.`);
+      } else if (res && res.status === 'already_initialized') {
+        setSuccess('الدليل المحاسبي للمنشأة مهيأ مسبقاً بالفعل.');
+      }
+      await loadAccounts();
+    } catch (err: any) {
+      console.error('Error seeding industry COA:', err);
+      setError(err.message || 'فشلت عملية تأسيس شجرة الحسابات الخاصة بالقطاع.');
     } finally {
       setLoading(false);
     }
@@ -396,7 +580,26 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
 
         const matchesClass = filterClassification === 'all' || node.classification === filterClassification;
 
-        if (matchesSearch && matchesClass) {
+        const matchesStatus = filterStatus === 'all' ||
+          (filterStatus === 'active' && node.is_active) ||
+          (filterStatus === 'inactive' && !node.is_active);
+
+        let matchesType = true;
+        if (filterType !== 'all') {
+          const isParent = !node.allow_direct_posting || parentIdsSet.has(node.id);
+          const isPostable = node.allow_direct_posting && !parentIdsSet.has(node.id) && node.is_active;
+          const isSystem = node.is_system;
+
+          if (filterType === 'parent') {
+            matchesType = isParent;
+          } else if (filterType === 'postable') {
+            matchesType = isPostable;
+          } else if (filterType === 'system') {
+            matchesType = isSystem;
+          }
+        }
+
+        if (matchesSearch && matchesClass && matchesStatus && matchesType) {
           // If node matches directly, preserve all its subbranches
           return { ...node, children } as Account;
         } else if (children.length > 0) {
@@ -409,9 +612,9 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
   };
 
   const filteredTree = useMemo(() => {
-    if (!searchQuery && filterClassification === 'all') return accountTree;
+    if (!searchQuery && filterClassification === 'all' && filterStatus === 'all' && filterType === 'all') return accountTree;
     return filterAndFormatTree(accountTree);
-  }, [accountTree, searchQuery, filterClassification]);
+  }, [accountTree, searchQuery, filterClassification, filterStatus, filterType]);
 
   // Recursively render tree row layout
   const renderAccountTreeNode = (node: Account, depth = 0) => {
@@ -425,9 +628,11 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
         {/* Account Row */}
         <div 
           className={`flex items-center justify-between p-3.5 rounded-2xl border transition group ${
-            node.is_system 
-              ? 'bg-slate-50/55 border-slate-100 hover:bg-slate-50 hover:border-slate-200' 
-              : 'bg-white border-slate-100 hover:bg-slate-50/40 hover:border-slate-200/80 hover:shadow-sm'
+            !node.is_active
+              ? 'bg-slate-50/45 border-slate-100 text-slate-400 opacity-65'
+              : node.is_system 
+                ? 'bg-slate-50/55 border-slate-100 hover:bg-slate-50 hover:border-slate-200' 
+                : 'bg-white border-slate-100 hover:bg-slate-50/40 hover:border-slate-200/80 hover:shadow-sm'
           }`}
           style={{ marginRight: `${depth * 28}px` }}
         >
@@ -468,7 +673,13 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
                 </span>
                 
                 {/* Account Name */}
-                <span className={`text-xs font-bold leading-none ${hasChildren ? 'text-slate-800' : 'text-slate-600'}`}>
+                <span className={`text-xs font-bold leading-none ${
+                  !node.is_active
+                    ? 'text-slate-400 line-through decoration-slate-300'
+                    : hasChildren 
+                      ? 'text-slate-800' 
+                      : 'text-slate-600'
+                }`}>
                   {node.name_ar}
                 </span>
 
@@ -479,24 +690,28 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
                   </span>
                 )}
 
-                {/* Protected standard indicators */}
+                {/* Safety Status Badges */}
                 {node.is_system && (
-                  <span className="bg-slate-100 text-slate-500 text-[8.5px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5" title="حساب افتراضي مقفل ومحمي للنظام">
-                    <ShieldCheck className="w-3 h-3 text-slate-400" />
+                  <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 select-none shrink-0" title="حساب نظامي محمي غير قابل للتعطيل أو الحذف">
+                    <Lock className="w-3 h-3 text-slate-400" />
                     <span>نظامي</span>
                   </span>
                 )}
 
-                {/* Direct posting label */}
-                {!node.allow_direct_posting && (
-                  <span className="bg-slate-50 border border-slate-200 text-slate-400 text-[8.5px] font-bold px-1.5 py-0.5 rounded-md">
+                {(!node.allow_direct_posting || parentIdsSet.has(node.id)) && (
+                  <span className="bg-amber-50 text-amber-700 border border-amber-220 text-[9px] font-bold px-2 py-0.5 rounded-md select-none shrink-0" title="حساب رئيسي تجميعي لتصنيف الحسابات الفرعية">
                     تجميعي
                   </span>
                 )}
 
-                {/* Inactive indicators */}
+                {(node.allow_direct_posting && !parentIdsSet.has(node.id) && node.is_active) && (
+                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-250 text-[9px] font-bold px-2 py-0.5 rounded-md select-none shrink-0" title="حساب فرعي نشط وقابل لترحيل المعاملات المالية المباشرة">
+                    قابل للترحيل
+                  </span>
+                )}
+
                 {!node.is_active && (
-                  <span className="bg-red-50 text-red-500 text-[8.5px] font-bold px-1.5 py-0.5 rounded-md">
+                  <span className="bg-red-50 text-red-600 border border-red-200 text-[9px] font-bold px-2 py-0.5 rounded-md select-none shrink-0" title="حساب معطل خارج الخدمة">
                     غير نشط
                   </span>
                 )}
@@ -539,49 +754,60 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
                 className="flex items-center gap-1 text-[10px] font-bold py-1 px-2.5 rounded-lg border text-brand-blue bg-brand-blue/5 border-brand-blue/20 hover:bg-brand-blue/15 transition cursor-pointer font-sans"
                 title="عرض دفتر الأستاذ"
               >
-                <span>عرض دفتر الأستاذ</span>
+                <span>دفتر الأستاذ</span>
               </button>
             ) : (
-              <button
-                disabled
-                className="flex items-center gap-1 text-[10px] font-bold py-1 px-2.5 rounded-lg border text-slate-400 bg-slate-50 border-slate-200 transition cursor-not-allowed select-none font-sans"
-                title="هذا حساب تجميعي لا يحتوي قيود مباشرة."
+              <span
+                className="text-[10px] text-slate-400 py-1 px-2 select-none font-sans hidden sm:inline"
+                title="حساب تجميعي لا يحتوي على قيود مباشرة"
               >
-                <span>هذا حساب تجميعي لا يحتوي قيود مباشرة.</span>
-              </button>
+                لا يقبل الترحيل
+              </span>
             )}
 
-            {isPrivileged && (
-              <>
+            {canManage && (
+              <div className="flex items-center gap-1 border-r border-slate-100 pr-1.5 mr-1.5">
                 {/* Create sub-ledger under this */}
-                <button 
-                  onClick={() => openAddModal(node)}
-                  className="p-1.5 hover:bg-brand-blue/10 text-slate-400 hover:text-brand-blue rounded-lg transition cursor-pointer"
-                  title="إضافة حساب فرعي"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+                {node.is_active && (
+                  <button 
+                    onClick={() => openAddModal(node)}
+                    className="p-1.5 hover:bg-brand-blue/10 text-slate-400 hover:text-brand-blue rounded-lg transition cursor-pointer shrink-0"
+                    title="إضافة حساب فرعي"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
 
                 {/* Edit accounts definitions */}
                 <button 
                   onClick={() => openEditModal(node)}
-                  className="p-1.5 hover:bg-amber-500/10 text-slate-400 hover:text-amber-500 rounded-lg transition cursor-pointer"
+                  className="p-1.5 hover:bg-amber-500/10 text-slate-400 hover:text-amber-500 rounded-lg transition cursor-pointer shrink-0"
                   title="تعديل الحساب"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Remove, restrict system tags */}
+                {/* Disable/Reactivate Button for non-system accounts */}
                 {!node.is_system && (
-                  <button 
-                    onClick={() => handleDeleteAccount(node)}
-                    className="p-1.5 hover:bg-red-500/10 text-slate-400 hover:text-red-500 rounded-lg transition cursor-pointer"
-                    title="حذف الحساب"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  node.is_active ? (
+                    <button
+                      onClick={() => handleToggleActive(node, false)}
+                      className="text-[9px] font-bold py-1 px-2 rounded-md border text-red-600 bg-red-50 border-red-200 hover:bg-red-100 transition cursor-pointer font-sans shrink-0"
+                      title="تعطيل الحساب المحاسبي"
+                    >
+                      تعطيل
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleToggleActive(node, true)}
+                      className="text-[9px] font-bold py-1 px-2 rounded-md border text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 transition cursor-pointer font-sans shrink-0"
+                      title="إعادة تفعيل الحساب المحاسبي"
+                    >
+                      تفعيل
+                    </button>
+                  )
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -619,40 +845,105 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
         </div>
       )}
 
+      {/* Top Statistics Cards */}
+      {accounts.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-full text-right" dir="rtl">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 text-right space-y-1 shadow-xs">
+            <span className="text-[10px] font-bold text-slate-400 block font-sans">إجمالي الحسابات</span>
+            <span className="text-xl font-extrabold text-slate-800 font-mono leading-none select-all">{stats.total}</span>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 text-right space-y-1 shadow-xs">
+            <span className="text-[10px] font-bold text-emerald-600 block font-sans">الحسابات النشطة</span>
+            <span className="text-xl font-extrabold text-emerald-700 font-mono leading-none select-all">{stats.active}</span>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 text-right space-y-1 shadow-xs">
+            <span className="text-[10px] font-bold text-red-500 block font-sans">الحسابات غير النشطة</span>
+            <span className="text-xl font-extrabold text-red-600 font-mono leading-none select-all">{stats.inactive}</span>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 text-right space-y-1 shadow-xs">
+            <span className="text-[10px] font-bold text-slate-500 block font-sans">الحسابات النظامية</span>
+            <span className="text-xl font-extrabold text-slate-700 font-mono leading-none select-all">{stats.system}</span>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 text-right space-y-1 shadow-xs">
+            <span className="text-[10px] font-bold text-brand-blue block font-sans">الحسابات القابلة للترحيل</span>
+            <span className="text-xl font-extrabold text-brand-blue-deep font-mono leading-none select-all">{stats.postable}</span>
+          </div>
+        </div>
+      )}
+
       {/* Primary Toolbar Grid */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4 text-right" dir="rtl">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           
           {/* Search Inputs */}
-          <div className="relative w-full md:w-80">
-            <Search className="absolute right-3.5 top-2.5 w-4 h-4 text-slate-400" />
-            <input 
-              type="text"
-              placeholder="ابحث بالرمز أو اسم الحساب..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-blue text-right font-sans"
-            />
+          <div className="relative w-full">
+            <label className="text-[10px] font-bold text-slate-400 block mb-1.5">البحث السريع</label>
+            <div className="relative">
+              <Search className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
+              <input 
+                type="text"
+                placeholder="ابحث بالرمز أو اسم الحساب..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-blue text-right font-sans"
+              />
+            </div>
           </div>
 
-          {/* Sorters and Category Filter lists */}
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Classification Filter */}
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 block mb-1.5">التصنيف المحاسبي</label>
             <select
               value={filterClassification}
               onChange={(e) => setFilterClassification(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none focus:border-brand-blue cursor-pointer font-sans"
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none focus:border-brand-blue cursor-pointer font-sans"
             >
-              <option value="all">كافة الحسابات الرئيسية والفرعية</option>
+              <option value="all">الكل (كافة التصنيفات)</option>
               <option value="assets">الأصول</option>
               <option value="liabilities">الالتزامات</option>
               <option value="equity">حقوق الملكية</option>
               <option value="revenue">الإيرادات</option>
               <option value="expenses">المصروفات</option>
             </select>
+          </div>
 
+          {/* Status Filter */}
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 block mb-1.5">الحالة</label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none focus:border-brand-blue cursor-pointer font-sans"
+            >
+              <option value="all">الكل (نشط وغير نشط)</option>
+              <option value="active">نشط فقط</option>
+              <option value="inactive">غير نشط فقط</option>
+            </select>
+          </div>
+
+          {/* Account Type Filter */}
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 block mb-1.5">نوع الحساب</label>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none focus:border-brand-blue cursor-pointer font-sans"
+            >
+              <option value="all">الكل (تجميعي وقابل للترحيل ونظامي)</option>
+              <option value="parent">حساب تجميعي</option>
+              <option value="postable">قابل للترحيل</option>
+              <option value="system">حساب نظامي</option>
+            </select>
+          </div>
+
+        </div>
+
+        {/* Expand/Collapse and main actions */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button 
               onClick={handleExpandAll}
-              className="text-xs bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 text-slate-600 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer font-sans"
+              className="text-xs bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 text-slate-600 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer font-sans w-1/2 sm:w-auto justify-center"
               title="توسيع شجرة الدليل"
             >
               <FolderTree className="w-4 h-4" />
@@ -661,24 +952,23 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
 
             <button 
               onClick={handleCollapseAll}
-              className="text-xs bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 text-slate-600 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer font-sans"
+              className="text-xs bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 text-slate-600 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer font-sans w-1/2 sm:w-auto justify-center"
               title="طي فروع شجرة الدليل"
             >
               <ChevronsUpDown className="w-4 h-4" />
               <span>طي الكل</span>
             </button>
-
-            {isPrivileged && (
-              <button 
-                onClick={() => openAddModal(null)}
-                className="text-xs bg-brand-blue hover:bg-brand-blue-deep text-white font-extrabold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm shadow-brand-blue/15 font-sans"
-              >
-                <Plus className="w-4 h-4" />
-                <span>إضافة حساب رئيسي</span>
-              </button>
-            )}
           </div>
 
+          {canManage && (
+            <button 
+              onClick={() => openAddModal(null)}
+              className="text-xs bg-brand-blue hover:bg-brand-blue-deep text-white font-extrabold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm shadow-brand-blue/15 font-sans w-full sm:w-auto justify-center"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إضافة حساب رئيسي جديد</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -690,25 +980,27 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
         </div>
       ) : accounts.length === 0 ? (
         
-        /* Empty accounts trigger onboarding COA Setup panel */
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center text-white space-y-6 flex flex-col items-center justify-center max-w-4xl mx-auto">
-          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-brand-turquoise">
-            <Compass className="w-7 h-7" />
+        /* Empty accounts trigger onboarding COA Setup panel with industry templates */
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 md:p-12 text-center text-slate-800 space-y-6 flex flex-col items-center justify-center max-w-4xl mx-auto shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-brand-turquoise">
+            <Compass className="w-7 h-7 animate-pulse" />
           </div>
           <div className="space-y-2 max-w-xl text-center">
-            <h3 className="text-base font-extrabold text-white">تأسيس الدليل المحاسبي الشجري لمنشأتك</h3>
-            <p className="text-xs text-slate-400">
-              يرحب بك نظام LEDGRA | لِدجرا. لم يتم العثور على أي حسابات محاسبية مسجلة لمنشأتك حتى الآن. 
-              هل ترغب بتأسيس دليل حسابات سعودي قياسي متكامل ومعتمد يدعم طبيعة عملك بكافة الحسابات والترابطات الضريبية الأساسية؟
+            <h3 className="text-lg font-extrabold text-slate-900">لم يتم تأسيس دليل الحسابات بعد</h3>
+            <p className="text-xs text-slate-500 font-sans">
+              يرحب بك نظام LEDGRA | لِدجرا. لم يتم تأسيس وتثبيت أي حسابات محاسبية مسجلة لمنشأتك حتى الآن. 
+              يرجى اختيار قالب دليل الحسابات الملائم لقطاعك لتأسيس الهيكل المالي فوراً:
             </p>
           </div>
-          
-          <button 
-            onClick={handleSeedCOA}
-            className="text-xs bg-brand-turquoise hover:bg-brand-turquoise/90 text-slate-950 font-extrabold px-6 py-3.5 rounded-xl transition shadow-lg shadow-brand-turquoise/15 cursor-pointer font-sans"
-          >
-            تأسيس الدليل الحسابي لِدجرا القياسي
-          </button>
+
+          <div className="w-full">
+            {currentOrg && (
+              <CoaTemplateSelector 
+                orgId={currentOrg.id}
+                onSuccess={loadAccounts}
+              />
+            )}
+          </div>
         </div>
       ) : filteredTree.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center space-y-3 font-sans">
@@ -830,6 +1122,12 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
                 </div>
               </div>
 
+              {selectedParent && (
+                <div className="bg-amber-50/60 border border-amber-250 rounded-xl p-3.5 text-[11px] text-amber-800 leading-relaxed font-sans">
+                  • الحساب الفرعي يرث نوع وطبيعة الحساب الأب تلقائياً لضمان سلامة الهيكل المحاسبي ({selectedParent.name_ar}).
+                </div>
+              )}
+
               <div>
                 <label className="text-[10px] font-bold text-slate-400 block mb-1">الوصف أو الملاحظات (اختياري)</label>
                 <textarea 
@@ -883,6 +1181,19 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
             {formError && (
               <div className="bg-red-50 border border-red-200 rounded-2xl p-3 text-red-800 text-[11px] font-bold">
                 {formError}
+              </div>
+            )}
+
+            {editingAccount.is_system && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-[11px] text-blue-800 leading-relaxed flex items-center gap-2">
+                <Lock className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>هذا حساب نظامي محمي. يسمح بتعديل الاسم والوصف فقط لضمان سلامة العمليات المحاسبية والنظام.</span>
+              </div>
+            )}
+
+            {formParentId && !editingAccount.is_system && (
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 text-[11px] text-amber-800 leading-relaxed font-sans">
+                • الحساب الفرعي يرث نوع وطبيعة الحساب الأب تلقائياً لضمان سلامة الهيكل المحاسبي.
               </div>
             )}
 
@@ -985,7 +1296,17 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
                   <label className="text-[10px] font-bold text-slate-400 block mb-1">الحساب الأب (نقل الحساب)</label>
                   <select
                     value={formParentId || ''}
-                    onChange={(e) => setFormParentId(e.target.value || null)}
+                    onChange={(e) => {
+                      const newParentId = e.target.value || null;
+                      setFormParentId(newParentId);
+                      if (newParentId) {
+                        const p = accounts.find(a => a.id === newParentId);
+                        if (p) {
+                          setFormClassification(p.classification);
+                          setFormNature(p.nature);
+                        }
+                      }
+                    }}
                     className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none"
                   >
                     <option value="">« بدون حساب أب - حساب رئيسي »</option>
@@ -1182,6 +1503,46 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger }
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Modal Dialog: DISABLE CONFIRMATION */}
+      {confirmDisableAccount && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md shadow-2xl p-6 text-right space-y-6 font-sans" dir="rtl">
+            <div className="flex items-center gap-3 text-red-650">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <AlertOctagon className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-extrabold text-slate-850">تأكيد تعطيل الحساب المحاسبي</h3>
+            </div>
+
+            <div className="space-y-3.5">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                هل أنت متأكد من رغبتك في تعطيل الحساب <strong className="text-slate-900 font-bold">"{confirmDisableAccount.name_ar}"</strong> ({confirmDisableAccount.code})؟
+              </p>
+              <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 text-[11px] text-slate-500 leading-relaxed">
+                سيتم إيقاف استخدام هذا الحساب في العمليات الجديدة، لكنه سيبقى ظاهرًا في التقارير التاريخية.
+              </div>
+            </div>
+
+            <div className="flex justify-start gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleConfirmDisable}
+                className="text-xs bg-red-600 hover:bg-red-700 text-white font-extrabold px-5 py-2.5 rounded-xl transition cursor-pointer"
+              >
+                تأكيد التعطيل
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDisableAccount(null)}
+                className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
           </div>
         </div>
       )}

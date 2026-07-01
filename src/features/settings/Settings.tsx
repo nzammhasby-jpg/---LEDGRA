@@ -38,7 +38,8 @@ import {
   Activity,
   Edit,
   User,
-  UserPlus
+  UserPlus,
+  Copy
 } from 'lucide-react';
 import { canInviteMoreMembers } from '../../lib/permissions';
 
@@ -50,6 +51,7 @@ interface SettingsMember {
   email: string | null;
   role: string;
   status: string;
+  created_at?: string;
 }
 
 interface RPCMemberResult {
@@ -378,6 +380,53 @@ export const Settings: React.FC = () => {
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [updatingRoleLoading, setUpdatingRoleLoading] = useState<boolean>(false);
 
+  // Manual Invitation link states & helper functions
+  const [createdInviteLink, setCreatedInviteLink] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  const getStoredTokenForInvite = (id: string): string | null => {
+    try {
+      const tokens = JSON.parse(localStorage.getItem('ledgra_invite_tokens') || '{}');
+      return tokens[id] || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const canEditRole = (memberRole: string) => {
+    if (roleInCurrentOrg === 'owner') return memberRole !== 'owner';
+    if (roleInCurrentOrg === 'admin') return memberRole !== 'owner' && memberRole !== 'admin';
+    return false;
+  };
+
+  const canDeactivate = (member: SettingsMember) => {
+    if (member.role === 'owner') return false;
+    if (roleInCurrentOrg === 'owner') return true;
+    if (roleInCurrentOrg === 'admin') {
+      return member.role !== 'owner' && member.role !== 'admin';
+    }
+    return false;
+  };
+
+  const getAllowedRoleOptions = (memberRole: string) => {
+    if (roleInCurrentOrg === 'owner') {
+      return [
+        { value: 'viewer', label: 'مستعرض فقط' },
+        { value: 'sales', label: 'مسؤول مبيعات' },
+        { value: 'accountant', label: 'محاسب مالي' },
+        { value: 'admin', label: 'مدير نظام' }
+      ];
+    }
+    if (roleInCurrentOrg === 'admin') {
+      return [
+        { value: 'viewer', label: 'مستعرض فقط' },
+        { value: 'sales', label: 'مسؤول مبيعات' },
+        { value: 'accountant', label: 'محاسب مالي' }
+      ];
+    }
+    return [];
+  };
+
   // Forms statuses
   const [newBranchSuccess, setNewBranchSuccess] = useState<string | null>(null);
   const [newBranchError, setNewBranchError] = useState<string | null>(null);
@@ -432,7 +481,8 @@ export const Settings: React.FC = () => {
           phone: m.phone || 'غير مسجل',
           email: m.email || null,
           role: m.role,
-          status: m.is_active ? 'نشط' : 'معطل'
+          status: m.is_active ? 'نشط' : 'معطل',
+          created_at: m.created_at
         }));
         setMembersList(mapped);
       }
@@ -465,63 +515,79 @@ export const Settings: React.FC = () => {
     }
   };
 
-  // Handle invitation submission via Edge Function
+  // Handle invitation submission via RPC (Manual Invite Link System)
   const handleSendInvitation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentOrg) return;
 
     setInvitationSuccess(null);
     setInvitationError(null);
+    setCreatedInviteLink(null);
+    setCopiedLink(false);
     setInvitingLoading(true);
 
     try {
+      // Frontend Validations
+      if (!invitationEmail || !invitationEmail.includes('@')) {
+        throw new Error('الرجاء إدخال بريد إلكتروني صحيح ومكتمل الصيغة.');
+      }
+      if (!invitationRole) {
+        throw new Error('الرجاء اختيار صلاحية ودور العضو المراد دعوته.');
+      }
+
+      // Check role authorization for invitation
+      if (roleInCurrentOrg !== 'owner' && roleInCurrentOrg !== 'admin') {
+        throw new Error('ليس لديك صلاحية لإصدار دعوات لهذه المنشأة.');
+      }
+
+      if (roleInCurrentOrg === 'admin' && invitationRole === 'owner') {
+        throw new Error('لا يمكن للمشرفين دعوة مالك جديد للمنشأة.');
+      }
+
       // Validate subscription limit
       const canInvite = canInviteMoreMembers(subscription, membersList.length);
       if (!canInvite) {
         throw new Error('تجاوزت هذه المنشأة الحد الأقصى لعدد المستخدمين المتاح في باقة الاشتراك الحالية.');
       }
 
-      // Get current auth session to acquire the access token
-      const sessionRes = await supabase.auth.getSession();
-      const session = sessionRes.data.session;
-      if (!session) {
-        throw new Error('يجب تسجيل الدخول لإرسال دعوة من الفضاء المالي الآمن لـ LEDGRA.');
-      }
-
-      // Trigger the Edge Function securely
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-organization-invite`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
-        },
-        body: JSON.stringify({
-          organizationId: currentOrg.id,
-          email: invitationEmail,
-          role: invitationRole
-        })
+      // Call the secure postgres RPC directly
+      const { data, error } = await supabase.rpc('create_organization_invitation', {
+        p_org_id: currentOrg.id,
+        p_email: invitationEmail.trim().toLowerCase(),
+        p_role: invitationRole
       });
 
-      const resJson = await response.json();
-      if (!response.ok || resJson.error) {
-        throw new Error(resJson.error || 'فشل إرسال الدعوة عبر الخادم.');
+      if (error) {
+        throw new Error(error.message);
       }
 
-      let successMsg = '';
-      if (resJson.inviteLink) {
-        successMsg = `تم إنشاء الدعوة. استخدم رابط القبول السريع التالي للتجربة:\n${resJson.inviteLink}`;
-      } else if (resJson.message) {
-        successMsg = resJson.message;
-      } else {
-        successMsg = 'تم إنشاء الدعوة بنجاح، لكن إرسال البريد يحتاج ضبط مزود بريد داخل Edge Function.';
+      const invitation = Array.isArray(data) ? data[0] : data;
+      if (!invitation || !invitation.raw_token) {
+        throw new Error('لم يقم الخادم بإرجاع الرمز الآمن للدعوة.');
       }
-      setInvitationSuccess(successMsg);
+
+      // Save token in localStorage mapped to invitation ID to allow coping it later in the session
+      try {
+        const tokens = JSON.parse(localStorage.getItem('ledgra_invite_tokens') || '{}');
+        tokens[invitation.invitation_id] = invitation.raw_token;
+        localStorage.setItem('ledgra_invite_tokens', JSON.stringify(tokens));
+      } catch (err) {
+        console.error('Failed to store invitation token locally:', err);
+      }
+
+      // Construct the invite link using standard accept-invite path
+      const inviteLink = `${window.location.origin}/#/accept-invite?token=${invitation.raw_token}`;
+      setCreatedInviteLink(inviteLink);
+      setInvitationSuccess('تم إنشاء الدعوة اليدوية بنجاح! انسخ رابط الانضمام أدناه وأرسله لزميلك لبدء التجربة.');
       setInvitationEmail('');
       loadInvitations();
     } catch (err: any) {
-      console.error('Error sending invitation:', err);
-      setInvitationError(err.message || 'فشلت عملية إصدار الدعوة بسبب عطل غير متوقع.');
+      console.error('Error creating invitation:', err);
+      let friendlyMessage = err.message || 'فشلت عملية إصدار الدعوة بسبب عطل غير متوقع.';
+      if (friendlyMessage.includes('Failed to fetch')) {
+        friendlyMessage = 'تعذر الاتصال بالخادم لإنشاء الدعوة اليدوية. يرجى التحقق من اتصال الإنترنت.';
+      }
+      setInvitationError(friendlyMessage);
     } finally {
       setInvitingLoading(false);
     }
@@ -1478,6 +1544,32 @@ export const Settings: React.FC = () => {
                       </div>
                     )}
 
+                    {createdInviteLink && (
+                      <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-2 text-slate-800" id="created-invite-link-card">
+                        <span className="text-[10px] font-bold text-slate-400 block">رابط الدعوة المباشر:</span>
+                        <div className="bg-white border border-slate-100 p-2.5 rounded-lg flex items-center justify-between gap-2 overflow-hidden">
+                          <code className="text-[10px] font-mono text-slate-600 truncate select-all block" style={{ direction: 'ltr' }}>
+                            {createdInviteLink}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(createdInviteLink);
+                              setCopiedLink(true);
+                              setTimeout(() => setCopiedLink(false), 3000);
+                            }}
+                            className="bg-brand-purple hover:bg-brand-purple/95 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shrink-0 transition flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedLink ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            <span>{copiedLink ? 'تم النسخ' : 'نسخ'}</span>
+                          </button>
+                        </div>
+                        <p className="text-[9px] text-amber-600 font-medium">
+                          * يرجى نسخ الرابط وإرساله يدويًا للعضو المراد دعوته. لن يتم عرض الرابط مرة أخرى بعد مغادرة هذه الصفحة حفاظاً على أمان منشأتك.
+                        </p>
+                      </div>
+                    )}
+
                     {invitationError && (
                       <div className="bg-red-50 border-r-4 border-red-500 p-3 rounded-lg text-red-800 text-[10px] font-semibold">
                         {invitationError}
@@ -1511,14 +1603,20 @@ export const Settings: React.FC = () => {
                         </select>
                       </div>
 
-                      <button
-                        type="submit"
-                        disabled={invitingLoading}
-                        className="w-full bg-brand-purple hover:bg-brand-purple/95 text-white text-xs font-bold py-2.5 rounded-xl shadow transition disabled:bg-slate-300 flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <Mail className="w-4 h-4" />
-                        <span>{invitingLoading ? 'جاري إرسال الدعوة...' : 'إرسال دعوة بالبريد'}</span>
-                      </button>
+                      <div className="space-y-2">
+                        <button
+                          type="submit"
+                          disabled={invitingLoading}
+                          className="w-full bg-brand-purple hover:bg-brand-purple/95 text-white text-xs font-bold py-2.5 rounded-xl shadow transition disabled:bg-slate-300 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          <span>{invitingLoading ? 'جاري إنشاء الدعوة...' : 'إنشاء رابط دعوة'}</span>
+                        </button>
+                        
+                        <p className="text-[9px] text-slate-400 text-center leading-relaxed font-semibold">
+                          سيتم ربط الإرسال بالبريد لاحقًا. حاليًا يمكنك نسخ رابط الدعوة وإرساله يدويًا.
+                        </p>
+                      </div>
                     </form>
                   </div>
 
@@ -1555,6 +1653,8 @@ export const Settings: React.FC = () => {
                               <th className="pb-2 font-bold text-right">البريد الإلكتروني</th>
                               <th className="pb-2 font-bold text-right">رقم الهاتف</th>
                               <th className="pb-2 font-bold text-center">الدور الممنوح</th>
+                              <th className="pb-2 font-bold text-center">تاريخ الانضمام</th>
+                              <th className="pb-2 font-bold text-center">آخر تحديث</th>
                               <th className="pb-2 font-bold text-center">الحالة</th>
                               <th className="pb-2 font-bold text-left">العمليات</th>
                             </tr>
@@ -1579,18 +1679,24 @@ export const Settings: React.FC = () => {
                                     <div className="flex items-center justify-center gap-1">
                                       <select
                                         defaultValue={u.role}
-                                        onChange={(e) => handleUpdateMemberRole(u.profile_id, e.target.value)}
+                                        onChange={(e) => {
+                                          const selectedRole = e.target.value;
+                                          if (roleInCurrentOrg === 'admin' && (selectedRole === 'admin' || selectedRole === 'owner')) {
+                                            alert('غير مصرح لك بمنح هذا الدور.');
+                                            return;
+                                          }
+                                          handleUpdateMemberRole(u.profile_id, selectedRole);
+                                        }}
                                         disabled={updatingRoleLoading}
-                                        className="bg-slate-50 text-[10px] px-2 py-1 rounded-lg border border-slate-200 focus:outline-none"
+                                        className="bg-slate-50 text-[10px] px-2 py-1 rounded-lg border border-slate-200 focus:outline-none cursor-pointer"
                                       >
-                                        <option value="viewer">مستعرض فقط</option>
-                                        <option value="sales">مسؤول مبيعات</option>
-                                        <option value="accountant">محاسب مالي</option>
-                                        <option value="admin">مدير نظام</option>
+                                        {getAllowedRoleOptions(u.role).map((opt) => (
+                                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
                                       </select>
                                       <button 
                                         onClick={() => setEditingMemberId(null)}
-                                        className="text-[9px] text-slate-400 hover:text-slate-600 px-1"
+                                        className="text-[9px] text-slate-400 hover:text-slate-600 px-1 cursor-pointer"
                                       >
                                         إلغاء
                                       </button>
@@ -1614,10 +1720,10 @@ export const Settings: React.FC = () => {
                                         {u.role === 'sales' && 'مسؤول مبيعات'}
                                         {u.role === 'viewer' && 'مستعرض فقط'}
                                       </span>
-                                      {u.role !== 'owner' && (
+                                      {canEditRole(u.role) && (
                                         <button 
                                           onClick={() => setEditingMemberId(u.id)}
-                                          className="text-slate-400 hover:text-brand-purple transition"
+                                          className="text-slate-400 hover:text-brand-purple transition cursor-pointer"
                                           title="تعديل الدور"
                                         >
                                           <Edit className="w-3.5 h-3.5" />
@@ -1625,6 +1731,12 @@ export const Settings: React.FC = () => {
                                       )}
                                     </div>
                                   )}
+                                </td>
+                                <td className="py-3 text-center text-slate-400 font-mono text-[10px]">
+                                  {u.created_at ? new Date(u.created_at).toLocaleDateString('ar-SA') : 'منذ التأسيس'}
+                                </td>
+                                <td className="py-3 text-center text-slate-400 font-mono text-[10px]">
+                                  {u.created_at ? new Date(u.created_at).toLocaleDateString('ar-SA') : 'منذ التأسيس'}
                                 </td>
                                 <td className="py-3 text-center">
                                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
@@ -1636,18 +1748,18 @@ export const Settings: React.FC = () => {
                                   </span>
                                 </td>
                                 <td className="py-3 text-left">
-                                  {u.role !== 'owner' && (
+                                  {canDeactivate(u) && (
                                     u.status === 'نشط' ? (
                                       <button
                                         onClick={() => handleDeactivateMember(u.profile_id)}
-                                        className="text-[10px] text-red-600 hover:text-red-800 font-semibold hover:underline"
+                                        className="text-[10px] text-red-600 hover:text-red-800 font-bold hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-red-100"
                                       >
                                         تعطيل الصلاحية
                                       </button>
                                     ) : (
                                       <button
                                         onClick={() => handleActivateMember(u.profile_id)}
-                                        className="text-[10px] text-emerald-600 hover:text-emerald-800 font-semibold hover:underline"
+                                        className="text-[10px] text-emerald-600 hover:text-emerald-800 font-bold hover:bg-emerald-50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-emerald-100"
                                       >
                                         إعادة تفعيل
                                       </button>
@@ -1749,16 +1861,42 @@ export const Settings: React.FC = () => {
                                   </span>
                                 </td>
                                 <td className="py-3 text-left">
-                                  {inv.status === 'pending' && (
-                                    <button
-                                      onClick={() => handleCancelInvitation(inv.id)}
-                                      className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors duration-200 inline-flex items-center gap-1 text-[10px] font-bold border border-transparent hover:border-red-100 cursor-pointer"
-                                      title="إلغاء وحذف الدعوة المعلقة"
-                                    >
-                                      <Trash2 className="w-3 h-3 text-red-500" />
-                                      <span>حذف الدعوة</span>
-                                    </button>
-                                  )}
+                                  <div className="flex items-center justify-end gap-2">
+                                    {inv.status === 'pending' && (
+                                      <>
+                                        {/* Copy button */}
+                                        <button
+                                          onClick={() => {
+                                            const token = getStoredTokenForInvite(inv.id);
+                                            if (token) {
+                                              const link = `${window.location.origin}/#/accept-invite?token=${token}`;
+                                              navigator.clipboard.writeText(link);
+                                              alert('تم نسخ رابط الدعوة بنجاح!');
+                                            } else {
+                                              alert('رابط الدعوة لم يُنشأ في هذه الجلسة المتصفحية ولا يمكن استرجاعه لأسباب أمنية. يرجى إلغاء هذه الدعوة وإنشاء دعوة جديدة للحصول على رابط جديد.');
+                                            }
+                                          }}
+                                          className="text-slate-600 hover:text-slate-800 hover:bg-slate-50 px-2.5 py-1 rounded-lg transition-colors duration-200 inline-flex items-center gap-1 text-[10px] font-bold border border-slate-100 cursor-pointer"
+                                          title="نسخ رابط الدعوة المعلقة"
+                                        >
+                                          <Copy className="w-3 h-3 text-slate-500" />
+                                          <span>نسخ الرابط</span>
+                                        </button>
+
+                                        {/* Cancel button */}
+                                        {((roleInCurrentOrg === 'owner') || (roleInCurrentOrg === 'admin' && inv.role !== 'owner')) && (
+                                          <button
+                                            onClick={() => handleCancelInvitation(inv.id)}
+                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors duration-200 inline-flex items-center gap-1 text-[10px] font-bold border border-transparent hover:border-red-100 cursor-pointer"
+                                            title="إلغاء وحذف الدعوة المعلقة"
+                                          >
+                                            <Trash2 className="w-3 h-3 text-red-500" />
+                                            <span>حذف الدعوة</span>
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
