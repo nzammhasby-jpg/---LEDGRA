@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Session, Subscription } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Profile, Organization, OrganizationRole, CreateOrgInput, MembershipJoinData } from '../types';
+import { getCountryProfile } from '../lib/countryProfiles';
 
 interface AuthContextType {
   user: User | null;
@@ -173,7 +174,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const memberships = (memberData as unknown as MembershipJoinData[]);
         const userOrgs: Organization[] = memberships
           .map(m => m.organizations)
-          .filter((org): org is Organization => !!org);
+          .filter((org): org is Organization => !!org)
+          .map(org => ({
+            ...org,
+            default_tax_rate: org.default_tax_rate !== undefined
+              ? org.default_tax_rate
+              : getCountryProfile(org.country_code).defaultTaxRate
+          }));
 
         setOrgsList(userOrgs);
 
@@ -313,7 +320,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Sign Up Action
   const signUp = async (email: string, password: string, fullName: string, phone: string): Promise<{ error: string | null, verificationRequired?: boolean }> => {
-    setLoading(true);
     try {
       const emailRedirectTo = `${window.location.origin}/auth/verified`;
       const { data, error } = await supabase.auth.signUp({
@@ -329,7 +335,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        setLoading(false);
         return { error: translateAuthError(error.message) };
       }
 
@@ -338,13 +343,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.session) {
           await supabase.auth.signOut();
         }
-        setLoading(false);
         return { error: null, verificationRequired: true };
       }
       return { error: null, verificationRequired: false };
     } catch (e: unknown) {
       const err = e as Error;
-      setLoading(false);
       return { error: translateAuthError(err.message) };
     }
   };
@@ -414,7 +417,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         p_accounting_mode: orgData.accounting_mode || 'pro',
         p_starting_balances_later: orgData.starting_balances_later !== undefined ? orgData.starting_balances_later : true,
         p_onboarding_completed: orgData.onboarding_completed !== undefined ? orgData.onboarding_completed : true,
-        p_onboarding_step: orgData.onboarding_step !== undefined ? orgData.onboarding_step : 3
+        p_onboarding_step: orgData.onboarding_step !== undefined ? orgData.onboarding_step : 3,
+        p_country_code: orgData.country_code || 'SA',
+        p_currency_code: orgData.currency_code || null
       });
 
       if (rpcErr || !orgIdResult) {
@@ -432,7 +437,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('فشل استرجاع بيانات المنشأة التي تم جدولتها سحابياً.');
       }
 
-      const finalOrg = orgDataResult as Organization;
+      const fetchedOrg = orgDataResult as Organization;
+      const finalOrg: Organization = {
+        ...fetchedOrg,
+        default_tax_rate: fetchedOrg.default_tax_rate !== undefined
+          ? fetchedOrg.default_tax_rate
+          : getCountryProfile(fetchedOrg.country_code).defaultTaxRate
+      };
 
       // Update states directly
       setOrgsList(prev => {
@@ -479,7 +490,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(fetchErr?.message || 'فشل استرجاع الصف المحدث للمنشأة.');
       }
 
-      const finalOrg = updatedData as Organization;
+      const fetchedUpdatedOrg = updatedData as Organization;
+      const finalOrg: Organization = {
+        ...fetchedUpdatedOrg,
+        default_tax_rate: fetchedUpdatedOrg.default_tax_rate !== undefined
+          ? fetchedUpdatedOrg.default_tax_rate
+          : getCountryProfile(fetchedUpdatedOrg.country_code).defaultTaxRate
+      };
 
       // Update states directly
       setOrgsList(prev => prev.map(org => org.id === finalOrg.id ? finalOrg : org));

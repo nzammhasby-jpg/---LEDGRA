@@ -252,10 +252,10 @@ export const InventoryMovementsPage: React.FC = () => {
                       {!isSales && (
                         <>
                           <td className="px-6 py-4 font-mono text-left text-gray-500">
-                            {formatNumberWithLatinDigits(move.unit_cost, 2)} ر.س
+                            {formatNumberWithLatinDigits(move.unit_cost, 2)} {currentOrg?.currency_code || ''}
                           </td>
                           <td className="px-6 py-4 font-mono text-left font-semibold text-gray-900">
-                            {formatNumberWithLatinDigits(move.total_cost, 2)} ر.س
+                            {formatNumberWithLatinDigits(move.total_cost, 2)} {currentOrg?.currency_code || ''}
                           </td>
                         </>
                       )}
@@ -264,7 +264,7 @@ export const InventoryMovementsPage: React.FC = () => {
                       </td>
                       {!isSales && (
                         <td className="px-6 py-4 font-mono text-left text-emerald-800">
-                          {formatNumberWithLatinDigits(move.average_cost_after, 2)} ر.س
+                          {formatNumberWithLatinDigits(move.average_cost_after, 2)} {currentOrg?.currency_code || ''}
                         </td>
                       )}
                     </tr>

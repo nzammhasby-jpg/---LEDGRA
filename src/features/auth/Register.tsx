@@ -167,249 +167,256 @@ export const Register: React.FC = () => {
             <Logo variant="full" theme="light" size="md" />
           </div>
 
-          {/* Form Header */}
-          <div className="text-center lg:text-right space-y-1">
-            <h2 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
-              {t('auth.register_title')}
-            </h2>
-            <p className="text-slate-500 text-xs">
-              {t('auth.register_subtitle')}
-            </p>
-          </div>
-
-          {/* Submit responses */}
-          {apiError && (
-            <div className="bg-red-50 border-r-4 border-red-500 p-4 rounded-xl flex items-start gap-2">
-              <ShieldAlert className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <h5 className="text-sm font-semibold text-red-900">فشل إنشاء الحساب</h5>
-                <p className="text-xs text-red-700 mt-0.5">{apiError}</p>
-              </div>
-            </div>
-          )}
-
-          {apiSuccess && !registrationSuccess && (
-            <div className="bg-emerald-50 border-r-4 border-emerald-500 p-4 rounded-xl flex items-start gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <div>
-                <h5 className="text-sm font-semibold text-emerald-900">تم إنشاء الحساب بنجاح</h5>
-                <p className="text-xs text-emerald-700 mt-0.5">
-                  تم إنشاء الحساب بنجاح. تم إرسال رسالة تأكيد إلى بريدك الإلكتروني، افتح البريد واضغط رابط التفعيل لإكمال الدخول.
+          {!registrationSuccess ? (
+            <>
+              {/* Form Header */}
+              <div className="text-center lg:text-right space-y-1">
+                <h2 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+                  {t('auth.register_title')}
+                </h2>
+                <p className="text-slate-500 text-xs">
+                  {t('auth.register_subtitle')}
                 </p>
               </div>
-            </div>
-          )}
 
-          {/* Prompt verification state or show standard signup form */}
-          {!registrationSuccess ? (
-            <form id="register-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              
-              {/* Full Name */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t('auth.full_name')}
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                    <User className="w-4 h-4" />
-                  </span>
-                  <input
-                    id="reg-fullname-field"
-                    type="text"
-                    placeholder="محمد أحمد"
-                    {...register('fullName')}
-                    className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.fullName ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
-                    } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
-                  />
+              {/* Submit responses */}
+              {apiError && (
+                <div className="bg-red-50 border-r-4 border-red-500 p-4 rounded-xl flex items-start gap-2">
+                  <ShieldAlert className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="text-sm font-semibold text-red-900">فشل إنشاء الحساب</h5>
+                    <p className="text-xs text-red-700 mt-0.5">{apiError}</p>
+                  </div>
                 </div>
-                {errors.fullName && (
-                  <p className="text-xs text-red-600 mt-0.5">{errors.fullName.message}</p>
-                )}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t('auth.email')}
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                    <Mail className="w-4 h-4" />
-                  </span>
-                  <input
-                    id="reg-email-field"
-                    type="email"
-                    placeholder="name@company.com"
-                    {...register('email')}
-                    className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.email ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
-                    } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
-                    style={{ direction: 'ltr', textAlign: 'right' }}
-                  />
-                </div>
-                {errors.email && (
-                  <p className="text-xs text-red-600 mt-0.5">{errors.email.message}</p>
-                )}
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  رقم الجوال (السعودي)
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                    <Phone className="w-4 h-4" />
-                  </span>
-                  <input
-                    id="reg-phone-field"
-                    type="text"
-                    placeholder="05XXXXXXXX"
-                    {...register('phone', {
-                      onChange: (e) => {
-                        e.target.value = normalizeIntegerInput(e.target.value);
-                      }
-                    })}
-                    className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.phone ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
-                    } rounded-xl text-sm focus:outline-none focus:ring-4 transition text-left font-mono tabular-nums`}
-                    dir="ltr"
-                    inputMode="numeric"
-                  />
-                </div>
-                {errors.phone && (
-                  <p className="text-xs text-red-600 mt-0.5">{errors.phone.message}</p>
-                )}
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t('auth.password')}
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-4 h-4" />
-                  </span>
-                  <input
-                    id="reg-password-field"
-                    type="password"
-                    placeholder="••••••••"
-                    {...register('password')}
-                    className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.password ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
-                    } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
-                    style={{ direction: 'ltr', textAlign: 'right' }}
-                  />
-                </div>
-                {errors.password && (
-                  <p className="text-xs text-red-600 mt-0.5">{errors.password.message}</p>
-                )}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {t('auth.confirm_password')}
-                </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-4 h-4" />
-                  </span>
-                  <input
-                    id="reg-confirmpassword-field"
-                    type="password"
-                    placeholder="••••••••"
-                    {...register('confirmPassword')}
-                    className={`w-full pr-9 pl-3 py-2 bg-white border ${
-                      errors.confirmPassword ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
-                    } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
-                    style={{ direction: 'ltr', textAlign: 'right' }}
-                  />
-                </div>
-                {errors.confirmPassword && (
-                  <p className="text-xs text-red-600 mt-0.5">{errors.confirmPassword.message}</p>
-                )}
-              </div>
-
-              {/* Terms and Conditions */}
-              <div className="flex items-start gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="agree-checkbox"
-                  {...register('agreeTerms')}
-                  className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue/30 w-4 h-4 mt-0.5"
-                />
-                <label htmlFor="agree-checkbox" className="text-[11px] leading-relaxed text-slate-500 cursor-pointer select-none">
-                  أوافق على <a href="#" className="text-brand-blue font-semibold hover:underline">شروط الخدمة</a> و <a href="#" className="text-brand-blue font-semibold hover:underline">سياسة الخصوصية</a> الخاصة بمنصة لِدجرا.
-                </label>
-              </div>
-              {errors.agreeTerms && (
-                <p className="text-xs text-red-600 mt-0.5">{errors.agreeTerms.message}</p>
               )}
 
-              {/* Submit btn */}
-              <button
-                id="submit-register-btn"
-                type="submit"
-                disabled={isSubmitting || apiSuccess}
-                className="w-full py-2.5 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-sm shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-brand-blue/20 transition disabled:opacity-55 flex items-center justify-center gap-2 cursor-pointer pt-2"
-              >
-                {isSubmitting ? (
-                  <span className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                ) : (
-                  <span>{t('auth.sign_up_btn')}</span>
+              {apiSuccess && !registrationSuccess && (
+                <div className="bg-emerald-50 border-r-4 border-emerald-500 p-4 rounded-xl flex items-start gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="text-sm font-semibold text-emerald-900">تم إنشاء الحساب بنجاح</h5>
+                    <p className="text-xs text-emerald-700 mt-0.5">
+                      تم إنشاء الحساب بنجاح. تم إرسال رسالة تأكيد إلى بريدك الإلكتروني، افتح البريد واضغط رابط التفعيل لإكمال الدخول.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <form id="register-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                
+                {/* Full Name */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {t('auth.full_name')}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                      <User className="w-4 h-4" />
+                    </span>
+                    <input
+                      id="reg-fullname-field"
+                      type="text"
+                      placeholder="محمد أحمد"
+                      {...register('fullName')}
+                      className={`w-full pr-9 pl-3 py-2 bg-white border ${
+                        errors.fullName ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
+                      } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
+                    />
+                  </div>
+                  {errors.fullName && (
+                    <p className="text-xs text-red-600 mt-0.5">{errors.fullName.message}</p>
+                  )}
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {t('auth.email')}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                      <Mail className="w-4 h-4" />
+                    </span>
+                    <input
+                      id="reg-email-field"
+                      type="email"
+                      placeholder="name@company.com"
+                      {...register('email')}
+                      className={`w-full pr-9 pl-3 py-2 bg-white border ${
+                        errors.email ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
+                      } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
+                      style={{ direction: 'ltr', textAlign: 'right' }}
+                    />
+                  </div>
+                  {errors.email && (
+                    <p className="text-xs text-red-600 mt-0.5">{errors.email.message}</p>
+                  )}
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    رقم الجوال (السعودي)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                      <Phone className="w-4 h-4" />
+                    </span>
+                    <input
+                      id="reg-phone-field"
+                      type="text"
+                      placeholder="05XXXXXXXX"
+                      {...register('phone', {
+                        onChange: (e) => {
+                          e.target.value = normalizeIntegerInput(e.target.value);
+                        }
+                      })}
+                      className={`w-full pr-9 pl-3 py-2 bg-white border ${
+                        errors.phone ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
+                      } rounded-xl text-sm focus:outline-none focus:ring-4 transition text-left font-mono tabular-nums`}
+                      dir="ltr"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  {errors.phone && (
+                    <p className="text-xs text-red-600 mt-0.5">{errors.phone.message}</p>
+                  )}
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {t('auth.password')}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                      <Lock className="w-4 h-4" />
+                    </span>
+                    <input
+                      id="reg-password-field"
+                      type="password"
+                      placeholder="••••••••"
+                      {...register('password')}
+                      className={`w-full pr-9 pl-3 py-2 bg-white border ${
+                        errors.password ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
+                      } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
+                      style={{ direction: 'ltr', textAlign: 'right' }}
+                    />
+                  </div>
+                  {errors.password && (
+                    <p className="text-xs text-red-600 mt-0.5">{errors.password.message}</p>
+                  )}
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {t('auth.confirm_password')}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                      <Lock className="w-4 h-4" />
+                    </span>
+                    <input
+                      id="reg-confirmpassword-field"
+                      type="password"
+                      placeholder="••••••••"
+                      {...register('confirmPassword')}
+                      className={`w-full pr-9 pl-3 py-2 bg-white border ${
+                        errors.confirmPassword ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
+                      } rounded-xl text-sm focus:outline-none focus:ring-4 transition`}
+                      style={{ direction: 'ltr', textAlign: 'right' }}
+                    />
+                  </div>
+                  {errors.confirmPassword && (
+                    <p className="text-xs text-red-600 mt-0.5">{errors.confirmPassword.message}</p>
+                  )}
+                </div>
+
+                {/* Terms and Conditions */}
+                <div className="flex items-start gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="agree-checkbox"
+                    {...register('agreeTerms')}
+                    className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue/30 w-4 h-4 mt-0.5"
+                  />
+                  <label htmlFor="agree-checkbox" className="text-[11px] leading-relaxed text-slate-500 cursor-pointer select-none">
+                    أوافق على <a href="#" className="text-brand-blue font-semibold hover:underline">شروط الخدمة</a> و <a href="#" className="text-brand-blue font-semibold hover:underline">سياسة الخصوصية</a> الخاصة بمنصة لِدجرا.
+                  </label>
+                </div>
+                {errors.agreeTerms && (
+                  <p className="text-xs text-red-600 mt-0.5">{errors.agreeTerms.message}</p>
                 )}
-              </button>
-            </form>
-          ) : (
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center space-y-4 shadow-sm animate-fade-in" dir="rtl">
-              <div className="bg-emerald-50 text-emerald-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle2 className="w-6 h-6" />
+
+                {/* Submit btn */}
+                <button
+                  id="submit-register-btn"
+                  type="submit"
+                  disabled={isSubmitting || apiSuccess}
+                  className="w-full py-2.5 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-sm shadow-md hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-brand-blue/20 transition disabled:opacity-55 flex items-center justify-center gap-2 cursor-pointer pt-2"
+                >
+                  {isSubmitting ? (
+                    <span className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  ) : (
+                    <span>{t('auth.sign_up_btn')}</span>
+                  )}
+                </button>
+              </form>
+
+              {/* Form switch link */}
+              <div className="text-center pt-4 border-t border-slate-100">
+                <span className="text-sm text-slate-500">{t('auth.already_have_account')} </span>
+                <Link id="link-to-login" to="/login" className="text-sm font-bold text-brand-blue hover:underline">
+                  {t('auth.sign_in')}
+                </Link>
               </div>
-              <h3 className="text-base font-bold text-slate-900">تم إرسال رابط تأكيد إلى بريدك الإلكتروني</h3>
-              <p className="text-slate-600 text-xs leading-relaxed">
-                افتح بريدك واضغط على رابط التفعيل لإكمال إنشاء الحساب
-              </p>
+            </>
+          ) : (
+            <div className="bg-white border border-slate-200/80 p-8 rounded-3xl text-center space-y-6 shadow-xl animate-fade-in relative overflow-hidden" dir="rtl">
+              <div className="bg-emerald-50 text-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto border border-emerald-100">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+              </div>
               
-              <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl text-xs text-slate-700 font-semibold">
-                تم الإرسال إلى: <span className="font-bold text-brand-blue font-mono">{registeredEmail}</span>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black text-slate-900">تم إرسال رابط تأكيد إلى بريدك الإلكتروني</h3>
+                <p className="text-slate-500 text-xs leading-relaxed px-2">
+                  افتح بريدك واضغط على رابط التفعيل لإكمال إنشاء الحساب
+                </p>
+              </div>
+              
+              <div className="bg-slate-50 border border-slate-150 p-4 rounded-2xl text-xs text-slate-700 font-semibold space-y-1">
+                <span className="text-slate-400 block text-[10px] font-bold">تم الإرسال إلى</span>
+                <span className="font-bold text-brand-blue font-mono text-sm block select-all">{registeredEmail}</span>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 space-y-3">
                 <Link
                   id="btn-login-after-verify"
                   to="/login"
-                  className="inline-block w-full py-2.5 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-xs shadow-sm transition text-center"
+                  className="block w-full py-3 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-xs shadow-md hover:shadow-lg transition text-center duration-200 cursor-pointer"
                 >
                   العودة لتسجيل الدخول
                 </Link>
-              </div>
-
-              <p className="text-[10.5px] text-slate-400">
-                إذا لم تجد الرسالة، تحقق من البريد غير الهام أو أعد المحاولة لاحقًا.
-              </p>
-
-              <div className="pt-2">
+                
                 <button
                   type="button"
-                  onClick={() => setRegistrationSuccess(false)}
-                  className="text-xs text-slate-400 hover:text-slate-600 hover:underline bg-transparent border-none cursor-pointer"
+                  onClick={() => {
+                    setRegistrationSuccess(false);
+                    setApiSuccess(false);
+                    setApiError(null);
+                  }}
+                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded-xl text-xs transition duration-200 cursor-pointer text-center"
                 >
-                  ← العودة وتعديل بيانات التسجيل
+                  تعديل بيانات التسجيل
                 </button>
               </div>
+
+              <p className="text-[10px] text-slate-400 leading-relaxed px-4 pt-2">
+                إذا لم تجد الرسالة في صندوق الوارد، يرجى التحقق من مجلد البريد غير الهام (Spam) أو إعادة المحاولة لاحقاً.
+              </p>
             </div>
           )}
-
-          {/* Form switch link */}
-          <div className="text-center pt-4 border-t border-slate-100">
-            <span className="text-sm text-slate-500">{t('auth.already_have_account')} </span>
-            <Link id="link-to-login" to="/login" className="text-sm font-bold text-brand-blue hover:underline">
-              {t('auth.sign_in')}
-            </Link>
-          </div>
 
         </div>
       </div>

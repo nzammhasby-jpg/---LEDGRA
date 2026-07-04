@@ -111,7 +111,7 @@ export const PaymentPrint: React.FC = () => {
           <div>
             <span className="text-[10px] text-slate-400 font-extrabold block mb-1">صافي القيمة المصروفة:</span>
             <span className="text-2xl font-black tracking-tight">
-              {formatNumberWithLatinDigits(payment.amount)} <span className="text-sm font-normal text-slate-300">SAR</span>
+              {formatNumberWithLatinDigits(payment.amount)} <span className="text-sm font-normal text-slate-300">{currentOrg?.currency_code || ''}</span>
             </span>
           </div>
           <div className="text-left font-sans text-xs space-y-1 text-slate-350" style={{ direction: 'rtl' }}>

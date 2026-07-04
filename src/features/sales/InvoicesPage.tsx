@@ -757,7 +757,7 @@ export const InvoicesPage: React.FC = () => {
               <div>
                 <span className="text-slate-400 text-[10px] block">إجمالي الفواتير الصادرة</span>
                 <span className="text-sm font-bold text-slate-800 font-mono">
-                  {formatNumberWithLatinDigits(invoices.reduce((acc, current) => acc + (current.status === 'approved' ? current.total : 0), 0))} <span className="text-[10px] font-sans">SAR</span>
+                  {formatNumberWithLatinDigits(invoices.reduce((acc, current) => acc + (current.status === 'approved' ? current.total : 0), 0))} <span className="text-[10px] font-sans">{currentOrg?.currency_code || ''}</span>
                 </span>
               </div>
             </div>
@@ -769,7 +769,7 @@ export const InvoicesPage: React.FC = () => {
               <div>
                 <span className="text-slate-400 text-[10px] block">إجمالي المبالغ المحصلة</span>
                 <span className="text-sm font-bold text-slate-800 font-mono">
-                  {formatNumberWithLatinDigits(invoices.reduce((acc, current) => acc + (current.status === 'approved' ? current.paid_amount : 0), 0))} <span className="text-[10px] font-sans">SAR</span>
+                  {formatNumberWithLatinDigits(invoices.reduce((acc, current) => acc + (current.status === 'approved' ? current.paid_amount : 0), 0))} <span className="text-[10px] font-sans">{currentOrg?.currency_code || ''}</span>
                 </span>
               </div>
             </div>
@@ -781,7 +781,7 @@ export const InvoicesPage: React.FC = () => {
               <div>
                 <span className="text-slate-400 text-[10px] block">المستحقات غير المحصلة</span>
                 <span className="text-sm font-bold text-rose-600 font-mono">
-                  {formatNumberWithLatinDigits(invoices.reduce((acc, current) => acc + (current.status === 'approved' ? current.balance_due : 0), 0))} <span className="text-[10px] font-sans font-bold">SAR</span>
+                  {formatNumberWithLatinDigits(invoices.reduce((acc, current) => acc + (current.status === 'approved' ? current.balance_due : 0), 0))} <span className="text-[10px] font-sans font-bold">{currentOrg?.currency_code || ''}</span>
                 </span>
               </div>
             </div>
@@ -1382,25 +1382,25 @@ export const InvoicesPage: React.FC = () => {
                 <div className="space-y-2.5 text-xs text-slate-300">
                   <div className="flex items-center justify-between">
                     <span>مجموع البنود الإجمالي:</span>
-                    <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(subtotal)} SAR</span>
+                    <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(subtotal)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   <div className="flex items-center justify-between text-rose-400">
                     <span>إجمالي الخصومات المدرجة:</span>
-                    <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>- {formatNumberWithLatinDigits(discountTotal)} SAR</span>
+                    <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>- {formatNumberWithLatinDigits(discountTotal)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   <div className="flex items-center justify-between text-brand-turquoise">
                     <span>الوعاء الضريبي المطبق:</span>
-                    <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(subtotal - discountTotal)} SAR</span>
+                    <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(subtotal - discountTotal)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   <div className="flex items-center justify-between text-amber-400">
                     <span>مجموع الضريبة المضافة (15%):</span>
-                    <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(taxTotal)} SAR</span>
+                    <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(taxTotal)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   
                   <div className="border-t border-white/10 pt-3.5 mt-2 flex items-center justify-between text-sm font-extrabold text-white">
                     <span>الصافي النهائي المستحق:</span>
                     <span className="text-lg font-mono font-extrabold text-brand-turquoise" style={{ direction: 'ltr' }}>
-                      {formatNumberWithLatinDigits(total)} SAR
+                      {formatNumberWithLatinDigits(total)} {currentOrg?.currency_code || ''}
                     </span>
                   </div>
                 </div>
@@ -1959,7 +1959,7 @@ export const InvoicesPage: React.FC = () => {
                 </span>
                 <span className="text-[10px] text-slate-400 block pt-1">الرصيد المتبقي: </span>
                 <span className="text-sm font-extrabold text-rose-600 font-mono" style={{ direction: 'ltr' }}>
-                  {formatNumberWithLatinDigits(selectedInvoice.balance_due)} SAR
+                  {formatNumberWithLatinDigits(selectedInvoice.balance_due)} {selectedInvoice.currency || currentOrg?.currency_code || ''}
                 </span>
               </div>
             </div>
@@ -2003,7 +2003,7 @@ export const InvoicesPage: React.FC = () => {
               <div>
                 <span className="text-[10px] text-slate-400 block">إجمالي الفاتورة شامل الضريبة:</span>
                 <span className="text-xs font-black text-slate-900 font-mono" style={{ direction: 'ltr' }}>
-                  {formatNumberWithLatinDigits(selectedInvoice.total)} SAR
+                  {formatNumberWithLatinDigits(selectedInvoice.total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}
                 </span>
               </div>
             </div>
@@ -2065,39 +2065,39 @@ export const InvoicesPage: React.FC = () => {
               <div className="text-xs space-y-2 text-slate-600">
                 <div className="flex justify-between">
                   <span>المجموع الفرعي للبضائع:</span>
-                  <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(selectedInvoice.subtotal)} SAR</span>
+                  <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(selectedInvoice.subtotal)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 <div className="flex justify-between text-red-500">
                   <span>الخصم المسموح به:</span>
-                  <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>- {formatNumberWithLatinDigits(selectedInvoice.discount_total)} SAR</span>
+                  <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>- {formatNumberWithLatinDigits(selectedInvoice.discount_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 <div className="flex justify-between font-bold text-slate-800 border-t border-slate-50 pt-1">
                   <span>الوعاء الخاضع للضريبة:</span>
-                  <span className="font-mono" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(selectedInvoice.subtotal - selectedInvoice.discount_total)} SAR</span>
+                  <span className="font-mono" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(selectedInvoice.subtotal - selectedInvoice.discount_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>الضريبة المضافة المطبقة (15%):</span>
-                  <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(selectedInvoice.tax_total)} SAR</span>
+                  <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(selectedInvoice.tax_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 
                 <div className="flex justify-between font-extrabold border-t border-slate-200 pt-3 text-sm text-slate-900 leading-none">
                   <span>الصافي المطلوب (شامل المضافة):</span>
                   <span className="font-mono text-base text-brand-blue" style={{ direction: 'ltr' }}>
-                    {formatNumberWithLatinDigits(selectedInvoice.total)} SAR
+                    {formatNumberWithLatinDigits(selectedInvoice.total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}
                   </span>
                 </div>
 
                 <div className="flex justify-between pt-1 border-t border-slate-50 text-xs font-semibold text-emerald-600">
                   <span>المسدد كلياً حتى الآن:</span>
                   <span className="font-mono" style={{ direction: 'ltr' }}>
-                    {formatNumberWithLatinDigits(selectedInvoice.paid_amount)} SAR
+                    {formatNumberWithLatinDigits(selectedInvoice.paid_amount)} {selectedInvoice.currency || currentOrg?.currency_code || ''}
                   </span>
                 </div>
 
                 <div className="flex justify-between font-black text-rose-500 pt-1 border-t border-slate-100">
                   <span>الرصيد المتبقي مستحق السداد:</span>
                   <span className="font-mono" style={{ direction: 'ltr' }}>
-                    {formatNumberWithLatinDigits(selectedInvoice.balance_due)} SAR
+                    {formatNumberWithLatinDigits(selectedInvoice.balance_due)} {selectedInvoice.currency || currentOrg?.currency_code || ''}
                   </span>
                 </div>
               </div>

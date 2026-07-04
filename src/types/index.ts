@@ -32,6 +32,7 @@ export interface Organization {
   system_start_date: string | null;
   accounting_mode: string | null;
   starting_balances_later: boolean | null;
+  default_tax_rate?: number;
   website?: string | null;
   address_line?: string | null;
   country?: string | null;
@@ -114,6 +115,9 @@ export interface CreateOrgInput {
   starting_balances_later: boolean;
   onboarding_completed?: boolean;
   onboarding_step?: number;
+  country_code?: string;
+  currency_code?: string;
+  default_tax_rate?: number;
 }
 
 export interface MembershipJoinData {

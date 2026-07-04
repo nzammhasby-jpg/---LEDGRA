@@ -8,6 +8,7 @@ import { normalizeIntegerInput } from '../../lib/formatters';
 import { organizationSettingsService } from '../../lib/organizationSettingsService';
 import { ZatcaSettingsComp } from './ZatcaSettings';
 import { useOrganizationSubscription } from '../../hooks/useOrganizationSubscription';
+import { getCountryProfile, countryProfiles } from '../../lib/countryProfiles';
 import { 
   Building, 
   Users, 
@@ -39,7 +40,8 @@ import {
   Edit,
   User,
   UserPlus,
-  Copy
+  Copy,
+  Coins
 } from 'lucide-react';
 import { canInviteMoreMembers } from '../../lib/permissions';
 
@@ -76,6 +78,7 @@ interface Invitation {
 
 export const Settings: React.FC = () => {
   const { currentOrg, roleInCurrentOrg, updateOrg, profile, user, refreshUserData } = useAuth();
+  const currentProfile = getCountryProfile(currentOrg?.country_code || 'SA');
   const { t, i18n, currentLanguage } = useTranslation();
   const [activeTab, setActiveTab] = useState<'info' | 'users' | 'branches' | 'accounting' | 'zatca' | 'subscription' | 'profile'>('info');
 
@@ -836,9 +839,10 @@ export const Settings: React.FC = () => {
           { id: 'users', label: t('settings.tab_users'), icon: Users },
           { id: 'branches', label: t('settings.tab_branches'), icon: MapPin },
           { id: 'accounting', label: 'الإعدادات المحاسبية والسيرفر', icon: BookOpen },
-          { id: 'zatca', label: 'الفوترة الإلكترونية (ZATCA)', icon: ShieldAlert },
+          currentProfile.zatcaEnabled ? { id: 'zatca', label: 'الفوترة الإلكترونية (ZATCA)', icon: ShieldAlert } : null,
           { id: 'subscription', label: 'اشتراك المؤسسة', icon: CreditCard }
-        ].map((tab) => {
+        ].filter(Boolean).map((tab) => {
+          if (!tab) return null;
           const TabIcon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
@@ -1037,6 +1041,76 @@ export const Settings: React.FC = () => {
               {/* Left Column (2 Cols): General Information Fields */}
               <div className="lg:col-span-2 space-y-6">
                 
+                {/* إعدادات الدولة والعملة (Country and Currency Settings) */}
+                <div className="bg-slate-50 border border-slate-200/80 p-5 rounded-2xl space-y-4">
+                  <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2 flex items-center justify-between">
+                    <span>إعدادات الدولة والعملة والضريبة الافتراضية</span>
+                    <Globe className="w-4 h-4 text-brand-blue" />
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold mb-1">دولة المقر للمنشأة (للقراءة فقط)</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-800">{currentProfile.nameAr}</span>
+                        <span className="text-[10px] bg-slate-100 px-2.5 py-1 rounded-md text-slate-600 font-extrabold">{currentProfile.code}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold mb-1">العملة الأساسية للحسابات (للقراءة فقط)</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-800">{currentProfile.currencyNameAr} ({currentProfile.currencyCode})</span>
+                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-md font-extrabold">أساسية</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold mb-1">الضريبة الافتراضية للمبيعات والمشتريات</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-800">{currentProfile.defaultTaxRate}%</span>
+                        <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2.5 py-1 rounded-md font-extrabold">مطبقة تلقائياً</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                      <span className="text-[10px] text-slate-400 block font-bold mb-1">
+                        {currentProfile.zatcaEnabled ? 'الامتثال والربط مع هيئة الزكاة والضريبة والجمارك (ZATCA)' : 'متطلبات الامتثال المحلي'}
+                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-800">
+                          {currentProfile.zatcaEnabled ? 'مدعوم' : 'لا توجد فوترة إلكترونية سعودية مطلوبة لهذه الدولة.'}
+                        </span>
+                        <span className={`text-[10px] px-2.5 py-1 rounded-md font-extrabold border ${
+                          currentProfile.zatcaEnabled 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                            : 'bg-slate-100 text-slate-500 border-slate-150'
+                        }`}>{currentProfile.zatcaEnabled ? 'نشط' : 'غير مطلوب'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Warning and Guidance Notes */}
+                  <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3.5 space-y-2">
+                    <div className="flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-[10.5px] text-amber-800 leading-relaxed text-right">
+                        <p className="font-extrabold">تنبيه تقييد تعديل الدولة والعملة بعد التأسيس:</p>
+                        <p className="mt-0.5 text-amber-700">الدولة والعملة والضريبة الأساسية ترتبط بالنظام المالي للمنشأة ولا يمكن تعديلها بعد التأسيس لضمان سلامة العمليات المحاسبية وفواتير المبيعات والمشتريات. سيتم دعم تعديل ذلك من خلال قنوات الدعم الفني لاحقاً.</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-start gap-2.5 border-t border-amber-200/50 pt-2">
+                      <Coins className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-[10.5px] text-amber-700 leading-relaxed text-right">
+                        العملة الأساسية للمنشأة غير قابلة للتعديل حالياً. يتم دعم العملات المتعددة (Multi-Currency) قريباً.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* 1. الأسماء وعناوين الكيان */}
                 <div className="bg-slate-50/50 border border-slate-200/60 p-5 rounded-2xl space-y-4">
                   <h4 className="text-xs font-extrabold text-slate-800 border-b border-slate-100 pb-2 mb-2">البيانات الأساسية للمنشأة</h4>
@@ -1073,27 +1147,31 @@ export const Settings: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 block mb-1">رقم السجل التجاري / الرقم الموحد (10 خانات)</label>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">
+                        {currentProfile.crLabel} {currentProfile.crRequired ? '*' : '(اختياري)'}
+                      </label>
                       <input
                         type="text"
                         name="cr_number"
                         value={formData.cr_number}
                         onChange={handleInputChange}
                         disabled={!isPrivileged}
-                        placeholder="أدخل 10 أرقام رقمية فقط"
+                        placeholder={currentProfile.code === 'SA' ? '10 أرقام للسجل' : 'رقم السجل / الترخيص'}
                         className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition font-sans disabled:bg-slate-100"
                       />
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 block mb-1">الرقم الضريبي الموحد للمنشأة (15 خانة)</label>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">
+                        {currentProfile.vatLabel}
+                      </label>
                       <input
                         type="text"
                         name="vat_number"
                         value={formData.vat_number}
                         onChange={handleInputChange}
                         disabled={!isPrivileged}
-                        placeholder="يبدأ بالرقم 3 وينتهي بـ 3"
+                        placeholder={currentProfile.code === 'SA' ? '15 رقمًا للرقم الضريبي' : 'الرقم الضريبي / رقم المكلّف'}
                         className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition font-sans disabled:bg-slate-100"
                       />
                     </div>
@@ -1178,15 +1256,15 @@ export const Settings: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-500 block mb-1">الدولة</label>
+                      <label className="text-[11px] font-bold text-slate-500 block mb-1">الدولة (للقراءة فقط بعد التأسيس)</label>
                       <input
                         type="text"
                         name="country"
                         value={formData.country}
                         onChange={handleInputChange}
-                        disabled={!isPrivileged}
+                        disabled={true}
                         placeholder="مثال: المملكة العربية السعودية"
-                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition disabled:bg-slate-100"
+                        className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition bg-slate-100 text-slate-500 cursor-not-allowed"
                       />
                     </div>
 
@@ -1626,7 +1704,7 @@ export const Settings: React.FC = () => {
                     <div className="space-y-2 text-[10px] text-slate-500 leading-relaxed">
                       <p>● <strong className="text-amber-800">المالك (Owner):</strong> صلاحيات غير مقيدة وتعديل إعدادات المنشأة والهوية المالية.</p>
                       <p>● <strong className="text-blue-800">مدير النظام (Admin):</strong> دعوة الزملاء، تعديل الأدوار، تعطيل الصلاحيات، وإدارة التكوينات الأساسية.</p>
-                      <p>● <strong className="text-purple-800">المحاسب (Accountant):</strong> إدارة العمليات المالية والقيود والفواتير وتقارير الإقرارات والامتثال لـ ZATCA.</p>
+                      <p>● <strong className="text-purple-800">المحاسب (Accountant):</strong> {currentProfile.zatcaEnabled ? 'إدارة العمليات المالية والقيود والفواتير وتقارير الإقرارات والامتثال لـ ZATCA.' : 'إدارة العمليات المالية والقيود والفواتير والتقارير.'}</p>
                       <p>● <strong className="text-emerald-800">المبيعات (Sales):</strong> إصدار وتصحيح فواتير وعروض المبيعات والمستندات والعملاء دون الوصول للدفاتر العامة.</p>
                     </div>
                   </div>
@@ -2314,7 +2392,7 @@ export const Settings: React.FC = () => {
         )}
 
         {/* Tab 5: ZATCA Compliance */}
-        {activeTab === 'zatca' && (
+        {activeTab === 'zatca' && currentProfile.zatcaEnabled && (
           <ZatcaSettingsComp />
         )}
 

@@ -111,7 +111,7 @@ export const ReceiptPrint: React.FC = () => {
           <div>
             <span className="text-[10px] text-slate-400 font-extrabold uppercase block mb-1">المبلغ المقبوض:</span>
             <span className="text-2xl font-black tracking-tight">
-              {formatNumberWithLatinDigits(receipt.amount)} <span className="text-sm text-slate-300 font-normal">SAR</span>
+              {formatNumberWithLatinDigits(receipt.amount)} <span className="text-sm text-slate-300 font-normal">{currentOrg?.currency_code || ''}</span>
             </span>
           </div>
           <div className="text-left font-sans text-xs space-y-1 text-slate-300" style={{ direction: 'rtl' }}>

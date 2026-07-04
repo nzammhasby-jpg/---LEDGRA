@@ -217,10 +217,27 @@ DECLARE
     v_has_draft_entries boolean := false;
     v_has_draft_invoices boolean := false;
     v_has_draft_bills boolean := false;
+    v_retained_acc_valid boolean := true;
+    v_retained_acc_issue text := null;
+    v_retained_class text;
+    v_retained_active boolean;
+    v_retained_direct boolean;
 BEGIN
     -- Require login
     IF auth.uid() IS NULL THEN
-        RAISE EXCEPTION 'يجب تسجيل الدخول.';
+        RAISE EXCEPTION 'غير مصرح: يجب تسجيل الدخول.';
+    END IF;
+
+    -- Explicit Owner Authorization Check
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM public.organization_members
+        WHERE organization_id = p_org_id
+          AND profile_id = auth.uid()
+          AND role = 'owner'
+          AND is_active = true
+    ) THEN
+        RAISE EXCEPTION 'غير مصرح: ملخص إقفال السنة المالية متاح لمالك المنشأة فقط.';
     END IF;
 
     -- Fetch fiscal year dates
@@ -254,6 +271,28 @@ BEGIN
     FROM public.accounting_settings s
     LEFT JOIN public.accounts a ON a.id = s.default_retained_earnings_account_id
     WHERE s.organization_id = p_org_id;
+
+    -- Improve Retained Earnings Account Validation
+    IF v_retained_acc_id IS NULL THEN
+        v_retained_acc_valid := false;
+        v_retained_acc_issue := 'حساب الأرباح المبقاة غير مضبوط.';
+    ELSE
+        SELECT classification, is_active, allow_direct_posting
+        INTO v_retained_class, v_retained_active, v_retained_direct
+        FROM public.accounts
+        WHERE id = v_retained_acc_id AND organization_id = p_org_id;
+
+        IF NOT FOUND THEN
+            v_retained_acc_valid := false;
+            v_retained_acc_issue := 'حساب الأرباح المبقاة غير موجود في دليل الحسابات.';
+        ELSIF v_retained_class <> 'equity' THEN
+            v_retained_acc_valid := false;
+            v_retained_acc_issue := 'حساب الأرباح المبقاة يجب أن يكون من حقوق الملكية.';
+        ELSIF NOT v_retained_active OR NOT v_retained_direct THEN
+            v_retained_acc_valid := false;
+            v_retained_acc_issue := 'حساب الأرباح المبقاة غير نشط أو لا يقبل الترحيل المباشر.';
+        END IF;
+    END IF;
 
     -- Check if all periods of the year are closed/locked
     SELECT NOT EXISTS (
@@ -295,7 +334,9 @@ BEGIN
         'all_periods_closed', v_all_periods_closed,
         'has_draft_entries', v_has_draft_entries,
         'has_draft_invoices', v_has_draft_invoices,
-        'has_draft_bills', v_has_draft_bills
+        'has_draft_bills', v_has_draft_bills,
+        'retained_earnings_account_valid', v_retained_acc_valid,
+        'retained_earnings_account_issue', v_retained_acc_issue
     );
 END;
 $$;

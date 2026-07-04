@@ -28,6 +28,13 @@ import {
 import { normalizeIntegerInput, normalizeInputDigits } from '../../lib/formatters';
 import { supabase } from '../../lib/supabase';
 import { CoaTemplateSelector } from '../accounting/CoaTemplateSelector';
+import {
+  getCountryProfile,
+  validatePhone,
+  validateCommercialRegistration,
+  validateTaxNumber,
+  countryProfiles
+} from '../../lib/countryProfiles';
 
 const onboardingSchema = z.object({
   // Step 1
@@ -39,7 +46,7 @@ const onboardingSchema = z.object({
   phone: z.preprocess((val) => {
     if (typeof val === 'string') return normalizeIntegerInput(val);
     return val;
-  }, z.string().regex(/^05[0-9]{8}$/, { message: 'رقم الجوال يجب أن يبدأ بـ 05 ويتكون من 10 أرقام' })),
+  }, z.string()),
   email: z.string().min(1, { message: 'البريد الإلكتروني مطلوب' }).email({ message: 'البريد الإلكتروني غير صحيح' }),
   
   // Step 2
@@ -47,7 +54,7 @@ const onboardingSchema = z.object({
   cr_number: z.preprocess((val) => {
     if (typeof val === 'string') return normalizeIntegerInput(val);
     return val;
-  }, z.string().regex(/^[0-9]{10}$/, { message: 'السجل التجاري يجب أن يتكون من 10 خانات رقمية متتالية فقط دون حروف أو فواصل' })),
+  }, z.string().optional()),
   vat_number: z.preprocess((val) => {
     if (typeof val === 'string') return normalizeIntegerInput(val);
     return val;
@@ -68,23 +75,38 @@ const onboardingSchema = z.object({
   }, z.string().min(1, { message: 'تاريخ بدء استخدام النظام مطلوب' })),
   starting_balances_later: z.boolean().default(true)
 }).superRefine((data, ctx) => {
+  // Dynamic validation using countryProfiles helpers
+  
+  // 1. Phone validation
+  const phoneRes = validatePhone(data.country_code, data.phone);
+  if (!phoneRes.isValid) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: phoneRes.errorAr || 'رقم الجوال غير صحيح',
+      path: ['phone']
+    });
+  }
+
+  // 2. Commercial Registration (CR) validation
+  const profile = getCountryProfile(data.country_code);
+  if (profile.crRequired || (data.cr_number && data.cr_number.trim() !== '')) {
+    const crRes = validateCommercialRegistration(data.country_code, data.cr_number);
+    if (!crRes.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: crRes.errorAr || 'رقم السجل التجاري غير صحيح',
+        path: ['cr_number']
+      });
+    }
+  }
+
+  // 3. VAT Number validation
   if (data.is_vat_registered) {
-    if (!data.vat_number || data.vat_number.trim() === '') {
+    const vatRes = validateTaxNumber(data.country_code, data.vat_number, true);
+    if (!vatRes.isValid) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'الرقم الضريبي مطلوب لأنك حددت أن المنشأة مسجلة ضريبياً',
-        path: ['vat_number']
-      });
-    } else if (!/^[0-9]{15}$/.test(data.vat_number)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'الرقم الضريبي السعودي يتكون من 15 خانة رقمية متتالية فقط دون حروف',
-        path: ['vat_number']
-      });
-    } else if (!data.vat_number.startsWith('3') || !data.vat_number.endsWith('3')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'الرقم الضريبي السعودي يجب أن يبدأ بالرقم 3 وينتهي بالرقم 3 حسب معايير الهيئة',
+        message: vatRes.errorAr || 'الرقم الضريبي غير صحيح',
         path: ['vat_number']
       });
     }
@@ -159,9 +181,10 @@ export const Onboarding: React.FC = () => {
     }
   });
 
-  const { register, trigger, handleSubmit, watch, formState: { isValid, isSubmitting } } = methods;
+  const { register, trigger, handleSubmit, watch, setValue, formState: { isValid, isSubmitting } } = methods;
 
   const currentValues = watch();
+  const currentProfile = getCountryProfile(currentValues.country_code);
 
   // Load initial draft state of organization if it already exists (Requirement 6)
   React.useEffect(() => {
@@ -501,8 +524,66 @@ export const Onboarding: React.FC = () => {
                       <div className="space-y-4">
                         <div>
                           <h4 className="text-base font-bold text-slate-900 border-b border-slate-100 pb-2">معلومات المنشأة وعنوان النشاط</h4>
-                          <p className="text-xs text-slate-500 mt-1">ابدأ وإدخال البيانات الأساسية التي ستظهر على مراسلاتك وفواتيرك.</p>
+                          <p className="text-xs text-slate-500 mt-1">ابدأ وإدخل البيانات الأساسية التي ستظهر على مراسلاتك وفواتيرك.</p>
                         </div>
+
+                        {/* Country Selection Cards */}
+                        <div className="space-y-2">
+                          <label className="block text-xs font-bold text-slate-700">دولة المقر للمنشأة *</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Saudi Arabia Card */}
+                            <div
+                              id="country-card-sa"
+                              onClick={() => {
+                                setValue('country_code', 'SA');
+                                setValue('currency_code', countryProfiles.SA.currencyCode);
+                                setValue('city', countryProfiles.SA.cities[0]);
+                              }}
+                              className={`cursor-pointer border-2 rounded-2xl p-4 flex items-center justify-between transition ${
+                                currentValues.country_code === 'SA'
+                                  ? 'border-brand-blue bg-blue-50/20 shadow-md ring-2 ring-brand-blue/30'
+                                  : 'border-slate-200 bg-white hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="text-right">
+                                <span className="text-xs font-bold text-slate-900 block">{countryProfiles.SA.nameAr}</span>
+                                <span className="text-[10px] text-slate-500 block mt-1">العملة الأساسية: {countryProfiles.SA.currencyNameAr} ({countryProfiles.SA.currencyCode})</span>
+                                <span className="text-[10px] text-emerald-600 block mt-0.5">الضريبة الافتراضية: {countryProfiles.SA.defaultTaxRate}% {countryProfiles.SA.zatcaEnabled ? '(ZATCA مدعوم)' : ''}</span>
+                              </div>
+                              <Globe2 className={`w-6 h-6 transition-colors ${
+                                currentValues.country_code === 'SA' ? 'text-brand-blue' : 'text-slate-400'
+                              }`} />
+                            </div>
+
+                            {/* Yemen Card */}
+                            <div
+                              id="country-card-ye"
+                              onClick={() => {
+                                setValue('country_code', 'YE');
+                                setValue('currency_code', countryProfiles.YE.currencyCode);
+                                setValue('city', countryProfiles.YE.cities[0]);
+                              }}
+                              className={`cursor-pointer border-2 rounded-2xl p-4 flex items-center justify-between transition ${
+                                currentValues.country_code === 'YE'
+                                  ? 'border-brand-purple bg-purple-50/20 shadow-md ring-2 ring-brand-purple/30'
+                                  : 'border-slate-200 bg-white hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="text-right">
+                                <span className="text-xs font-bold text-slate-900 block">{countryProfiles.YE.nameAr}</span>
+                                <span className="text-[10px] text-slate-500 block mt-1">العملة الأساسية: {countryProfiles.YE.currencyNameAr} ({countryProfiles.YE.currencyCode})</span>
+                                <span className="text-[10px] text-slate-500 block mt-0.5">ضريبة افتراضية: {countryProfiles.YE.defaultTaxRate}% {countryProfiles.YE.zatcaEnabled ? '(ZATCA مدعوم)' : ''}</span>
+                              </div>
+                              <Globe2 className={`w-6 h-6 transition-colors ${
+                                currentValues.country_code === 'YE' ? 'text-brand-purple' : 'text-slate-400'
+                              }`} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Hidden Inputs for Form State Registration */}
+                        <input type="hidden" {...register('country_code')} />
+                        <input type="hidden" {...register('currency_code')} />
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
@@ -551,13 +632,13 @@ export const Onboarding: React.FC = () => {
                             <input
                               id="input-city"
                               type="text"
-                              placeholder="مثال: الرياض"
+                              placeholder={`مثال: ${currentProfile.cities[0]}`}
                               {...register('city')}
                               className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition"
                               list="cities-list"
                             />
                             <datalist id="cities-list">
-                              {cityOptions.map((c) => <option key={c} value={c} />)}
+                              {currentProfile.cities.map((c) => <option key={c} value={c} />)}
                             </datalist>
                             {methods.formState.errors.city && (
                               <p className="text-xs text-red-600 mt-1">{methods.formState.errors.city.message}</p>
@@ -567,9 +648,9 @@ export const Onboarding: React.FC = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1.5">الدولة</label>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">الدولة المحددة</label>
                             <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-xl text-sm text-slate-600 font-semibold flex items-center justify-between">
-                              <span>المملكة العربية السعودية</span>
+                              <span>{currentProfile.nameAr}</span>
                               <Globe2 className="w-4 h-4 text-emerald-600" />
                             </div>
                           </div>
@@ -579,7 +660,7 @@ export const Onboarding: React.FC = () => {
                             <input
                               id="input-phone"
                               type="tel"
-                              placeholder="05xxxxxxxx"
+                              placeholder={currentProfile.phonePlaceholder}
                               {...register('phone', {
                                 onChange: (e) => {
                                   e.target.value = normalizeIntegerInput(e.target.value);
@@ -636,19 +717,21 @@ export const Onboarding: React.FC = () => {
                           </div>
 
                           <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1.5">الرقم الموحد / السجل التجاري (CR) *</label>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">{currentProfile.crLabel} {currentProfile.crRequired ? '*' : '(اختياري)'}</label>
                             <input
                               id="input-cr-number"
                               type="text"
-                              placeholder="مثال: 1010xxxxxx"
+                              placeholder={currentProfile.code === 'SA' ? 'مثال: 1010xxxxxx' : 'رقم السجل التجاري'}
                               {...register('cr_number', {
                                 onChange: (e) => {
-                                  e.target.value = normalizeIntegerInput(e.target.value);
+                                  e.target.value = currentProfile.code === 'SA'
+                                    ? normalizeIntegerInput(e.target.value)
+                                    : normalizeInputDigits(e.target.value);
                                 }
                               })}
                               className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition text-left font-mono tabular-nums"
                               dir="ltr"
-                              inputMode="numeric"
+                              inputMode={currentProfile.code === 'SA' ? 'numeric' : 'text'}
                             />
                             {methods.formState.errors.cr_number && (
                               <p className="text-xs text-red-600 mt-1">{methods.formState.errors.cr_number.message}</p>
@@ -667,7 +750,11 @@ export const Onboarding: React.FC = () => {
                             />
                             <div className="text-right">
                               <span className="text-xs font-bold text-slate-900 block">هل المنشأة مسجلة في ضريبة القيمة المضافة؟</span>
-                              <span className="text-[10px] text-slate-500">اختر هذا الخيار فقط في حال حصولك على شهادة التسجيل الضريبي بضريبة القيمة المضافة بالمملكة العربية السعودية.</span>
+                              <span className="text-[10px] text-slate-500">
+                                {currentProfile.code === 'SA' 
+                                  ? 'اختر هذا الخيار فقط في حال حصولك على شهادة التسجيل الضريبي بضريبة القيمة المضافة بالمملكة العربية السعودية.' 
+                                  : 'اختر هذا الخيار في حال كون المنشأة مسجلة في مصلحة الضرائب بالجمهورية اليمنية.'}
+                              </span>
                             </div>
                           </label>
 
@@ -677,19 +764,21 @@ export const Onboarding: React.FC = () => {
                               animate={{ opacity: 1, height: 'auto' }}
                               className="pt-2 border-t border-slate-200/80"
                             >
-                              <label className="block text-xs font-bold text-slate-700 mb-1.5">الرقم الضريبي المكون من 15 رقم يبدأ بـ 3 *</label>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">{currentProfile.vatLabel} *</label>
                               <input
                                 id="input-vat-number"
                                 type="text"
-                                placeholder="3xxxxxxxxxxxx3"
+                                placeholder={currentProfile.code === 'SA' ? '3xxxxxxxxxxxx3' : 'رقم الملف الضريبي'}
                                 {...register('vat_number', {
                                   onChange: (e) => {
-                                    e.target.value = normalizeIntegerInput(e.target.value);
+                                    e.target.value = currentProfile.code === 'SA'
+                                      ? normalizeIntegerInput(e.target.value)
+                                      : normalizeInputDigits(e.target.value);
                                   }
                                 })}
                                 className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition text-left font-mono tabular-nums"
                                 dir="ltr"
-                                inputMode="numeric"
+                                inputMode={currentProfile.code === 'SA' ? 'numeric' : 'text'}
                               />
                               {methods.formState.errors.vat_number && (
                                 <p className="text-xs text-red-600 mt-1">{methods.formState.errors.vat_number.message}</p>
@@ -712,7 +801,7 @@ export const Onboarding: React.FC = () => {
                           <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1.5">العملة الأساسية</label>
                             <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-xl text-sm text-slate-600 font-bold flex items-center justify-between">
-                              <span>الريال السعودي (SAR)</span>
+                              <span>{currentProfile.currencyNameAr} ({currentProfile.currencyCode})</span>
                               <Coins className="w-4 h-4 text-amber-500" />
                             </div>
                           </div>

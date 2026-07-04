@@ -233,12 +233,12 @@ export const TrialBalance: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-bold text-xs text-white">
             <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800">
               <span className="text-slate-400 block font-semibold text-[10px]">إجمالي أرصدة الجانب المدين (Leaves)</span>
-              <span className="text-base font-mono block mt-1.5 tabular-nums text-emerald-400">{formatNumberWithLatinDigits(totalDebitsSum)} ر.س</span>
+              <span className="text-base font-mono block mt-1.5 tabular-nums text-emerald-400">{formatNumberWithLatinDigits(totalDebitsSum)} {currentOrg?.currency_code || ''}</span>
             </div>
             
             <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800">
               <span className="text-slate-400 block font-semibold text-[10px]">إجمالي أرصدة الجانب الدائن (Leaves)</span>
-              <span className="text-base font-mono block mt-1.5 tabular-nums text-emerald-400">{formatNumberWithLatinDigits(totalCreditsSum)} ر.س</span>
+              <span className="text-base font-mono block mt-1.5 tabular-nums text-emerald-400">{formatNumberWithLatinDigits(totalCreditsSum)} {currentOrg?.currency_code || ''}</span>
             </div>
 
             <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800 flex flex-col justify-between">
@@ -251,7 +251,7 @@ export const TrialBalance: React.FC = () => {
               ) : (
                 <div className="flex items-center gap-1.5 text-rose-400 text-sm mt-1.5">
                   <span className="w-2.5 h-2.5 bg-rose-500 rounded-full inline-block animate-pulse"></span>
-                  <span>فرق غير موازن: {formatNumberWithLatinDigits(Math.abs(totalDebitsSum - totalCreditsSum))} ر.س</span>
+                  <span>فرق غير موازن: {formatNumberWithLatinDigits(Math.abs(totalDebitsSum - totalCreditsSum))} {currentOrg?.currency_code || ''}</span>
                 </div>
               )}
             </div>

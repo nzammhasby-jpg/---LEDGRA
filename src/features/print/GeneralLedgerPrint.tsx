@@ -119,7 +119,7 @@ export const GeneralLedgerPrint: React.FC = () => {
             <div className="text-left">
               <span className="text-[10px] text-slate-400 block mb-0.5">الرصيد النهائي بالفترة</span>
               <span className="text-base font-black text-brand-blue font-mono">
-                {formatNumberWithLatinDigits(Math.abs(finalBalance))} <span className="text-[10px] font-normal text-slate-500">ر.س ({finalBalance < 0 ? 'دائن' : 'مدين'})</span>
+                {formatNumberWithLatinDigits(Math.abs(finalBalance))} <span className="text-[10px] font-normal text-slate-500">{currentOrg?.currency_code || ''} ({finalBalance < 0 ? 'دائن' : 'مدين'})</span>
               </span>
             </div>
           </div>

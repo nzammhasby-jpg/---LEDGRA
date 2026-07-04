@@ -523,7 +523,7 @@ export const ReceiptsPage: React.FC = () => {
               <div>
                 <span className="text-slate-400 text-[10px] block">إجمالي المقبوضات المعتمدة</span>
                 <span className="text-sm font-black text-slate-800 font-mono">
-                  {formatNumberWithLatinDigits(receipts.reduce((acc, r) => acc + (r.status === 'approved' ? r.amount : 0), 0))} <span className="text-[10px] font-sans">SAR</span>
+                  {formatNumberWithLatinDigits(receipts.reduce((acc, r) => acc + (r.status === 'approved' ? r.amount : 0), 0))} <span className="text-[10px] font-sans">{currentOrg?.currency_code || ''}</span>
                 </span>
               </div>
             </div>
@@ -871,7 +871,7 @@ export const ReceiptsPage: React.FC = () => {
 
                   {/* Receipt amount write */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-slate-400">المبلغ المقبوض الإجمالي (SAR) *</label>
+                    <label className="text-[11px] font-bold text-slate-400">المبلغ المقبوض الإجمالي ({currentOrg?.currency_code || ''}) *</label>
                     <input
                       type="text"
                       inputMode="decimal"
@@ -995,7 +995,7 @@ export const ReceiptsPage: React.FC = () => {
                           <th className="px-3 py-2 text-left">قيمة الفاتورة</th>
                           <th className="px-3 py-2 text-left">المسدد سابقاً</th>
                           <th className="px-3 py-2 text-left text-rose-500 font-extrabold">المتبقي المطلوب</th>
-                          <th className="px-3 py-2 text-left w-36">المخصص الحركي في هذا السند (SAR)</th>
+                          <th className="px-3 py-2 text-left w-36">المخصص الحركي في هذا السند ({currentOrg?.currency_code || ''})</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
@@ -1040,14 +1040,14 @@ export const ReceiptsPage: React.FC = () => {
                   <div className="flex justify-between">
                     <span>مبلغ السند المطلوب:</span>
                     <span className="font-mono font-bold text-white text-sm" style={{ direction: 'ltr' }}>
-                      {formatNumberWithLatinDigits(amount)} SAR
+                      {formatNumberWithLatinDigits(amount)} {currentOrg?.currency_code || ''}
                     </span>
                   </div>
 
                   <div className="flex justify-between text-brand-turquoise font-bold">
                     <span>إجمالي المبالغ الموزعة:</span>
                     <span className="font-mono font-bold text-sm" style={{ direction: 'ltr' }}>
-                      {formatNumberWithLatinDigits(totalAllocated)} SAR
+                      {formatNumberWithLatinDigits(totalAllocated)} {currentOrg?.currency_code || ''}
                     </span>
                   </div>
 
@@ -1060,7 +1060,7 @@ export const ReceiptsPage: React.FC = () => {
                       </span>
                     ) : (
                       <span className="font-mono text-xs font-medium text-amber-400" style={{ direction: 'ltr' }}>
-                        {formatNumberWithLatinDigits(parseFloat(toEnglishDigits(amount) || '0') - totalAllocated)} SAR
+                        {formatNumberWithLatinDigits(parseFloat(toEnglishDigits(amount) || '0') - totalAllocated)} {currentOrg?.currency_code || ''}
                       </span>
                     )}
                   </div>
@@ -1203,7 +1203,7 @@ export const ReceiptsPage: React.FC = () => {
                 </span>
                 <span className="text-[10px] text-slate-400 block pt-1">رقم المقبوض الموزع:</span>
                 <span className="text-sm font-black text-slate-800 font-mono" style={{ direction: 'ltr' }}>
-                  {formatNumberWithLatinDigits(selectedReceipt.amount)} SAR
+                  {formatNumberWithLatinDigits(selectedReceipt.amount)} {currentOrg?.currency_code || ''}
                 </span>
               </div>
             </div>
@@ -1251,10 +1251,10 @@ export const ReceiptsPage: React.FC = () => {
                           {formatArabicDateWithLatinDigits(al.sales_invoice?.invoice_date)}
                         </td>
                         <td className="px-3 py-2.5 text-left font-mono" style={{ direction: 'ltr' }}>
-                          {formatNumberWithLatinDigits(al.sales_invoice?.total)} SAR
+                          {formatNumberWithLatinDigits(al.sales_invoice?.total)} {currentOrg?.currency_code || ''}
                         </td>
                         <td className="px-3 py-2.5 text-left font-bold text-emerald-600 font-mono" style={{ direction: 'ltr' }}>
-                          {formatNumberWithLatinDigits(al.allocated_amount)} SAR
+                          {formatNumberWithLatinDigits(al.allocated_amount)} {currentOrg?.currency_code || ''}
                         </td>
                       </tr>
                     ))}
@@ -1276,7 +1276,7 @@ export const ReceiptsPage: React.FC = () => {
                 <div className="flex justify-between border-b border-slate-200 pb-1.5 font-sans">
                   <span>إجمالي المبلغ المستلم والمقيد:</span>
                   <span className="font-bold text-base font-mono text-emerald-600" style={{ direction: 'ltr' }}>
-                    {formatNumberWithLatinDigits(selectedReceipt.amount)} SAR
+                    {formatNumberWithLatinDigits(selectedReceipt.amount)} {currentOrg?.currency_code || ''}
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 pt-1 leading-normal text-right">

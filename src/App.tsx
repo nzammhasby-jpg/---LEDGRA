@@ -12,6 +12,7 @@ import { Onboarding } from './features/onboarding/Onboarding';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { Settings } from './features/settings/Settings';
 import { AccountingLayout } from './features/accounting/AccountingLayout';
+import { QATestingPage } from './features/accounting/QATestingPage';
 import { CustomersPage } from './features/customers/CustomersPage';
 import { VendorsPage } from './features/vendors/VendorsPage';
 import { ItemsPage } from './features/items/ItemsPage';
@@ -426,6 +427,7 @@ export default function App() {
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/accounting" element={<AccountingLayout />} />
+            <Route path="/qa-testing" element={<QATestingPage />} />
             <Route path="/reports" element={<ReportsLayout />} />
             <Route path="/reports-soon" element={<SoonModule />} />
             <Route path="/help-panel" element={<HelpPanel />} />

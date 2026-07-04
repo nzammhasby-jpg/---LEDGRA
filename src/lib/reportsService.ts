@@ -174,7 +174,7 @@ export const reportsService = {
     return data as VendorStatementResult;
   },
 
-  // ==========================================
+// ==========================================
   // 5. CURRENT INVENTORY VALUATION (تقرير المخزون)
   // ==========================================
   async getInventoryReport(orgId: string): Promise<InventoryReportRow[]> {
@@ -184,5 +184,210 @@ export const reportsService = {
 
     if (error) throw error;
     return (data || []) as InventoryReportRow[];
+  },
+
+  // ==========================================
+  // 6. ADVANCED INCOME STATEMENT (قائمة الدخل المتقدمة)
+  // ==========================================
+  async getIncomeStatementAdvanced(
+    orgId: string,
+    dateFrom: string,
+    dateTo: string,
+    excludeClosingEntries: boolean = true
+  ): Promise<AdvancedIncomeStatementResult> {
+    const { data, error } = await supabase.rpc('get_income_statement_advanced', {
+      p_org_id: orgId,
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+      p_exclude_closing_entries: excludeClosingEntries
+    });
+
+    if (error) throw error;
+    return data as AdvancedIncomeStatementResult;
+  },
+
+  // ==========================================
+  // 7. VAT TAX REPORT (التقرير الضريبي المخصص)
+  // ==========================================
+  async getTaxReport(
+    orgId: string,
+    dateFrom: string,
+    dateTo: string
+  ): Promise<TaxReportResult> {
+    const { data, error } = await supabase.rpc('get_tax_report', {
+      p_org_id: orgId,
+      p_date_from: dateFrom,
+      p_date_to: dateTo
+    });
+
+    if (error) throw error;
+    return data as TaxReportResult;
+  },
+
+  // ==========================================
+  // 8. ADVANCED TRIAL BALANCE (ميزان المراجعة المتقدم)
+  // ==========================================
+  async getTrialBalanceAdvanced(
+    orgId: string,
+    dateFrom: string,
+    dateTo: string,
+    includeZeroAccounts: boolean = false,
+    includeParentAccounts: boolean = true,
+    excludeClosingEntries: boolean = true
+  ): Promise<TrialBalanceResult> {
+    const { data, error } = await supabase.rpc('get_trial_balance_advanced', {
+      p_org_id: orgId,
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+      p_include_zero_accounts: includeZeroAccounts,
+      p_include_parent_accounts: includeParentAccounts,
+      p_exclude_closing_entries: excludeClosingEntries
+    });
+
+    if (error) throw error;
+    return data as TrialBalanceResult;
+  },
+
+  // ==========================================
+  // 9. ADVANCED LEDGER REPORT (دفتر الأستاذ المتقدم)
+  // ==========================================
+  async getLedgerReportAdvanced(
+    orgId: string,
+    accountId: string,
+    dateFrom: string,
+    dateTo: string,
+    excludeClosingEntries: boolean = false
+  ): Promise<LedgerReportResult> {
+    const { data, error } = await supabase.rpc('get_ledger_report_advanced', {
+      p_org_id: orgId,
+      p_account_id: accountId,
+      p_date_from: dateFrom,
+      p_date_to: dateTo,
+      p_exclude_closing_entries: excludeClosingEntries
+    });
+
+    if (error) throw error;
+    return data as LedgerReportResult;
   }
 };
+
+export interface TrialBalanceAccount {
+  account_id: string;
+  code: string;
+  name_ar: string;
+  name_en: string | null;
+  classification: string;
+  nature: 'debit' | 'credit';
+  level: number;
+  parent_id: string | null;
+  allow_direct_posting: boolean;
+  is_active: boolean;
+  is_system: boolean;
+  opening_debit: number;
+  opening_credit: number;
+  period_debit: number;
+  period_credit: number;
+  closing_debit: number;
+  closing_credit: number;
+  net_balance: number;
+}
+
+export interface TrialBalanceTotals {
+  opening_debit: number;
+  opening_credit: number;
+  period_debit: number;
+  period_credit: number;
+  closing_debit: number;
+  closing_credit: number;
+  is_balanced: boolean;
+  difference: number;
+}
+
+export interface TrialBalanceResult {
+  date_from: string;
+  date_to: string;
+  include_zero_accounts: boolean;
+  include_parent_accounts: boolean;
+  exclude_closing_entries: boolean;
+  totals: TrialBalanceTotals;
+  accounts: TrialBalanceAccount[];
+}
+
+export interface LedgerAccountInfo {
+  id: string;
+  code: string;
+  name_ar: string;
+  name_en: string | null;
+  classification: string;
+  nature: 'debit' | 'credit';
+}
+
+export interface LedgerEntryRow {
+  entry_id: string;
+  entry_date: string;
+  reference: string;
+  description: string;
+  debit: number;
+  credit: number;
+  source_type: string;
+  source_id: string | null;
+  is_closing_entry: boolean;
+  running_balance: number;
+}
+
+export interface LedgerReportResult {
+  account: LedgerAccountInfo;
+  date_from: string;
+  date_to: string;
+  exclude_closing_entries: boolean;
+  opening_balance: number;
+  total_debit: number;
+  total_credit: number;
+  closing_balance: number;
+  entries: LedgerEntryRow[];
+}
+
+export interface AdvancedIncomeStatementAccount {
+  account_id: string;
+  code: string;
+  name_ar: string;
+  name_en: string | null;
+  amount: number;
+}
+
+export interface AdvancedIncomeStatementResult {
+  date_from: string;
+  date_to: string;
+  exclude_closing_entries: boolean;
+  total_revenue: number;
+  total_cogs: number;
+  gross_profit: number;
+  total_operating_expenses: number;
+  total_expenses: number;
+  net_income: number;
+  revenue_accounts: AdvancedIncomeStatementAccount[];
+  cogs_accounts: AdvancedIncomeStatementAccount[];
+  expense_accounts: AdvancedIncomeStatementAccount[];
+}
+
+export interface TaxMovement {
+  date: string;
+  reference: string | null;
+  description: string;
+  debit: number;
+  credit: number;
+  net_amount: number;
+}
+
+export interface TaxReportResult {
+  date_from: string;
+  date_to: string;
+  output_tax_account_id: string | null;
+  input_tax_account_id: string | null;
+  total_output_tax: number;
+  total_input_tax: number;
+  net_tax_due: number;
+  output_tax_movements: TaxMovement[];
+  input_tax_movements: TaxMovement[];
+}
+

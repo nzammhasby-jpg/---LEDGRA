@@ -137,7 +137,7 @@ export const BalanceSheetPage: React.FC = () => {
             </div>
           </div>
           <div className="font-sans text-xs font-bold" style={{ direction: 'ltr' }}>
-            الفرق الدفتري: {formatNumberWithLatinDigits(reportData.check_difference)} SAR
+            الفرق الدفتري: {formatNumberWithLatinDigits(reportData.check_difference)} {currentOrg?.currency_code || ''}
           </div>
         </div>
       )}
@@ -151,7 +151,7 @@ export const BalanceSheetPage: React.FC = () => {
               <span className="text-lg font-extrabold text-brand-blue font-sans" style={{ direction: 'ltr' }}>
                 {formatNumberWithLatinDigits(reportData.assets)}
               </span>
-              <span className="bg-brand-blue/10 text-brand-blue text-[10px] px-2 py-0.5 rounded-full font-bold">SAR</span>
+              <span className="bg-brand-blue/10 text-brand-blue text-[10px] px-2 py-0.5 rounded-full font-bold">{currentOrg?.currency_code || ''}</span>
             </div>
           </div>
 
@@ -161,7 +161,7 @@ export const BalanceSheetPage: React.FC = () => {
               <span className="text-lg font-extrabold text-red-600 font-sans" style={{ direction: 'ltr' }}>
                 {formatNumberWithLatinDigits(reportData.liabilities)}
               </span>
-              <span className="bg-red-500/10 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">SAR</span>
+              <span className="bg-red-500/10 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">{currentOrg?.currency_code || ''}</span>
             </div>
           </div>
 
@@ -171,7 +171,7 @@ export const BalanceSheetPage: React.FC = () => {
               <span className="text-lg font-extrabold text-emerald-600 font-sans" style={{ direction: 'ltr' }}>
                 {formatNumberWithLatinDigits(reportData.current_year_net_income)}
               </span>
-              <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-0.5 rounded-full font-bold">SAR</span>
+              <span className="bg-emerald-500/10 text-emerald-500 text-[10px] px-2 py-0.5 rounded-full font-bold">{currentOrg?.currency_code || ''}</span>
             </div>
           </div>
 
@@ -181,7 +181,7 @@ export const BalanceSheetPage: React.FC = () => {
               <span className="text-lg font-extrabold text-slate-800 font-sans" style={{ direction: 'ltr' }}>
                 {formatNumberWithLatinDigits(reportData.liabilities + reportData.equity + reportData.current_year_net_income)}
               </span>
-              <span className="bg-slate-100 text-slate-650 text-[10px] px-2 py-0.5 rounded-full font-bold">SAR</span>
+              <span className="bg-slate-100 text-slate-650 text-[10px] px-2 py-0.5 rounded-full font-bold">{currentOrg?.currency_code || ''}</span>
             </div>
           </div>
         </div>
@@ -224,7 +224,7 @@ export const BalanceSheetPage: React.FC = () => {
             <div className="border-t border-slate-100 bg-slate-50/20 px-5 py-4 flex justify-between items-center text-xs font-extrabold select-none">
               <span>مجموع أصول المنشأة الحالية (A)</span>
               <span className="font-sans text-brand-blue text-sm" style={{ direction: 'ltr' }}>
-                {formatNumberWithLatinDigits(reportData.assets)} SAR
+                {formatNumberWithLatinDigits(reportData.assets)} {currentOrg?.currency_code || ''}
               </span>
             </div>
           </div>
@@ -323,7 +323,7 @@ export const BalanceSheetPage: React.FC = () => {
             <div className="border-t border-slate-100 bg-slate-50/20 px-5 py-4 flex justify-between items-center text-xs font-extrabold select-none">
               <span>مجموع الخصوم وحقوق ملكيتك المجمعة (B)</span>
               <span className="font-sans text-slate-800 text-sm" style={{ direction: 'ltr' }}>
-                {formatNumberWithLatinDigits(reportData.liabilities + reportData.equity + reportData.current_year_net_income)} SAR
+                {formatNumberWithLatinDigits(reportData.liabilities + reportData.equity + reportData.current_year_net_income)} {currentOrg?.currency_code || ''}
               </span>
             </div>
 

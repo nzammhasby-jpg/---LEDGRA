@@ -241,7 +241,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
       {/* 2. SIDEBAR - Responsive drawer/rail layout */}
       <aside 
-        className={`fixed md:sticky top-0 right-0 h-screen bg-brand-navy text-white z-50 flex flex-col justify-between transition-all duration-300 overflow-x-hidden ${
+        className={`fixed md:sticky top-0 right-0 h-screen bg-brand-navy text-white z-50 flex flex-col justify-between transition-all duration-300 overflow-x-hidden print:hidden ${
           sidebarCollapsed ? 'w-20' : 'w-72'
         } ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}
       >
@@ -421,7 +421,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         
         {/* Topbar Header */}
-        <header className="bg-white border-b border-slate-200 h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-35 shadow-sm shrink-0">
+        <header className="bg-white border-b border-slate-200 h-16 px-4 md:px-8 flex items-center justify-between sticky top-0 z-35 shadow-sm shrink-0 print:hidden">
           
           {/* Right Section: Mobile toggle and Page Title */}
           <div className="flex items-center gap-3">
@@ -603,7 +603,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         </header>
 
         {/* 4. ACTUAL PAGE DYNAMIC INJECT CHASSIS ROW */}
-        <div className="flex-grow overflow-y-auto p-4 md:p-8 space-y-4">
+        <div className="flex-grow overflow-y-auto p-4 md:p-8 space-y-4 print:p-0 print:overflow-visible">
           {isSuspended && (
             <div className="bg-rose-50 border border-rose-200 text-rose-800 px-5 py-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-pulse" dir="rtl">
               <div className="flex items-start sm:items-center gap-3">

@@ -142,7 +142,7 @@ export const JournalEntryPrint: React.FC = () => {
             </tbody>
             <tfoot>
               <tr className="bg-slate-50 font-black text-slate-900 border-t-2 border-slate-300">
-                <td colSpan={3} className="py-2.5 px-3 border border-slate-200 text-left">إجمالي الحركة المتوازنة (SAR):</td>
+                <td colSpan={3} className="py-2.5 px-3 border border-slate-200 text-left">إجمالي الحركة المتوازنة ({currentOrg?.currency_code || ''}):</td>
                 <td className="py-2.5 px-3 border border-slate-200 text-center font-mono font-black">{formatNumberWithLatinDigits(totalDebit)}</td>
                 <td className="py-2.5 px-3 border border-slate-200 text-center font-mono font-black">{formatNumberWithLatinDigits(totalCredit)}</td>
               </tr>

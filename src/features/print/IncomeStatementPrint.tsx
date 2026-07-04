@@ -131,7 +131,7 @@ export const IncomeStatementPrint: React.FC = () => {
 
             <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex justify-between items-center text-xs font-black text-slate-900">
               <span>إجمالي الإيرادات (أ):</span>
-              <span className="font-mono">{formatNumberWithLatinDigits(report.revenue)} SAR</span>
+              <span className="font-mono">{formatNumberWithLatinDigits(report.revenue)} {currentOrg?.currency_code || ''}</span>
             </div>
           </div>
 
@@ -160,7 +160,7 @@ export const IncomeStatementPrint: React.FC = () => {
 
             <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex justify-between items-center text-xs font-black text-slate-900">
               <span>إجمالي تكلفة المبيعات (ب):</span>
-              <span className="font-mono">{formatNumberWithLatinDigits(report.cogs)} SAR</span>
+              <span className="font-mono">{formatNumberWithLatinDigits(report.cogs)} {currentOrg?.currency_code || ''}</span>
             </div>
           </div>
 
@@ -168,7 +168,7 @@ export const IncomeStatementPrint: React.FC = () => {
           <div className="bg-slate-100 border border-slate-250 rounded-2xl px-6 py-3.5 flex justify-between items-center text-xs font-extrabold text-slate-900 select-none">
             <span className="text-sm font-black">مــجــمــل الــربــح / الــخــســارة (أ - ب):</span>
             <span className="font-mono text-base font-black text-brand-blue">
-              {formatNumberWithLatinDigits(report.gross_profit)} SAR
+              {formatNumberWithLatinDigits(report.gross_profit)} {currentOrg?.currency_code || ''}
             </span>
           </div>
 
@@ -197,7 +197,7 @@ export const IncomeStatementPrint: React.FC = () => {
 
             <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex justify-between items-center text-xs font-black text-slate-900">
               <span>إجمالي المصروفات (ج):</span>
-              <span className="font-mono">{formatNumberWithLatinDigits(report.expenses)} SAR</span>
+              <span className="font-mono">{formatNumberWithLatinDigits(report.expenses)} {currentOrg?.currency_code || ''}</span>
             </div>
           </div>
 
@@ -209,7 +209,7 @@ export const IncomeStatementPrint: React.FC = () => {
           }`}>
             <span className="text-sm font-black">صــافــي الــربــح / الــخــســارة لـلـفـتـرة الـمـالـيـة:</span>
             <span className="font-mono text-xl font-black">
-              {formatNumberWithLatinDigits(report.net_income)} SAR
+              {formatNumberWithLatinDigits(report.net_income)} {currentOrg?.currency_code || ''}
             </span>
           </div>
 

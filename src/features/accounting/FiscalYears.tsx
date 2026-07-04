@@ -69,6 +69,8 @@ export const FiscalYears: React.FC = () => {
   const canManageFiscalYears = ['owner', 'admin'].includes(roleInCurrentOrg || '');
   const canClosePeriod = ['owner', 'admin'].includes(roleInCurrentOrg || '');
   const canReopenPeriod = roleInCurrentOrg === 'owner';
+  const canCloseFiscalYear = roleInCurrentOrg === 'owner';
+  const canReopenFiscalYear = roleInCurrentOrg === 'owner';
 
   // Load Years list
   const loadYearsData = async () => {
@@ -455,14 +457,23 @@ export const FiscalYears: React.FC = () => {
                           </span>
                         )}
 
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
                           year.status === 'open' 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
                             : year.status === 'closed'
                             ? 'bg-red-50 text-red-700 border-red-150 font-extrabold'
+                            : year.status === 'locked'
+                            ? 'bg-slate-900 text-slate-100 border-slate-950 font-extrabold'
                             : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}>
-                          {year.status === 'open' ? 'سنة مالية مفتوحة' : year.status === 'closed' ? 'سنة مغلقة محاسبياً ومقيدة' : 'مسودة'}
+                          {year.status === 'locked' && <Lock className="w-2.5 h-2.5" />}
+                          {year.status === 'open' 
+                            ? 'سنة مالية مفتوحة' 
+                            : year.status === 'closed' 
+                            ? 'سنة مغلقة محاسبياً ومقيدة' 
+                            : year.status === 'locked'
+                            ? 'سنة مالية مقفلة'
+                            : 'مسودة'}
                         </span>
                       </div>
 
@@ -478,11 +489,11 @@ export const FiscalYears: React.FC = () => {
                         </span>
                       </div>
 
-                      {year.status === 'closed' && (
+                      {(year.status === 'closed' || year.status === 'locked') && (
                         <div className="mt-2 bg-slate-900 text-slate-100 p-3 rounded-2xl text-[11px] font-sans space-y-1.5 leading-relaxed max-w-xl text-right">
                           <div className="flex items-center gap-1.5 font-bold text-amber-400">
                             <Lock className="w-4 h-4 shrink-0 text-amber-400" />
-                            <span>تم إقفال هذه السنة المالية وحماية جميع سجلاتها وقيودها بالكامل</span>
+                            <span>{year.status === 'locked' ? 'تم إقفال هذه السنة المالية بالكامل وحماية جميع سجلاتها وقيودها الختامية' : 'تم إغلاق هذه السنة المالية وحماية جميع سجلاتها محاسبياً'}</span>
                           </div>
                           {year.closed_at && (
                             <div className="text-[10px] text-slate-300">
@@ -520,7 +531,7 @@ export const FiscalYears: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {year.status === 'open' && canManageFiscalYears && (
+                      {year.status === 'open' && canCloseFiscalYear && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -533,7 +544,7 @@ export const FiscalYears: React.FC = () => {
                         </button>
                       )}
 
-                      {year.status === 'closed' && roleInCurrentOrg === 'owner' && (
+                      {(year.status === 'closed' || year.status === 'locked') && canReopenFiscalYear && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -546,9 +557,9 @@ export const FiscalYears: React.FC = () => {
                         </button>
                       )}
 
-                      {year.status === 'closed' && roleInCurrentOrg !== 'owner' && (
+                      {(year.status === 'closed' || year.status === 'locked') && roleInCurrentOrg !== 'owner' && (
                         <span className="text-[9px] text-slate-400 border border-slate-100 bg-slate-50 px-2.5 py-1.5 rounded-lg select-none" title="إعادة فتح السنة المالية مغلق لمالك المنشأة حصراً">
-                          مغلقة (إعادة فتح للمالك)
+                          {year.status === 'locked' ? 'مقفلة (إعادة فتح للمالك)' : 'مغلقة (إعادة فتح للمالك)'}
                         </span>
                       )}
 
@@ -946,14 +957,14 @@ export const FiscalYears: React.FC = () => {
                   <div className="bg-slate-50 border border-slate-150 rounded-2xl p-3.5 space-y-1">
                     <span className="text-[10px] font-bold text-slate-400 block">إجمالي الإيرادات السنوية</span>
                     <strong className="text-xs font-mono text-slate-700">
-                      {formatArabicDateWithLatinDigits(closingSummary.total_revenue.toLocaleString('en-US', { minimumFractionDigits: 2 }))} ر.س
+                      {formatArabicDateWithLatinDigits(closingSummary.total_revenue.toLocaleString('en-US', { minimumFractionDigits: 2 }))} {currentOrg?.currency_code || ''}
                     </strong>
                   </div>
 
                   <div className="bg-slate-50 border border-slate-150 rounded-2xl p-3.5 space-y-1">
                     <span className="text-[10px] font-bold text-slate-400 block">إجمالي المصروفات السنوية</span>
                     <strong className="text-xs font-mono text-slate-700">
-                      {formatArabicDateWithLatinDigits(closingSummary.total_expenses.toLocaleString('en-US', { minimumFractionDigits: 2 }))} ر.س
+                      {formatArabicDateWithLatinDigits(closingSummary.total_expenses.toLocaleString('en-US', { minimumFractionDigits: 2 }))} {currentOrg?.currency_code || ''}
                     </strong>
                   </div>
 
@@ -961,7 +972,7 @@ export const FiscalYears: React.FC = () => {
                     <div>
                       <span className="text-[10px] font-bold text-slate-400 block">صافي الربح / الخسارة الختامي</span>
                       <strong className={`text-sm font-mono font-bold block mt-0.5 ${closingSummary.net_profit_or_loss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatArabicDateWithLatinDigits(closingSummary.net_profit_or_loss.toLocaleString('en-US', { minimumFractionDigits: 2 }))} ر.س
+                        {formatArabicDateWithLatinDigits(closingSummary.net_profit_or_loss.toLocaleString('en-US', { minimumFractionDigits: 2 }))} {currentOrg?.currency_code || ''}
                       </strong>
                     </div>
                     <span className={`text-[9px] font-extrabold px-2.5 py-1 rounded-md ${closingSummary.net_profit_or_loss >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
@@ -971,18 +982,36 @@ export const FiscalYears: React.FC = () => {
                 </div>
 
                 {/* Retained earnings account details */}
-                <div className="bg-slate-50 border border-slate-150 rounded-2xl p-3.5 text-xs text-slate-700 flex justify-between items-center">
+                <div className={`border rounded-2xl p-3.5 text-xs text-slate-700 flex justify-between items-center ${
+                  closingSummary.retained_earnings_account_valid === false
+                    ? 'bg-red-50 border-red-200'
+                    : 'bg-slate-50 border-slate-150'
+                }`}>
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 block">الحساب المعتمد لترحيل صافي الدورة</span>
-                    <strong className="text-slate-800 mt-1 block">
+                    <strong className="text-slate-800 mt-1 block font-sans">
                       {closingSummary.retained_earnings_account_name || 'غير محدد'}
                     </strong>
                   </div>
-                  <span className="text-[9px] bg-blue-50 text-brand-blue px-2 py-0.5 rounded-md font-bold">حقوق ملكية (Equity)</span>
+                  {closingSummary.retained_earnings_account_valid === false ? (
+                    <span className="text-[9px] bg-red-100 text-red-700 px-2 py-1 rounded-md font-extrabold flex items-center gap-1 shrink-0">
+                      <AlertOctagon className="w-3 h-3 text-red-700" />
+                      <span>الحساب غير صالح للإقفال</span>
+                    </span>
+                  ) : (
+                    <span className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md font-extrabold flex items-center gap-1 shrink-0">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                      <span>حساب حقوق ملكية معتمد</span>
+                    </span>
+                  )}
                 </div>
 
                 {/* Blocking Validations Check block */}
-                {(!closingSummary.all_periods_closed || closingSummary.has_draft_entries || closingSummary.has_draft_invoices || closingSummary.has_draft_bills) && (
+                {(!closingSummary.all_periods_closed || 
+                  closingSummary.has_draft_entries || 
+                  closingSummary.has_draft_invoices || 
+                  closingSummary.has_draft_bills || 
+                  closingSummary.retained_earnings_account_valid === false) && (
                   <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-red-800 text-xs space-y-2 leading-relaxed">
                     <div className="flex items-center gap-1.5 font-bold text-red-700">
                       <AlertOctagon className="w-4.5 h-4.5 text-red-600" />
@@ -995,12 +1024,19 @@ export const FiscalYears: React.FC = () => {
                       {(closingSummary.has_draft_entries || closingSummary.has_draft_invoices || closingSummary.has_draft_bills) && (
                         <li>توجد مستندات مسودة (قيود، فواتير مبيعات، أو فواتير مشتريات) غير معتمدة داخل السنة.</li>
                       )}
+                      {closingSummary.retained_earnings_account_valid === false && (
+                        <li>{closingSummary.retained_earnings_account_issue || 'حساب الأرباح المبقاة المعتمد في الإعدادات غير صالح أو غير موجود.'}</li>
+                      )}
                     </ul>
                   </div>
                 )}
 
                 {/* Close notes text field */}
-                {closingSummary.all_periods_closed && !closingSummary.has_draft_entries && !closingSummary.has_draft_invoices && !closingSummary.has_draft_bills && (
+                {closingSummary.all_periods_closed && 
+                 !closingSummary.has_draft_entries && 
+                 !closingSummary.has_draft_invoices && 
+                 !closingSummary.has_draft_bills && 
+                 closingSummary.retained_earnings_account_valid !== false && (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 block">ملاحظات أو مستند مرجع الإقفال السنوي</label>
                     <textarea
@@ -1034,7 +1070,8 @@ export const FiscalYears: React.FC = () => {
                   !closingSummary.all_periods_closed || 
                   closingSummary.has_draft_entries || 
                   closingSummary.has_draft_invoices || 
-                  closingSummary.has_draft_bills
+                  closingSummary.has_draft_bills ||
+                  closingSummary.retained_earnings_account_valid === false
                 }
                 onClick={handleExecuteCloseYear}
                 className="text-xs font-extrabold px-5 py-2.5 rounded-xl text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"

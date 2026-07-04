@@ -108,7 +108,7 @@ export const BalanceSheetPrint: React.FC = () => {
             <div>
               <span className="font-extrabold block">تنبيه وملاحظة هامة: يوجد فرق في معادلة قيد المركز المالي!</span>
               <p className="mt-1 text-red-700">
-                قيمة الفارق غير الموزونة تبلغ: <strong className="font-mono">{formatNumberWithLatinDigits(report.check_difference)} SAR</strong>. 
+                قيمة الفارق غير الموزونة تبلغ: <strong className="font-mono">{formatNumberWithLatinDigits(report.check_difference)} {currentOrg?.currency_code || ''}</strong>. 
                 يرجى مراجعة ميزان المراجعة والقيود غير المرحلة لضمان موازنة أرصدة الأصول مع الخصوم وتثبيتها.
               </p>
             </div>
@@ -143,7 +143,7 @@ export const BalanceSheetPrint: React.FC = () => {
 
               <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex justify-between items-center text-xs font-black text-slate-950">
                 <span>إجمالي قيم الأصول:</span>
-                <span className="font-mono text-brand-blue">{formatNumberWithLatinDigits(report.total_assets)} SAR</span>
+                <span className="font-mono text-brand-blue">{formatNumberWithLatinDigits(report.total_assets)} {currentOrg?.currency_code || ''}</span>
               </div>
             </div>
           </div>
@@ -176,7 +176,7 @@ export const BalanceSheetPrint: React.FC = () => {
 
               <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex justify-between items-center text-xs font-black text-slate-950">
                 <span>إجمالي مبالغ الخصوم والذمم:</span>
-                <span className="font-mono">{formatNumberWithLatinDigits(report.total_liabilities)} SAR</span>
+                <span className="font-mono">{formatNumberWithLatinDigits(report.total_liabilities)} {currentOrg?.currency_code || ''}</span>
               </div>
             </div>
 
@@ -210,7 +210,7 @@ export const BalanceSheetPrint: React.FC = () => {
 
               <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex justify-between items-center text-xs font-black text-slate-950">
                 <span>إجمالي حقوق الملكية والأرباح:</span>
-                <span className="font-mono">{formatNumberWithLatinDigits(report.total_equity + report.current_year_net_income)} SAR</span>
+                <span className="font-mono">{formatNumberWithLatinDigits(report.total_equity + report.current_year_net_income)} {currentOrg?.currency_code || ''}</span>
               </div>
             </div>
 
@@ -218,7 +218,7 @@ export const BalanceSheetPrint: React.FC = () => {
             <div className="bg-slate-900 text-white rounded-xl px-4 py-3 flex justify-between items-center text-xs font-black select-none">
               <span>إجمالي الالتزامات وحقوق الملكية:</span>
               <span className="font-mono text-brand-turquoise">
-                {formatNumberWithLatinDigits(report.total_liabilities + report.total_equity + report.current_year_net_income)} SAR
+                {formatNumberWithLatinDigits(report.total_liabilities + report.total_equity + report.current_year_net_income)} {currentOrg?.currency_code || ''}
               </span>
             </div>
 

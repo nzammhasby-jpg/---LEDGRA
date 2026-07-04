@@ -667,7 +667,7 @@ export const PurchaseBillsPage: React.FC = () => {
                           {formatArabicDateWithLatinDigits(b.bill_date)}
                         </td>
                         <td className="p-4 font-bold text-slate-900 font-mono tracking-tight text-left pl-6" style={{ direction: 'ltr' }}>
-                          {formatNumberWithLatinDigits(b.total)} ر.س
+                          {formatNumberWithLatinDigits(b.total)} {currentOrg?.currency_code || ''}
                         </td>
                         <td className="p-4">
                           {getStatusBadge(b.status)}
@@ -879,7 +879,7 @@ export const PurchaseBillsPage: React.FC = () => {
                 </select>
                 {selectedVendorInfo && (
                   <span className="text-[10px] text-brand-blue mt-1.5 block font-medium">
-                    الرصيد الافتتاحي: {selectedVendorInfo.opening_balance} ر.س | حساب الذمم: {selectedVendorInfo.payable_account?.name || '—'}
+                    الرصيد الافتتاحي: {selectedVendorInfo.opening_balance} {currentOrg?.currency_code || ''} | حساب الذمم: {selectedVendorInfo.payable_account?.name || '—'}
                   </span>
                 )}
               </div>
@@ -954,7 +954,7 @@ export const PurchaseBillsPage: React.FC = () => {
                     <th className="p-3">الوصف</th>
                     <th className="p-3 w-20 text-center">الكمية</th>
                     <th className="p-3 w-28 text-center">التكلفة (دون ضريبة)</th>
-                    <th className="p-3 w-24 text-center">الخصم (ر.س)</th>
+                    <th className="p-3 w-24 text-center">الخصم ({currentOrg?.currency_code || ''})</th>
                     <th className="p-3 w-16 text-center">الضريبة</th>
                     <th className="p-3 w-1/4">الحساب المحاسبي للبند</th>
                     <th className="p-3 text-left pl-6">الإجمالي الفرعي</th>
@@ -1120,22 +1120,22 @@ export const PurchaseBillsPage: React.FC = () => {
               
               <div className="flex justify-between text-xs">
                 <span className="font-sans text-slate-400">الإجمالي غير المخصوم:</span>
-                <span className="font-bold">{subtotal.toFixed(2)} ر.س</span>
+                <span className="font-bold">{subtotal.toFixed(2)} {currentOrg?.currency_code || ''}</span>
               </div>
 
               <div className="flex justify-between text-xs text-red-400">
                 <span className="font-sans">إجمالي الخصومات:</span>
-                <span className="font-bold">-{discountTotal.toFixed(2)} ر.س</span>
+                <span className="font-bold">-{discountTotal.toFixed(2)} {currentOrg?.currency_code || ''}</span>
               </div>
 
               <div className="flex justify-between text-xs text-brand-turquoise">
                 <span className="font-sans text-slate-400">ضريبة المدخلات (15%):</span>
-                <span className="font-bold">+{taxTotal.toFixed(2)} ر.س</span>
+                <span className="font-bold">+{taxTotal.toFixed(2)} {currentOrg?.currency_code || ''}</span>
               </div>
 
               <div className="border-t border-white/10 pt-4 flex justify-between items-baseline">
-                <span className="font-sans text-xs text-white font-bold">الصافي المطلوب (SAR):</span>
-                <span className="text-lg font-bold text-brand-turquoise">{total.toFixed(2)} ر.س</span>
+                <span className="font-sans text-xs text-white font-bold">الصافي المطلوب ({currentOrg?.currency_code || ''}):</span>
+                <span className="text-lg font-bold text-brand-turquoise">{total.toFixed(2)} {currentOrg?.currency_code || ''}</span>
               </div>
             </div>
 
@@ -1280,11 +1280,11 @@ export const PurchaseBillsPage: React.FC = () => {
                           <td className="p-3 text-slate-800">{line.item?.name || 'مشتريات/بضاعة'}</td>
                           <td className="p-3 text-slate-500 font-normal">{line.description || '—'}</td>
                           <td className="p-3 text-center font-mono">{line.quantity}</td>
-                          <td className="p-3 text-center font-mono">{formatNumberWithLatinDigits(line.unit_cost)} ر.س</td>
-                          <td className="p-3 text-center font-mono text-red-500">{formatNumberWithLatinDigits(line.discount_amount)} ر.s</td>
+                          <td className="p-3 text-center font-mono">{formatNumberWithLatinDigits(line.unit_cost)} {currentOrg?.currency_code || ''}</td>
+                          <td className="p-3 text-center font-mono text-red-500">{formatNumberWithLatinDigits(line.discount_amount)} {currentOrg?.currency_code || ''}</td>
                           <td className="p-3 text-center font-mono">{line.tax_rate}%</td>
                           <td className="p-3 text-left pl-6 font-mono font-bold text-slate-900" style={{ direction: 'ltr' }}>
-                            {formatNumberWithLatinDigits(line.line_total)} ر.س
+                            {formatNumberWithLatinDigits(line.line_total)} {currentOrg?.currency_code || ''}
                           </td>
                         </tr>
                       ))}
@@ -1326,8 +1326,8 @@ export const PurchaseBillsPage: React.FC = () => {
                               <span className="text-brand-blue font-bold">[{lineAccountCode}]</span> {lineAccountName}
                             </div>
                             <div className="hidden md:block text-slate-500 font-sans">تثبيت تكلفة بند: {line.item?.name}</div>
-                            <div className="text-left font-bold text-emerald-600">{(line.line_total - line.tax_amount).toFixed(2)} ر.س</div>
-                            <div className="text-left pl-4 text-slate-400">0.00 ر.س</div>
+                            <div className="text-left font-bold text-emerald-600">{(line.line_total - line.tax_amount).toFixed(2)} {currentOrg?.currency_code || ''}</div>
+                            <div className="text-left pl-4 text-slate-400">0.00 {currentOrg?.currency_code || ''}</div>
                           </div>
                         );
                       })}
@@ -1337,8 +1337,8 @@ export const PurchaseBillsPage: React.FC = () => {
                             <span className="text-brand-blue font-bold">[1204]</span> ضريبة القيمة المضافة لمدخلات المنشأة
                           </div>
                           <div className="hidden md:block text-slate-500 font-sans">ضريبة المدخلات مفرزة بنسبة 15%</div>
-                          <div className="text-left font-bold text-emerald-600">{selectedBill.tax_total.toFixed(2)} ر.س</div>
-                          <div className="text-left pl-4 text-slate-400">0.00 ر.س</div>
+                          <div className="text-left font-bold text-emerald-600">{selectedBill.tax_total.toFixed(2)} {currentOrg?.currency_code || ''}</div>
+                          <div className="text-left pl-4 text-slate-400">0.00 {currentOrg?.currency_code || ''}</div>
                         </div>
                       )}
                       <div className="grid grid-cols-3 md:grid-cols-4 p-2.5 text-center items-center bg-brand-navy/5">
@@ -1346,8 +1346,8 @@ export const PurchaseBillsPage: React.FC = () => {
                           <span className="text-brand-blue">[2101]</span> ذمم الموردين الدائنة ({selectedBill.vendor?.name})
                         </div>
                         <div className="hidden md:block text-slate-500 font-sans">تثبيت مديونية الفاتورة {selectedBill.bill_number}</div>
-                        <div className="text-left text-slate-400 font-bold">0.00 ر.س</div>
-                        <div className="text-left pl-4 font-bold text-red-600">{selectedBill.total.toFixed(2)} ر.س</div>
+                        <div className="text-left text-slate-400 font-bold">0.00 {currentOrg?.currency_code || ''}</div>
+                        <div className="text-left pl-4 font-bold text-red-600">{selectedBill.total.toFixed(2)} {currentOrg?.currency_code || ''}</div>
                       </div>
                     </div>
                   </div>
@@ -1370,32 +1370,32 @@ export const PurchaseBillsPage: React.FC = () => {
                 
                 <div className="flex justify-between text-xs">
                   <span className="font-sans text-slate-400">المجموع قبل الخصم:</span>
-                  <span>{formatNumberWithLatinDigits(selectedBill.subtotal)} ر.س</span>
+                  <span>{formatNumberWithLatinDigits(selectedBill.subtotal)} {currentOrg?.currency_code || ''}</span>
                 </div>
 
                 <div className="flex justify-between text-xs text-red-400">
                   <span className="font-sans text-slate-400">إجمالي الخصومات:</span>
-                  <span>-{formatNumberWithLatinDigits(selectedBill.discount_total)} ر.س</span>
+                  <span>-{formatNumberWithLatinDigits(selectedBill.discount_total)} {currentOrg?.currency_code || ''}</span>
                 </div>
 
                 <div className="flex justify-between text-xs text-brand-turquoise">
                   <span className="font-sans text-slate-400">ضريبة المدخلات:</span>
-                  <span>+{formatNumberWithLatinDigits(selectedBill.tax_total)} ر.س</span>
+                  <span>+{formatNumberWithLatinDigits(selectedBill.tax_total)} {currentOrg?.currency_code || ''}</span>
                 </div>
 
                 <div className="border-t border-white/10 pt-4 flex justify-between items-baseline">
                   <span className="font-sans text-xs font-bold">الصافي المطلوب:</span>
-                  <span className="text-lg font-bold text-brand-turquoise">{formatNumberWithLatinDigits(selectedBill.total)} ر.س</span>
+                  <span className="text-lg font-bold text-brand-turquoise">{formatNumberWithLatinDigits(selectedBill.total)} {currentOrg?.currency_code || ''}</span>
                 </div>
 
                 <div className="border-t border-white/10 pt-4 space-y-2 font-sans text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-400">المبلغ المدفوع:</span>
-                    <span className="text-emerald-400 font-bold">{formatNumberWithLatinDigits(selectedBill.paid_amount)} ر.س</span>
+                    <span className="text-emerald-400 font-bold">{formatNumberWithLatinDigits(selectedBill.paid_amount)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">المبلغ الدائن المتبقي:</span>
-                    <span className="text-amber-400 font-bold">{formatNumberWithLatinDigits(selectedBill.balance_due)} ر.س</span>
+                    <span className="text-amber-400 font-bold">{formatNumberWithLatinDigits(selectedBill.balance_due)} {currentOrg?.currency_code || ''}</span>
                   </div>
                 </div>
               </div>

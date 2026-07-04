@@ -153,3 +153,10 @@ export function safeParseInt(value: any): number {
   return isNaN(parsed) || !isFinite(parsed) ? 0 : parsed;
 }
 
+/**
+ * Resolves the currency code of an organization, defaulting to empty string.
+ */
+export function getOrgCurrency(org: any): string {
+  return org?.currency_code || '';
+}
+

@@ -134,7 +134,7 @@ export const InventoryReportPrint: React.FC = () => {
             {!isSalesRepresentative ? (
               <div className="flex justify-between font-black text-slate-900 text-sm">
                 <span>القيمة الشرائية الكلية للمخازن (الرصيد الدفتري):</span>
-                <span className="font-mono text-brand-blue font-black">{formatNumberWithLatinDigits(totalValue)} SAR</span>
+                <span className="font-mono text-brand-blue font-black">{formatNumberWithLatinDigits(totalValue)} {currentOrg?.currency_code || ''}</span>
               </div>
             ) : (
               <div className="text-[10px] text-slate-400 text-center italic pt-1">

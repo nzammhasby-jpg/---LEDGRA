@@ -70,14 +70,14 @@ export const Dashboard: React.FC = () => {
         {/* Sales KPI */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3 relative overflow-hidden">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-400">إجمالي مبيعات الفترة (SAR)</span>
+            <span className="text-[11px] font-bold text-slate-400">إجمالي مبيعات الفترة ({currentOrg?.currency_code || ''})</span>
             <div className="bg-blue-50 p-2 rounded-xl text-brand-blue">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="space-y-1">
             <span className="text-xl md:text-2xl font-extrabold text-slate-900 font-mono tracking-tight">0.00</span>
-            <span className="text-xs text-slate-500 font-bold block">ر.س (SAR)</span>
+            <span className="text-xs text-slate-500 font-bold block">{currentOrg?.currency_code || ''}</span>
           </div>
           <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 pt-1 border-t border-slate-100">
             <span>● لا توجد فواتير مقيدة بعد</span>
@@ -94,7 +94,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="space-y-1">
             <span className="text-xl md:text-2xl font-extrabold text-slate-900 font-mono tracking-tight">0.00</span>
-            <span className="text-xs text-slate-500 font-bold block">ر.س</span>
+            <span className="text-xs text-slate-500 font-bold block">{currentOrg?.currency_code || ''}</span>
           </div>
           <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-1 pt-1 border-t border-slate-100">
             <span>● السجل المالي سليم وخالٍ</span>
@@ -111,7 +111,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="space-y-1">
             <span className="text-xl md:text-2xl font-extrabold text-slate-900 font-mono tracking-tight">0.00</span>
-            <span className="text-xs text-slate-500 font-bold block">ر.س</span>
+            <span className="text-xs text-slate-500 font-bold block">{currentOrg?.currency_code || ''}</span>
           </div>
           <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 pt-1 border-t border-slate-100">
             <span>● بانتظار استيراد الأرصدة بدايةً</span>
@@ -128,7 +128,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="space-y-1">
             <span className="text-xl md:text-2xl font-extrabold text-slate-900 font-mono tracking-tight">0.00</span>
-            <span className="text-xs text-slate-500 font-bold block">ر.س</span>
+            <span className="text-xs text-slate-500 font-bold block">{currentOrg?.currency_code || ''}</span>
           </div>
           <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1 pt-1 border-t border-slate-100">
             <span>● لا توجد ديون معلقة</span>

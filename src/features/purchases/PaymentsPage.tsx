@@ -319,7 +319,7 @@ export const PaymentsPage: React.FC = () => {
       if (isNaN(accAmt) || accAmt <= 0) continue;
 
       if (accAmt > bill.balance_due) {
-        setFormError(`المبلغ المراد تخصيصه للفاتورة ${bill.bill_number} يتعدى الرصيد المستحق لها (${bill.balance_due} ر.س).`);
+        setFormError(`المبلغ المراد تخصيصه للفاتورة ${bill.bill_number} يتعدى الرصيد المستحق لها (${bill.balance_due} ${currentOrg?.currency_code || ''}).`);
         return;
       }
 
@@ -337,7 +337,7 @@ export const PaymentsPage: React.FC = () => {
 
     // Exact allocation matching constraint
     if (Math.abs(allocatedSum - parsedAmount) > 0.01) {
-      setFormError(`مجموع التخصيصات (${allocatedSum.toFixed(2)} ر.س) يجب أن يتطابق تماماً مع إجمالي السند (${parsedAmount.toFixed(2)} ر.س).`);
+      setFormError(`مجموع التخصيصات (${allocatedSum.toFixed(2)} ${currentOrg?.currency_code || ''}) يجب أن يتطابق تماماً مع إجمالي السند (${parsedAmount.toFixed(2)} ${currentOrg?.currency_code || ''}).`);
       return;
     }
 
@@ -606,7 +606,7 @@ export const PaymentsPage: React.FC = () => {
                           {getMethodText(p.payment_method)}
                         </td>
                         <td className="p-4 font-bold text-slate-900 font-mono tracking-tight text-left pl-6" style={{ direction: 'ltr' }}>
-                          {formatNumberWithLatinDigits(p.amount)} ر.س
+                          {formatNumberWithLatinDigits(p.amount)} {currentOrg?.currency_code || ''}
                         </td>
                         <td className="p-4">
                           {getStatusBadge(p.status)}
@@ -835,7 +835,7 @@ export const PaymentsPage: React.FC = () => {
 
               {/* Total payout amount */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">المبلغ الإجمالي للسند (SAR) *</label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">المبلغ الإجمالي للسند ({currentOrg?.currency_code || ''}) *</label>
                 <input
                   type="text"
                   value={amount}
@@ -952,8 +952,8 @@ export const PaymentsPage: React.FC = () => {
                         <tr key={bill.id} className="hover:bg-slate-50/20">
                           <td className="p-3 font-mono font-bold text-slate-900">{bill.bill_number}</td>
                           <td className="p-3 font-mono text-slate-500">{formatArabicDateWithLatinDigits(bill.bill_date)}</td>
-                          <td className="p-3 font-mono text-slate-600">{formatNumberWithLatinDigits(bill.total)} ر.س</td>
-                          <td className="p-3 font-mono font-bold text-red-600">{formatNumberWithLatinDigits(bill.balance_due)} ر.س</td>
+                          <td className="p-3 font-mono text-slate-600">{formatNumberWithLatinDigits(bill.total)} {currentOrg?.currency_code || ''}</td>
+                          <td className="p-3 font-mono font-bold text-red-600">{formatNumberWithLatinDigits(bill.balance_due)} {currentOrg?.currency_code || ''}</td>
                           <td className="p-3 text-left pl-6">
                             <input
                               type="text"
@@ -975,7 +975,7 @@ export const PaymentsPage: React.FC = () => {
               <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between font-bold text-xs">
                 <span className="text-slate-500">إجمالي التخصيصات الموزعة:</span>
                 <span className={`font-mono text-sm ${Math.abs(totalAllocated - parseFloat(toEnglishDigits(amount))) < 0.01 ? 'text-emerald-600' : 'text-red-500 animate-pulse'}`}>
-                  {totalAllocated.toFixed(2)} ر.س / {parseFloat(toEnglishDigits(amount)).toFixed(2)} ر.س
+                  {totalAllocated.toFixed(2)} {currentOrg?.currency_code || ''} / {parseFloat(toEnglishDigits(amount)).toFixed(2)} {currentOrg?.currency_code || ''}
                 </span>
               </div>
 
@@ -1130,7 +1130,7 @@ export const PaymentsPage: React.FC = () => {
                           <td className="p-3 text-slate-500 font-mono">{formatArabicDateWithLatinDigits(alloc.purchase_bill?.bill_date || '')}</td>
                           <td className="p-3 text-slate-400 font-mono">{alloc.purchase_bill?.vendor_invoice_number || '—'}</td>
                           <td className="p-3 text-left pl-6 font-mono font-bold text-slate-900" style={{ direction: 'ltr' }}>
-                            {formatNumberWithLatinDigits(alloc.allocated_amount)} ر.س
+                            {formatNumberWithLatinDigits(alloc.allocated_amount)} {currentOrg?.currency_code || ''}
                           </td>
                         </tr>
                       ))}
@@ -1168,8 +1168,8 @@ export const PaymentsPage: React.FC = () => {
                           <span className="text-brand-blue font-bold">[2101]</span> ذمم الموردين الدائنة ({selectedPayment.vendor?.name})
                         </div>
                         <div className="hidden md:block text-slate-500 font-sans">تسوية ديون سند صرف {selectedPayment.payment_number}</div>
-                        <div className="text-left font-bold text-emerald-600">{selectedPayment.amount.toFixed(2)} ر.س</div>
-                        <div className="text-left pl-4 text-slate-400">0.00 ر.س</div>
+                        <div className="text-left font-bold text-emerald-600">{selectedPayment.amount.toFixed(2)} {currentOrg?.currency_code || ''}</div>
+                        <div className="text-left pl-4 text-slate-400">0.00 {currentOrg?.currency_code || ''}</div>
                       </div>
 
                       {/* Credit line: Cash or Bank */}
@@ -1182,8 +1182,8 @@ export const PaymentsPage: React.FC = () => {
                           )}
                         </div>
                         <div className="hidden md:block text-slate-500 font-sans">صرف سيولة مالية مسداة للمورد</div>
-                        <div className="text-left text-slate-400 font-normal">0.00 ر.س</div>
-                        <div className="text-left pl-4 font-bold text-red-600">{selectedPayment.amount.toFixed(2)} ر.س</div>
+                        <div className="text-left text-slate-400 font-normal">0.00 {currentOrg?.currency_code || ''}</div>
+                        <div className="text-left pl-4 font-bold text-red-600">{selectedPayment.amount.toFixed(2)} {currentOrg?.currency_code || ''}</div>
                       </div>
                     </div>
                   </div>
@@ -1200,13 +1200,13 @@ export const PaymentsPage: React.FC = () => {
                 
                 <div className="border-t border-white/10 pt-4 flex justify-between items-baseline">
                   <span className="font-sans text-xs font-bold text-slate-400">القيمة الإجمالية المدفوعة:</span>
-                  <span className="text-lg font-bold text-brand-turquoise">{formatNumberWithLatinDigits(selectedPayment.amount)} ر.س</span>
+                  <span className="text-lg font-bold text-brand-turquoise">{formatNumberWithLatinDigits(selectedPayment.amount)} {currentOrg?.currency_code || ''}</span>
                 </div>
 
                 <div className="border-t border-white/10 pt-4 space-y-2 font-sans text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-400">تم تخصيص وسداد:</span>
-                    <span className="text-emerald-400 font-bold">{formatNumberWithLatinDigits(selectedPayment.amount)} ر.س</span>
+                    <span className="text-emerald-400 font-bold">{formatNumberWithLatinDigits(selectedPayment.amount)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">حساب الخزينة/البنك:</span>

@@ -827,13 +827,13 @@ export const JournalEntries: React.FC = () => {
                 <div>
                   <span className="text-slate-400 font-semibold block text-[10px]">إجمالي الطرف المدين</span>
                   <span className="text-base font-mono mt-1 block tabular-nums text-emerald-400">
-                    {formatNumberWithLatinDigits(debitSum)} ر.س
+                    {formatNumberWithLatinDigits(debitSum)} {currentOrg?.currency_code || ''}
                   </span>
                 </div>
                 <div>
                   <span className="text-slate-400 font-semibold block text-[10px]">إجمالي الطرف الدائن</span>
                   <span className="text-base font-mono mt-1 block tabular-nums text-emerald-400">
-                    {formatNumberWithLatinDigits(creditSum)} ر.س
+                    {formatNumberWithLatinDigits(creditSum)} {currentOrg?.currency_code || ''}
                   </span>
                 </div>
                 <div className="md:border-r border-slate-800 md:pr-4">
@@ -847,7 +847,7 @@ export const JournalEntries: React.FC = () => {
                     <div className="text-amber-400 mt-1">
                       <div className="flex items-center gap-1.5 text-sm">
                         <AlertCircle className="w-4.5 h-4.5" />
-                        <span>الفرق: {formatNumberWithLatinDigits(difference)} ر.س</span>
+                        <span>الفرق: {formatNumberWithLatinDigits(difference)} {currentOrg?.currency_code || ''}</span>
                       </div>
                     </div>
                   )}
@@ -1000,13 +1000,13 @@ export const JournalEntries: React.FC = () => {
                     <span className="font-mono text-slate-950 block text-left text-sm tabular-nums">
                       {formatNumberWithLatinDigits(
                         selectedEntryDetails.lines?.reduce((sum, l) => sum + Number(l.debit || 0), 0) || 0
-                      )} ر.س
+                      )} {currentOrg?.currency_code || ''}
                     </span>
                     <span className="text-slate-400 font-bold block text-right">إجمالي الدائن (Credit):</span>
                     <span className="font-mono text-slate-950 block text-left text-sm tabular-nums">
                       {formatNumberWithLatinDigits(
                         selectedEntryDetails.lines?.reduce((sum, l) => sum + Number(l.credit || 0), 0) || 0
-                      )} ر.س
+                      )} {currentOrg?.currency_code || ''}
                     </span>
                   </div>
                 </div>

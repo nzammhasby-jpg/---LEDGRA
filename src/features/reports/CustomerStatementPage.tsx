@@ -182,7 +182,7 @@ export const CustomerStatementPage: React.FC = () => {
                 <span className="text-lg font-extrabold text-slate-800 font-sans" style={{ direction: 'ltr' }}>
                   {formatNumberWithLatinDigits(reportData.opening_balance)}
                 </span>
-                <span className="text-[10px] text-slate-450 font-bold bg-slate-100 px-2 py-0.5 rounded-full">SAR</span>
+                <span className="text-[10px] text-slate-450 font-bold bg-slate-100 px-2 py-0.5 rounded-full">{currentOrg?.currency_code || ''}</span>
               </div>
             </div>
 
@@ -192,7 +192,7 @@ export const CustomerStatementPage: React.FC = () => {
                 <span className="text-lg font-extrabold text-emerald-600 font-sans" style={{ direction: 'ltr' }}>
                   + {formatNumberWithLatinDigits(reportData.total_debit)}
                 </span>
-                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full">SAR</span>
+                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full">{currentOrg?.currency_code || ''}</span>
               </div>
             </div>
 
@@ -202,7 +202,7 @@ export const CustomerStatementPage: React.FC = () => {
                 <span className="text-lg font-extrabold text-red-600 font-sans" style={{ direction: 'ltr' }}>
                   - {formatNumberWithLatinDigits(reportData.total_credit)}
                 </span>
-                <span className="text-[10px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-full">SAR</span>
+                <span className="text-[10px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-full">{currentOrg?.currency_code || ''}</span>
               </div>
             </div>
 

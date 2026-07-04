@@ -284,7 +284,7 @@ export const SalesInvoicePrint: React.FC = () => {
 
             <div className="flex justify-between font-black text-slate-900 text-sm border-b border-double border-slate-300 pb-2">
               <span>صافي قيمة الفاتورة النهائي:</span>
-              <span className="font-mono text-brand-blue font-black">{formatNumberWithLatinDigits(invoice.total)} {invoice.currency || 'SAR'}</span>
+              <span className="font-mono text-brand-blue font-black">{formatNumberWithLatinDigits(invoice.total)} {invoice.currency || currentOrg?.currency_code || ''}</span>
             </div>
 
             <div className="flex justify-between font-bold text-emerald-600 pt-1">

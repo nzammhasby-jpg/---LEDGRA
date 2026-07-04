@@ -140,7 +140,7 @@ export const InventoryReportPage: React.FC = () => {
             <span className="text-xl font-extrabold text-emerald-600 font-sans" style={{ direction: 'ltr' }}>
               {isSalesRestricted ? '***' : formatNumberWithLatinDigits(totalValuation)}
             </span>
-            <span className="bg-emerald-500/10 text-emerald-600 text-[10px] px-2.5 py-0.75 rounded-full font-bold">SAR</span>
+            <span className="bg-emerald-500/10 text-emerald-600 text-[10px] px-2.5 py-0.75 rounded-full font-bold">{currentOrg?.currency_code || ''}</span>
           </div>
         </div>
 

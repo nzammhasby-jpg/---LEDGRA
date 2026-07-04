@@ -5,6 +5,9 @@ import { BalanceSheetPage } from './BalanceSheetPage';
 import { CustomerStatementPage } from './CustomerStatementPage';
 import { VendorStatementPage } from './VendorStatementPage';
 import { InventoryReportPage } from './InventoryReportPage';
+import { TaxReportPage } from './TaxReportPage';
+import { TrialBalancePage } from './TrialBalancePage';
+import { LedgerReportPage } from './LedgerReportPage';
 import { 
   TrendingUp, 
   Building, 
@@ -13,10 +16,21 @@ import {
   Package, 
   BarChart4, 
   Sparkles,
-  Lock
+  Lock,
+  Percent,
+  FolderTree,
+  ArrowRightLeft
 } from 'lucide-react';
 
-type ReportTab = 'income_statement' | 'balance_sheet' | 'customer_statement' | 'vendor_statement' | 'inventory_report';
+type ReportTab = 
+  | 'income_statement' 
+  | 'balance_sheet' 
+  | 'customer_statement' 
+  | 'vendor_statement' 
+  | 'inventory_report' 
+  | 'vat_tax_report'
+  | 'trial_balance'
+  | 'ledger_report';
 
 export const ReportsLayout: React.FC = () => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
@@ -137,6 +151,59 @@ export const ReportsLayout: React.FC = () => {
           <span>تقييم وحساب المخزون (Inventory Report)</span>
         </button>
 
+        {/* VAT Tax Report TAB */}
+        <button
+          onClick={() => !isSales && setActiveTab('vat_tax_report')}
+          disabled={isSales}
+          className={`py-3 px-4 text-xs font-extrabold border-b-2 flex items-center gap-2 transition whitespace-nowrap outline-none relative ${
+            isSales ? 'opacity-40 cursor-not-allowed text-slate-400' : 'cursor-pointer'
+          } ${
+            activeTab === 'vat_tax_report'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Percent className="w-4 h-4 shrink-0" />
+          <span>التقرير الضريبي (VAT Report)</span>
+          {isSales && <Lock className="w-3 h-3 text-slate-400 absolute left-1 top-2" />}
+        </button>
+
+        {/* Trial Balance TAB */}
+        <button
+          onClick={() => !isSales && setActiveTab('trial_balance')}
+          disabled={isSales}
+          className={`py-3 px-4 text-xs font-extrabold border-b-2 flex items-center gap-2 transition whitespace-nowrap outline-none relative ${
+            isSales ? 'opacity-40 cursor-not-allowed text-slate-400' : 'cursor-pointer'
+          } ${
+            activeTab === 'trial_balance'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          id="tab-trial-balance"
+        >
+          <FolderTree className="w-4 h-4 shrink-0" />
+          <span>ميزان المراجعة (Trial Balance)</span>
+          {isSales && <Lock className="w-3 h-3 text-slate-400 absolute left-1 top-2" />}
+        </button>
+
+        {/* General Ledger TAB */}
+        <button
+          onClick={() => !isSales && setActiveTab('ledger_report')}
+          disabled={isSales}
+          className={`py-3 px-4 text-xs font-extrabold border-b-2 flex items-center gap-2 transition whitespace-nowrap outline-none relative ${
+            isSales ? 'opacity-40 cursor-not-allowed text-slate-400' : 'cursor-pointer'
+          } ${
+            activeTab === 'ledger_report'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+          id="tab-ledger"
+        >
+          <ArrowRightLeft className="w-4 h-4 shrink-0" />
+          <span>دفتر الأستاذ (General Ledger)</span>
+          {isSales && <Lock className="w-3 h-3 text-slate-400 absolute left-1 top-2" />}
+        </button>
+
       </div>
 
       {/* Dynamic Tabs contents renderer */}
@@ -149,6 +216,12 @@ export const ReportsLayout: React.FC = () => {
           <CustomerStatementPage />
         ) : activeTab === 'vendor_statement' && !isSales ? (
           <VendorStatementPage />
+        ) : activeTab === 'vat_tax_report' && !isSales ? (
+          <TaxReportPage />
+        ) : activeTab === 'trial_balance' && !isSales ? (
+          <TrialBalancePage />
+        ) : activeTab === 'ledger_report' && !isSales ? (
+          <LedgerReportPage />
         ) : (
           <InventoryReportPage />
         )}

@@ -121,7 +121,7 @@ export const InventoryBalancesPage: React.FC = () => {
             <div className="space-y-1">
               <span className="text-xs font-semibold text-gray-400 font-sans">إجمالي القيمة التقديرية</span>
               <div className="text-xl font-bold font-mono text-gray-900 tracking-tight">
-                {formatNumberWithLatinDigits(totalValuation)} <span className="text-xs font-sans text-gray-400">ر.س</span>
+                {formatNumberWithLatinDigits(totalValuation)} <span className="text-xs font-sans text-gray-400">{currentOrg?.currency_code || ''}</span>
               </div>
             </div>
             <div className="rounded-lg bg-emerald-50 p-3">
@@ -240,10 +240,10 @@ export const InventoryBalancesPage: React.FC = () => {
                       {!isSales && (
                         <>
                           <td className="px-6 py-4 font-mono text-left text-gray-900">
-                            {formatNumberWithLatinDigits(inv.average_cost, 2)} ر.س
+                            {formatNumberWithLatinDigits(inv.average_cost, 2)} {currentOrg?.currency_code || ''}
                           </td>
                           <td className="px-6 py-4 font-mono text-left font-semibold text-gray-900 bg-gray-50/20">
-                            {formatNumberWithLatinDigits(inv.inventory_value, 2)} ر.س
+                            {formatNumberWithLatinDigits(inv.inventory_value, 2)} {currentOrg?.currency_code || ''}
                           </td>
                         </>
                       )}
