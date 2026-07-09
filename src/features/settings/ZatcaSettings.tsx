@@ -511,6 +511,38 @@ businessCategory = ${profileForm.csr_industry || 'Retail'}
 
   const readiness = zatcaSigningService.getSigningReadiness(signingProfile, settings, sdkStats);
 
+  if (currentOrg?.country_code !== 'SA') {
+    return (
+      <div className="space-y-8 animate-fade-in text-right" dir="rtl">
+        {/* Header Banner */}
+        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="bg-slate-100 text-slate-700 p-2.5 rounded-xl shrink-0">
+              <ShieldCheck className="w-6 h-6 text-slate-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">الفوترة الإلكترونية ZATCA</h3>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                الفوترة الإلكترونية السعودية (ZATCA) غير متاحة لبلد منشأ المؤسسة الحالي.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Warning Alert */}
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 p-6 rounded-2xl flex items-start gap-3.5 shadow-sm">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-bold">غير مدعوم في دولتك الحالية</h4>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              الفوترة الإلكترونية السعودية متاحة فقط للمنشآت داخل السعودية.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fade-in text-right" dir="rtl">
       

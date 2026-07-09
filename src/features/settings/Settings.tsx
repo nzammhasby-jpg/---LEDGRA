@@ -191,6 +191,9 @@ export const Settings: React.FC = () => {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
+  const [hasTransactions, setHasTransactions] = useState<boolean>(false);
+  const [loadingTransactions, setLoadingTransactions] = useState<boolean>(true);
+
   const [formData, setFormData] = useState({
     name_ar: '',
     name_en: '',
@@ -212,7 +215,60 @@ export const Settings: React.FC = () => {
     show_logo_on_print: true,
     show_tax_number_on_print: true,
     show_commercial_registration_on_print: true,
+    country_code: 'SA',
+    currency_code: 'SAR',
+    default_tax_rate: 15,
   });
+
+  useEffect(() => {
+    const checkTransactions = async () => {
+      if (!currentOrg) return;
+      setLoadingTransactions(true);
+      try {
+        const runCountQuery = async (table: string) => {
+          try {
+            const { count, error } = await supabase
+              .from(table)
+              .select('*', { count: 'exact', head: true })
+              .eq('organization_id', currentOrg.id)
+              .limit(1);
+            if (error) return 0;
+            return count || 0;
+          } catch (e) {
+            return 0;
+          }
+        };
+
+        const [
+          jeCount,
+          siCount,
+          rcCount,
+          pbCount,
+          pyCount,
+          cbCount,
+          imCount
+        ] = await Promise.all([
+          runCountQuery('journal_entries'),
+          runCountQuery('sales_invoices'),
+          runCountQuery('receipts'),
+          runCountQuery('purchase_bills'),
+          runCountQuery('payments'),
+          runCountQuery('cash_bank_transfers'),
+          runCountQuery('inventory_movements')
+        ]);
+
+        const total = (jeCount || 0) + (siCount || 0) + (rcCount || 0) + (pbCount || 0) + (pyCount || 0) + (cbCount || 0) + (imCount || 0);
+        setHasTransactions(total > 0);
+      } catch (err) {
+        console.error('Error checking transactions:', err);
+        setHasTransactions(false);
+      } finally {
+        setLoadingTransactions(false);
+      }
+    };
+
+    checkTransactions();
+  }, [currentOrg]);
 
   useEffect(() => {
     if (currentOrg) {
@@ -237,6 +293,9 @@ export const Settings: React.FC = () => {
         show_logo_on_print: currentOrg.show_logo_on_print ?? true,
         show_tax_number_on_print: currentOrg.show_tax_number_on_print ?? true,
         show_commercial_registration_on_print: currentOrg.show_commercial_registration_on_print ?? true,
+        country_code: currentOrg.country_code || 'SA',
+        currency_code: currentOrg.currency_code || 'SAR',
+        default_tax_rate: (currentOrg.default_tax_rate !== undefined && currentOrg.default_tax_rate !== null) ? currentOrg.default_tax_rate : getCountryProfile(currentOrg.country_code || 'SA').defaultTaxRate,
       });
     }
   }, [currentOrg]);
@@ -249,6 +308,18 @@ export const Settings: React.FC = () => {
 
   const handleCheckboxChange = (name: string, checked: boolean) => {
     setFormData(prev => ({ ...prev, [name]: checked }));
+  };
+
+  const handleCountryCodeChange = (code: 'SA' | 'YE') => {
+    const profileForCountry = getCountryProfile(code);
+    setFormData(prev => ({
+      ...prev,
+      country_code: code,
+      currency_code: profileForCountry.currencyCode,
+      default_tax_rate: profileForCountry.defaultTaxRate,
+      country: profileForCountry.nameAr,
+      city: profileForCountry.cities[0] || prev.city
+    }));
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -264,8 +335,7 @@ export const Settings: React.FC = () => {
     setSettingsError(null);
 
     try {
-      // Direct call to standard updateOrg that refreshes Context AND database beautifully
-      const { error } = await updateOrg(currentOrg.id, {
+      const updateData: any = {
         name_ar: formData.name_ar,
         name_en: formData.name_en,
         cr_number: formData.cr_number || null,
@@ -286,7 +356,16 @@ export const Settings: React.FC = () => {
         show_logo_on_print: formData.show_logo_on_print,
         show_tax_number_on_print: formData.show_tax_number_on_print,
         show_commercial_registration_on_print: formData.show_commercial_registration_on_print,
-      });
+        default_tax_rate: Number(formData.default_tax_rate)
+      };
+
+      if (!hasTransactions) {
+        updateData.country_code = formData.country_code;
+        updateData.currency_code = formData.currency_code;
+      }
+
+      // Direct call to standard updateOrg that refreshes Context AND database beautifully
+      const { error } = await updateOrg(currentOrg.id, updateData);
 
       if (error) {
         setSettingsError(error);
@@ -839,7 +918,7 @@ export const Settings: React.FC = () => {
           { id: 'users', label: t('settings.tab_users'), icon: Users },
           { id: 'branches', label: t('settings.tab_branches'), icon: MapPin },
           { id: 'accounting', label: 'الإعدادات المحاسبية والسيرفر', icon: BookOpen },
-          currentProfile.zatcaEnabled ? { id: 'zatca', label: 'الفوترة الإلكترونية (ZATCA)', icon: ShieldAlert } : null,
+          currentOrg?.country_code === 'SA' ? { id: 'zatca', label: 'الفوترة الإلكترونية (ZATCA)', icon: ShieldAlert } : null,
           { id: 'subscription', label: 'اشتراك المؤسسة', icon: CreditCard }
         ].filter(Boolean).map((tab) => {
           if (!tab) return null;
@@ -1048,67 +1127,137 @@ export const Settings: React.FC = () => {
                     <Globe className="w-4 h-4 text-brand-blue" />
                   </h4>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold mb-1">دولة المقر للمنشأة (للقراءة فقط)</span>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-800">{currentProfile.nameAr}</span>
-                        <span className="text-[10px] bg-slate-100 px-2.5 py-1 rounded-md text-slate-600 font-extrabold">{currentProfile.code}</span>
-                      </div>
-                    </div>
+                  {loadingTransactions ? (
+                    <div className="text-xs text-slate-500 text-center py-4">جاري تحميل بيانات العمليات المالية...</div>
+                  ) : hasTransactions ? (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                          <span className="text-[10px] text-slate-400 block font-bold mb-1">دولة المقر للمنشأة (للقراءة فقط)</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800">{currentProfile.nameAr}</span>
+                            <span className="text-[10px] bg-slate-100 px-2.5 py-1 rounded-md text-slate-600 font-extrabold">{currentProfile.code}</span>
+                          </div>
+                        </div>
 
-                    <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold mb-1">العملة الأساسية للحسابات (للقراءة فقط)</span>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-800">{currentProfile.currencyNameAr} ({currentProfile.currencyCode})</span>
-                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-md font-extrabold">أساسية</span>
+                        <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                          <span className="text-[10px] text-slate-400 block font-bold mb-1">العملة الأساسية للحسابات (للقراءة فقط)</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800">{currentProfile.currencyNameAr} ({currentProfile.currencyCode})</span>
+                            <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2.5 py-1 rounded-md font-extrabold">أساسية</span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold mb-1">الضريبة الافتراضية للمبيعات والمشتريات</span>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-800">{currentProfile.defaultTaxRate}%</span>
-                        <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2.5 py-1 rounded-md font-extrabold">مطبقة تلقائياً</span>
-                      </div>
-                    </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                          <span className="text-[10px] text-slate-400 block font-bold mb-1">الضريبة الافتراضية للمبيعات والمشتريات</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800">{formData.default_tax_rate}%</span>
+                            <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2.5 py-1 rounded-md font-extrabold">مطبقة تلقائياً</span>
+                          </div>
+                        </div>
 
-                    <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
-                      <span className="text-[10px] text-slate-400 block font-bold mb-1">
-                        {currentProfile.zatcaEnabled ? 'الامتثال والربط مع هيئة الزكاة والضريبة والجمارك (ZATCA)' : 'متطلبات الامتثال المحلي'}
-                      </span>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black text-slate-800">
-                          {currentProfile.zatcaEnabled ? 'مدعوم' : 'لا توجد فوترة إلكترونية سعودية مطلوبة لهذه الدولة.'}
-                        </span>
-                        <span className={`text-[10px] px-2.5 py-1 rounded-md font-extrabold border ${
-                          currentProfile.zatcaEnabled 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                            : 'bg-slate-100 text-slate-500 border-slate-150'
-                        }`}>{currentProfile.zatcaEnabled ? 'نشط' : 'غير مطلوب'}</span>
+                        <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                          <span className="text-[10px] text-slate-400 block font-bold mb-1">
+                            {currentProfile.zatcaEnabled ? 'الامتثال والربط مع هيئة الزكاة والضريبة والجمارك (ZATCA)' : 'متطلبات الامتثال المحلي'}
+                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800">
+                              {currentProfile.zatcaEnabled ? 'مدعوم' : 'لا توجد فوترة إلكترونية سعودية مطلوبة لهذه الدولة.'}
+                            </span>
+                            <span className={`text-[10px] px-2.5 py-1 rounded-md font-extrabold border ${
+                              currentProfile.zatcaEnabled 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                                : 'bg-slate-100 text-slate-500 border-slate-150'
+                            }`}>{currentProfile.zatcaEnabled ? 'نشط' : 'غير مطلوب'}</span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Warning and Guidance Notes */}
-                  <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3.5 space-y-2">
-                    <div className="flex items-start gap-2.5">
-                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="text-[10.5px] text-amber-800 leading-relaxed text-right">
-                        <p className="font-extrabold">تنبيه تقييد تعديل الدولة والعملة بعد التأسيس:</p>
-                        <p className="mt-0.5 text-amber-700">الدولة والعملة والضريبة الأساسية ترتبط بالنظام المالي للمنشأة ولا يمكن تعديلها بعد التأسيس لضمان سلامة العمليات المحاسبية وفواتير المبيعات والمشتريات. سيتم دعم تعديل ذلك من خلال قنوات الدعم الفني لاحقاً.</p>
+                      {/* Locked warning */}
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-2.5 shadow-sm">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-[10.5px] text-amber-800 leading-relaxed text-right animate-pulse">
+                          <p className="font-extrabold text-amber-900">لا يمكن تغيير الدولة أو العملة بعد بدء العمليات المالية.</p>
+                          <p className="mt-0.5 text-amber-700 font-medium">الدولة والعملة والضريبة الأساسية ترتبط بالنظام المالي للمنشأة ومقفلة لضمان سلامة القيود المحاسبية وفواتير المبيعات والمشتريات المدخلة مسبقاً.</p>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-2.5 border-t border-amber-200/50 pt-2">
-                      <Coins className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="text-[10.5px] text-amber-700 leading-relaxed text-right">
-                        العملة الأساسية للمنشأة غير قابلة للتعديل حالياً. يتم دعم العملات المتعددة (Multi-Currency) قريباً.
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                          <label className="text-[10px] text-slate-500 block font-black mb-1">دولة المقر للمنشأة</label>
+                          <select
+                            value={formData.country_code}
+                            onChange={(e) => handleCountryCodeChange(e.target.value as any)}
+                            disabled={!isPrivileged}
+                            className="w-full text-xs font-bold border border-slate-200 py-2 px-2 rounded-xl focus:border-brand-blue outline-none transition bg-white disabled:bg-slate-100"
+                          >
+                            <option value="SA">المملكة العربية السعودية (SA)</option>
+                            <option value="YE">الجمهورية اليمنية (YE)</option>
+                          </select>
+                        </div>
+
+                        <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                          <label className="text-[10px] text-slate-500 block font-black mb-1">العملة الأساسية للحسابات</label>
+                          <select
+                            value={formData.currency_code}
+                            onChange={(e) => setFormData(prev => ({ ...prev, currency_code: e.target.value }))}
+                            disabled={!isPrivileged}
+                            className="w-full text-xs font-bold border border-slate-200 py-2 px-2 rounded-xl focus:border-brand-blue outline-none transition bg-white disabled:bg-slate-100"
+                          >
+                            <option value="SAR">ريال سعودي (SAR)</option>
+                            <option value="YER">ريال يمني (YER)</option>
+                            <option value="USD">دولار أمريكي (USD)</option>
+                          </select>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                          <label className="text-[10px] text-slate-500 block font-black mb-1">الضريبة الافتراضية للمبيعات والمشتريات (%)</label>
+                          <input
+                            type="number"
+                            name="default_tax_rate"
+                            value={formData.default_tax_rate}
+                            onChange={(e) => setFormData(prev => ({ ...prev, default_tax_rate: parseFloat(e.target.value) || 0 }))}
+                            disabled={!isPrivileged}
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            className="w-full text-xs font-bold border border-slate-200 py-2 px-3 rounded-xl focus:border-brand-blue outline-none transition text-left disabled:bg-slate-100"
+                            dir="ltr"
+                          />
+                        </div>
+
+                        <div className="bg-white border border-slate-150 p-3.5 rounded-xl">
+                          <span className="text-[10px] text-slate-400 block font-bold mb-1">متطلبات الامتثال المحلي المتوقعة</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-slate-800">
+                              {formData.country_code === 'SA' ? 'الفوترة الإلكترونية (ZATCA) مدعومة' : 'لا توجد فوترة إلكترونية مطلوبة'}
+                            </span>
+                            <span className={`text-[10px] px-2.5 py-1 rounded-md font-extrabold border ${
+                              formData.country_code === 'SA' 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                                : 'bg-slate-100 text-slate-500 border-slate-150'
+                            }`}>{formData.country_code === 'SA' ? 'نشط' : 'غير مطلوب'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Dynamic Editable Notice */}
+                      <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-start gap-2.5">
+                          <Globe className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                          <div className="text-[10.5px] text-blue-800 leading-relaxed text-right font-medium">
+                            يمكنك الآن تعديل بلد منشأ المنشأة والعملة والنسبة الضريبية الافتراضية لبلدك، وسيتم قفل هذه الحقول فور بدء أي معاملات محاسبية أو إصدار الفواتير لحماية شجرة الحسابات واستقرار النظام المالي.
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* 1. الأسماء وعناوين الكيان */}
@@ -2392,8 +2541,14 @@ export const Settings: React.FC = () => {
         )}
 
         {/* Tab 5: ZATCA Compliance */}
-        {activeTab === 'zatca' && currentProfile.zatcaEnabled && (
-          <ZatcaSettingsComp />
+        {activeTab === 'zatca' && (
+          currentOrg?.country_code === 'SA' ? (
+            <ZatcaSettingsComp />
+          ) : (
+            <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 text-xs font-bold text-center">
+              الفوترة الإلكترونية السعودية متاحة فقط للمنشآت داخل السعودية.
+            </div>
+          )
         )}
 
         {/* Tab 6: Subscription */}

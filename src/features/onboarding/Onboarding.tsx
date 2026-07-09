@@ -115,7 +115,7 @@ const onboardingSchema = z.object({
 
 type OnboardingFields = z.infer<typeof onboardingSchema>;
 
-const activityTypeOptions = [
+const activityTypeOptions = Array.from(new Set([
   'التجارة بالتجزئة والجملة',
   'الخدمات التقنية وتقنية المعلومات',
   'المقاولات والإنشاءات والتشغيل',
@@ -124,7 +124,7 @@ const activityTypeOptions = [
   'المصانع والتصنيع والإنتاج',
   'الاستشارات والتدريب والتعليم',
   'أخرى'
-];
+]));
 
 const cityOptions = ['الرياض', 'جدة', 'الدمام', 'مكة المكرمة', 'المدينة المنورة', 'الخبر', 'بريدة', 'أبها', 'تبوك'];
 

@@ -464,6 +464,10 @@ export const InvoicesPage: React.FC = () => {
   // Action: Generate ZATCA XML and QR Artifact
   const handleGenerateEInvoiceData = async () => {
     if (!currentOrg || !selectedInvoice) return;
+    if (currentOrg.country_code !== 'SA') {
+      setError('الفوترة الإلكترونية السعودية متاحة فقط للمنشآت داخل السعودية.');
+      return;
+    }
     setGeneratingArtifact(true);
     setError(null);
     try {
@@ -508,6 +512,10 @@ export const InvoicesPage: React.FC = () => {
   // Handler to mark invoice artifact ready for SDK check
   const handleMarkReadyForSdk = async (artifactId: string) => {
     setError(null);
+    if (!currentOrg || currentOrg.country_code !== 'SA') {
+      setError('الفوترة الإلكترونية السعودية متاحة فقط للمنشآت داخل السعودية.');
+      return;
+    }
     try {
       const res = await zatcaService.markEInvoiceReadyForSdkCheck(artifactId);
       if (res.success) {
@@ -548,6 +556,10 @@ export const InvoicesPage: React.FC = () => {
 
   const handleTestIntegration = async (environment: 'sandbox' | 'simulation') => {
     if (!currentOrg || !selectedInvoice || !eInvoiceArtifact) return;
+    if (currentOrg.country_code !== 'SA') {
+      setIntegrationError('الفوترة الإلكترونية السعودية متاحة فقط للمنشآت داخل السعودية.');
+      return;
+    }
     setTestingIntegration(true);
     setIntegrationError(null);
     try {
@@ -573,6 +585,10 @@ export const InvoicesPage: React.FC = () => {
 
   // Handler to parse & analyze SDK validation text pasted by user
   const handleAnalyzeSdkText = () => {
+    if (!currentOrg || currentOrg.country_code !== 'SA') {
+      setError('الفوترة الإلكترونية السعودية متاحة فقط للمنشآت داخل السعودية.');
+      return;
+    }
     if (!sdkRawResult.trim()) {
       setError('يرجى لصق نص النتيجة الخام أولاً قبل التحليل.');
       return;
@@ -587,6 +603,10 @@ export const InvoicesPage: React.FC = () => {
   // Handler to save manual SDK validation results to database
   const handleSaveSdkResult = async () => {
     if (!selectedArtifactForSdk) return;
+    if (!currentOrg || currentOrg.country_code !== 'SA') {
+      setError('الفوترة الإلكترونية السعودية متاحة فقط للمنشآت داخل السعودية.');
+      return;
+    }
     setSavingSdkResult(true);
     setError(null);
     try {
