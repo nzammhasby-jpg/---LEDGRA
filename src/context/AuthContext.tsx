@@ -194,6 +194,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (selected) {
             localStorage.setItem(`ledgra_selected_org_${userId}`, selected.id);
+
+            // Background check for COA seeding to guarantee no empty state
+            (async () => {
+              try {
+                const { count, error } = await supabase
+                  .from('accounts')
+                  .select('*', { count: 'exact', head: true })
+                  .eq('organization_id', selected.id);
+
+                if (!error && count === 0) {
+                  const industryType = selected.activity_type || 'general_trading';
+                  await supabase.rpc('ensure_default_chart_of_accounts', {
+                    p_organization_id: selected.id,
+                    p_industry_type: industryType
+                  });
+                  console.log(`Successfully backfilled COA for organization: ${selected.id}`);
+                }
+              } catch (e) {
+                console.error('Error checking or backfilling COA existence:', e);
+              }
+            })();
+
             setCurrentOrg(selected);
             const memberInfo = memberships.find(m => m.organization_id === selected.id);
             setRoleInCurrentOrg((memberInfo?.role ?? null) as OrganizationRole | null);

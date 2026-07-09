@@ -310,5 +310,15 @@ export const accountingService = {
 
     if (error) throw error;
     return data;
+  },
+
+  async ensureDefaultChartOfAccounts(orgId: string, industryType: string = 'general_trading'): Promise<{ status: string; inserted_accounts?: number }> {
+    const { data, error } = await supabase.rpc('ensure_default_chart_of_accounts', {
+      p_organization_id: orgId,
+      p_industry_type: industryType
+    });
+
+    if (error) throw error;
+    return data;
   }
 };

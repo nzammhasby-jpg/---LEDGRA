@@ -147,7 +147,19 @@ export const Onboarding: React.FC = () => {
             .eq('organization_id', currentOrg.id);
           
           if (!error && count !== null) {
-            setHasAccounts(count > 0);
+            if (count > 0) {
+              setHasAccounts(true);
+            } else {
+              // Auto-seed in the background to ensure accounts exist
+              const industryType = currentOrg.activity_type || 'general_trading';
+              const { error: seedError } = await supabase.rpc('ensure_default_chart_of_accounts', {
+                p_organization_id: currentOrg.id,
+                p_industry_type: industryType
+              });
+              if (!seedError) {
+                setHasAccounts(true);
+              }
+            }
           }
         } catch (err) {
           console.error('Error checking accounts for onboarding:', err);
