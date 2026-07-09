@@ -177,3 +177,13 @@ export function validatePhone(
 
   return { isValid: true };
 }
+
+export function getOrgDefaultTaxRate(org: { country_code?: string | null; default_tax_rate?: number | null; is_vat_registered?: boolean | null } | null | undefined): number {
+  if (!org) return 0;
+  if (org.is_vat_registered === false) return 0;
+  if (org.default_tax_rate !== undefined && org.default_tax_rate !== null) {
+    return org.default_tax_rate;
+  }
+  return getCountryProfile(org.country_code).defaultTaxRate;
+}
+

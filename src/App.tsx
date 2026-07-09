@@ -23,6 +23,8 @@ import { PaymentsPage } from './features/purchases/PaymentsPage';
 import { InventoryBalancesPage } from './features/inventory/InventoryBalancesPage';
 import { InventoryMovementsPage } from './features/inventory/InventoryMovementsPage';
 import { ReportsLayout } from './features/reports/ReportsLayout';
+import { BankingPage } from './features/banking/BankingPage';
+import { CashBankTransfersPage } from './features/banking/CashBankTransfersPage';
 import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
@@ -136,6 +138,8 @@ const FullScreenLoader: React.FC = () => {
 
 // Professional Database Error Full-screen Alert when connection, RLS or DB errors occur
 const DatabaseErrorAlert: React.FC<{ error: string; onRetry: () => void }> = ({ error, onRetry }) => {
+  const isFetchError = error.toLowerCase().includes('failed to fetch');
+
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-center items-center p-6 font-sans select-none" dir="rtl">
       <div className="w-full max-w-lg bg-slate-800 border border-slate-700 p-8 rounded-3xl space-y-6 shadow-2xl relative overflow-hidden">
@@ -148,23 +152,43 @@ const DatabaseErrorAlert: React.FC<{ error: string; onRetry: () => void }> = ({ 
             <ShieldAlert className="w-6 h-6 text-red-400" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-100 font-sans">فشل في مزامنة البيانات السحابية</h1>
-            <p className="text-xs text-slate-400 font-sans">مزود قاعدة بيانات لِدجرا — خطأ اتصال مع خادم Supabase</p>
+            <h1 className="text-lg font-bold text-slate-100 font-sans">
+              {isFetchError ? 'انقطع الاتصال بخادم قاعدة البيانات' : 'فشل في مزامنة البيانات السحابية'}
+            </h1>
+            <p className="text-xs text-slate-400 font-sans">
+              {isFetchError ? 'خادم Supabase غير متاح حالياً أو الاتصال معطل' : 'مزود قاعدة بيانات لِدجرا — خطأ اتصال مع خادم Supabase'}
+            </p>
           </div>
         </div>
 
         <div className="space-y-4 text-sm leading-relaxed text-slate-300">
-          <p>
-            تتعذر مزامنة حسابك أو قراءة الكيانات بسبب خطأ الاتصال، أو عدم تفعيل مشغلات الحماية والأمن RLS:
-          </p>
-
-          <div className="bg-slate-900 rounded-2xl p-4 border border-slate-700/60 font-mono text-xs text-red-400 break-words leading-relaxed" style={{ direction: 'ltr', textAlign: 'left' }}>
-            {error}
-          </div>
-
-          <p className="text-xs text-slate-400">
-            يرجى تشغيل الملف الموحد <code className="bg-slate-700 inline-block px-1 py-0.5 rounded text-slate-200 text-[10px]">supabase/initial_schema.sql</code> بالكامل في مخرجات Supabase لتجهيز الجداول وخدمات الحماية المنشآتية وتفعيل triggers.
-          </p>
+          {isFetchError ? (
+            <>
+              <p>
+                حدث خطأ أثناء محاولة الاتصال بـ <strong>Supabase</strong>. قد يكون هذا بسبب توقف الخدمة مؤقتاً، مشكلة في الشبكة، أو عدم تطابق عناوين الاتصال:
+              </p>
+              <div className="bg-slate-900 rounded-2xl p-4 border border-slate-700/60 text-xs space-y-2">
+                <h5 className="font-bold text-slate-200">الخطوات المقترحة للحل:</h5>
+                <ul className="list-disc list-inside space-y-1.5 text-slate-400 pr-1">
+                  <li>تأكد من أن مشروع Supabase الخاص بك نشط وليس في وضع الخمول (Paused).</li>
+                  <li>تأكد من دقة وصحة المفاتيح <code className="bg-slate-800 px-1 py-0.5 rounded text-red-400 font-mono">VITE_SUPABASE_URL</code> و <code className="bg-slate-800 px-1 py-0.5 rounded text-red-400 font-mono">VITE_SUPABASE_ANON_KEY</code> في الإعدادات.</li>
+                  <li>تحقق من اتصالك بالإنترنت، وحاول تحديث الصفحة بعد ثوانٍ قليلة.</li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <>
+              <p>
+                تتعذر مزامنة حسابك أو قراءة الكيانات بسبب خطأ الاتصال، أو عدم تفعيل مشغلات الحماية والأمن RLS:
+              </p>
+              <div className="bg-slate-900 rounded-2xl p-4 border border-slate-700/60 font-mono text-xs text-red-400 break-words leading-relaxed" style={{ direction: 'ltr', textAlign: 'left' }}>
+                {error}
+              </div>
+              <p className="text-xs text-slate-400">
+                يرجى تشغيل الملف الموحد <code className="bg-slate-700 inline-block px-1 py-0.5 rounded text-slate-200 text-[10px]">supabase/initial_schema.sql</code> بالكامل في مخرجات Supabase لتجهيز الجداول وخدمات الحماية المنشآتية وتفعيل triggers.
+              </p>
+            </>
+          )}
         </div>
 
         <div className="flex justify-between items-center pt-2">
@@ -426,6 +450,8 @@ export default function App() {
             <Route path="/items" element={<ItemsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
+            <Route path="/banking" element={<BankingPage />} />
+            <Route path="/banking/transfers" element={<CashBankTransfersPage />} />
             <Route path="/accounting" element={<AccountingLayout />} />
             <Route path="/qa-testing" element={<QATestingPage />} />
             <Route path="/reports" element={<ReportsLayout />} />

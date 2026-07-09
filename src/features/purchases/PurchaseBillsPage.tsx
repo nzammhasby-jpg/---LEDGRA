@@ -12,6 +12,7 @@ import {
   AccountingSettings 
 } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
+import { getOrgDefaultTaxRate } from '../../lib/countryProfiles';
 import { 
   formatNumberWithLatinDigits, 
   formatArabicDateWithLatinDigits, 
@@ -176,7 +177,7 @@ export const PurchaseBillsPage: React.FC = () => {
         quantity: '1',
         unit_cost: '0',
         discount_amount: '0',
-        tax_rate: 15.00, // default standard 15% VAT in Saudi
+        tax_rate: getOrgDefaultTaxRate(currentOrg),
         expense_account_id: '',
         inventory_account_id: ''
       }
@@ -263,7 +264,12 @@ export const PurchaseBillsPage: React.FC = () => {
       updated[index].item_id = itemId;
       updated[index].description = item.description || item.name || '';
       updated[index].unit_cost = String(item.cost_price || 0);
-      updated[index].tax_rate = item.tax_rate !== undefined ? item.tax_rate : 15.00;
+      
+      if (currentOrg?.is_vat_registered === false) {
+        updated[index].tax_rate = 0;
+      } else {
+        updated[index].tax_rate = item.tax_rate ?? getOrgDefaultTaxRate(currentOrg);
+      }
 
       if (item.is_stockable) {
         updated[index].inventory_account_id = item.inventory_account_id || settings?.default_inventory_account_id || '';
@@ -276,6 +282,7 @@ export const PurchaseBillsPage: React.FC = () => {
       updated[index].item_id = '';
       updated[index].description = '';
       updated[index].unit_cost = '0';
+      updated[index].tax_rate = currentOrg?.is_vat_registered === false ? 0 : getOrgDefaultTaxRate(currentOrg);
       updated[index].expense_account_id = '';
       updated[index].inventory_account_id = '';
     }
@@ -308,7 +315,7 @@ export const PurchaseBillsPage: React.FC = () => {
         quantity: '1',
         unit_cost: '0',
         discount_amount: '0',
-        tax_rate: 15.00,
+        tax_rate: getOrgDefaultTaxRate(currentOrg),
         expense_account_id: '',
         inventory_account_id: ''
       }
@@ -1129,7 +1136,7 @@ export const PurchaseBillsPage: React.FC = () => {
               </div>
 
               <div className="flex justify-between text-xs text-brand-turquoise">
-                <span className="font-sans text-slate-400">ضريبة المدخلات (15%):</span>
+                <span className="font-sans text-slate-400">ضريبة المدخلات ({getOrgDefaultTaxRate(currentOrg)}%):</span>
                 <span className="font-bold">+{taxTotal.toFixed(2)} {currentOrg?.currency_code || ''}</span>
               </div>
 
@@ -1336,7 +1343,7 @@ export const PurchaseBillsPage: React.FC = () => {
                           <div className="text-right pr-2 font-semibold">
                             <span className="text-brand-blue font-bold">[1204]</span> ضريبة القيمة المضافة لمدخلات المنشأة
                           </div>
-                          <div className="hidden md:block text-slate-500 font-sans">ضريبة المدخلات مفرزة بنسبة 15%</div>
+                          <div className="hidden md:block text-slate-500 font-sans">ضريبة المدخلات مفرزة بنسبة {selectedBill.lines && selectedBill.lines.length > 0 ? selectedBill.lines[0].tax_rate : getOrgDefaultTaxRate(currentOrg)}%</div>
                           <div className="text-left font-bold text-emerald-600">{selectedBill.tax_total.toFixed(2)} {currentOrg?.currency_code || ''}</div>
                           <div className="text-left pl-4 text-slate-400">0.00 {currentOrg?.currency_code || ''}</div>
                         </div>

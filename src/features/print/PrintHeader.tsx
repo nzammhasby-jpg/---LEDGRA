@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Organization } from '../../types';
 import { organizationSettingsService } from '../../lib/organizationSettingsService';
+import { getCountryProfile } from '../../lib/countryProfiles';
 
 interface PrintHeaderProps {
   currentOrg: Organization | null;
@@ -48,6 +49,7 @@ export const PrintHeader: React.FC<PrintHeaderProps> = ({
   const showLogo = currentOrg.show_logo_on_print ?? true;
   const showTax = currentOrg.show_tax_number_on_print ?? true;
   const showCR = currentOrg.show_commercial_registration_on_print ?? true;
+  const profile = getCountryProfile(currentOrg.country_code);
 
   return (
     <div className="border-b-2 pb-5 mb-6 text-right font-sans" style={{ borderBottomColor: primaryColor }} dir="rtl">
@@ -65,13 +67,13 @@ export const PrintHeader: React.FC<PrintHeaderProps> = ({
           <div className="text-[11px] text-slate-600 space-y-0.5 pt-1.5 font-sans leading-relaxed">
             {showCR && currentOrg.cr_number && (
               <div>
-                <span className="font-bold text-slate-700">السجل التجاري (CR): </span>
+                <span className="font-bold text-slate-700">{profile.crLabel}: </span>
                 <span className="font-mono">{currentOrg.cr_number}</span>
               </div>
             )}
             {showTax && currentOrg.is_vat_registered && currentOrg.vat_number && (
               <div>
-                <span className="font-bold text-slate-700">الرقم الضريبي (VAT ID): </span>
+                <span className="font-bold text-slate-700">{profile.vatLabel}: </span>
                 <span className="font-mono">{currentOrg.vat_number}</span>
               </div>
             )}

@@ -36,7 +36,8 @@ import {
   Package,
   ShieldAlert,
   ShieldCheck,
-  MessageCircle
+  MessageCircle,
+  Landmark
 } from 'lucide-react';
 
 interface AppShellProps {
@@ -116,6 +117,12 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     if (location.pathname.startsWith('/inventory/movements')) {
       return 'حركة الصنف';
     }
+    if (location.pathname.startsWith('/banking/transfers')) {
+      return 'التحويلات الداخلية بين الحسابات';
+    }
+    if (location.pathname.startsWith('/banking')) {
+      return 'الحسابات البنكية والصناديق';
+    }
     switch (location.pathname) {
       case '/':
         return 'الرئيسية';
@@ -145,6 +152,10 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { name: 'رصيد المخزون', path: '/inventory/balances', icon: Package, isSoon: false },
     { name: t('sidebar.customers'), path: '/customers', icon: Users, isSoon: false },
     { name: t('sidebar.vendors'), path: '/vendors', icon: Truck, isSoon: false },
+    ...(roleInCurrentOrg !== 'sales' ? [
+      { name: 'الحسابات البنكية والصناديق', path: '/banking', icon: Landmark, isSoon: false },
+      { name: 'التحويلات الداخلية', path: '/banking/transfers', icon: ArrowRightLeft, isSoon: false }
+    ] : []),
     { name: t('sidebar.accounting'), path: '/accounting', icon: FileSpreadsheet, isSoon: false },
     { name: t('sidebar.reports'), path: '/reports', icon: SlidersHorizontal, isSoon: false },
     { name: t('sidebar.settings'), path: '/settings', icon: Settings, isSoon: false }

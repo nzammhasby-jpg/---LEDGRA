@@ -15,6 +15,7 @@ import {
   AccountingSettings 
 } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
+import { getOrgDefaultTaxRate, getCountryProfile } from '../../lib/countryProfiles';
 import { 
   formatNumberWithLatinDigits, 
   formatArabicDateWithLatinDigits,
@@ -206,7 +207,7 @@ export const InvoicesPage: React.FC = () => {
         quantity: '1',
         unit_price: '0',
         discount_amount: '0',
-        tax_rate: 15.00, // standard default
+        tax_rate: getOrgDefaultTaxRate(currentOrg),
         revenue_account_id: ''
       }
     ]);
@@ -297,7 +298,12 @@ export const InvoicesPage: React.FC = () => {
       updated[index].item_id = itemId;
       updated[index].description = item.description || item.name || '';
       updated[index].unit_price = String(item.selling_price || 0);
-      updated[index].tax_rate = item.tax_rate !== undefined ? item.tax_rate : 15.00;
+      
+      if (currentOrg?.is_vat_registered === false) {
+        updated[index].tax_rate = 0;
+      } else {
+        updated[index].tax_rate = item.tax_rate ?? getOrgDefaultTaxRate(currentOrg);
+      }
 
       // Determine correct revenue account
       let revId = '';
@@ -311,7 +317,7 @@ export const InvoicesPage: React.FC = () => {
       updated[index].item_id = '';
       updated[index].description = '';
       updated[index].unit_price = '0';
-      updated[index].tax_rate = 15.00;
+      updated[index].tax_rate = currentOrg?.is_vat_registered === false ? 0 : getOrgDefaultTaxRate(currentOrg);
       updated[index].revenue_account_id = '';
     }
 
@@ -337,7 +343,7 @@ export const InvoicesPage: React.FC = () => {
         quantity: '1',
         unit_price: '0',
         discount_amount: '0',
-        tax_rate: 15.00,
+        tax_rate: getOrgDefaultTaxRate(currentOrg),
         revenue_account_id: ''
       }
     ]);
@@ -667,7 +673,7 @@ export const InvoicesPage: React.FC = () => {
       setSelectedInvoice(full);
       setViewState('view');
 
-      if (full && full.status === 'approved') {
+      if (full && full.status === 'approved' && getCountryProfile(currentOrg?.country_code).zatcaEnabled) {
         setArtifactLoading(true);
         try {
           const settings = await zatcaService.getZatcaSettings(currentOrg!.id);
@@ -1278,9 +1284,16 @@ export const InvoicesPage: React.FC = () => {
                             onChange={(e) => handleUpdateLineField(index, 'tax_rate', Number(e.target.value))}
                             className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-750"
                           >
-                            <option value="15">15% ضريبة شاملة</option>
-                            <option value="5">5% ضريبة صغرى</option>
-                            <option value="0">0% معفى</option>
+                            {currentOrg?.is_vat_registered !== false ? (
+                              <>
+                                <option value={getOrgDefaultTaxRate(currentOrg)}>{getOrgDefaultTaxRate(currentOrg)}% ضريبة افتراضية</option>
+                                {getOrgDefaultTaxRate(currentOrg) !== 0 && (
+                                  <option value="0">0% معفى</option>
+                                )}
+                              </>
+                            ) : (
+                              <option value="0">0% معفى</option>
+                            )}
                           </select>
                         </div>
 
@@ -1393,7 +1406,7 @@ export const InvoicesPage: React.FC = () => {
                     <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(subtotal - discountTotal)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   <div className="flex items-center justify-between text-amber-400">
-                    <span>مجموع الضريبة المضافة (15%):</span>
+                    <span>مجموع الضريبة المضافة ({getOrgDefaultTaxRate(currentOrg)}%):</span>
                     <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(taxTotal)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   
@@ -1525,7 +1538,7 @@ export const InvoicesPage: React.FC = () => {
           </div>
 
           {/* Phase 12 - ZATCA Electronic Compliance HUB */}
-          {selectedInvoice.status === 'approved' && (
+          {selectedInvoice.status === 'approved' && getCountryProfile(currentOrg?.country_code).zatcaEnabled && (
             <div className="bg-slate-50 border border-slate-200/80 rounded-3xl p-5 max-w-4xl mx-auto mb-6 space-y-4 shadow-sm print:hidden">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-150 pb-3 gap-3">
                 <div className="flex items-center gap-2">
@@ -1948,12 +1961,14 @@ export const InvoicesPage: React.FC = () => {
               <div className="space-y-1">
                 <span className="text-brand-blue font-black tracking-widest uppercase text-xl font-sans block">LEDGRA | لِدجرا</span>
                 <span className="text-slate-400 text-xs block">أنظمة المحاسبة والمالية لإدارة المشاريع SaaS</span>
-                <span className="text-[11px] text-slate-500 block">رقم السجل التجاري: {currentOrg?.cr_number || 'منشأة مسجلة'}</span>
-                <span className="text-[11px] text-slate-500 block">الرقم الضريبي للمنشأة: {currentOrg?.vat_number || 'غير مسجل ضريبياً'}</span>
+                <span className="text-[11px] text-slate-500 block">{getCountryProfile(currentOrg?.country_code).crLabel}: {currentOrg?.cr_number || 'منشأة مسجلة'}</span>
+                <span className="text-[11px] text-slate-500 block">{getCountryProfile(currentOrg?.country_code).vatLabel}: {currentOrg?.vat_number || 'غير مسجل ضريبياً'}</span>
               </div>
 
               <div className="text-right sm:text-left mt-4 sm:mt-0 space-y-1">
-                <h2 className="text-md font-extrabold text-slate-800">فاتورة مبيعات بيع ضريبية</h2>
+                <h2 className="text-md font-extrabold text-slate-800">
+                  {currentOrg?.is_vat_registered !== false ? getCountryProfile(currentOrg?.country_code).taxInvoiceTitle : getCountryProfile(currentOrg?.country_code).normalInvoiceTitle}
+                </h2>
                 <span className="text-xs bg-slate-100 px-3 py-1 font-bold rounded-md font-mono text-slate-700 block mt-1 select-all">
                   {selectedInvoice.invoice_number}
                 </span>
@@ -2076,7 +2091,7 @@ export const InvoicesPage: React.FC = () => {
                   <span className="font-mono" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(selectedInvoice.subtotal - selectedInvoice.discount_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>الضريبة المضافة المطبقة (15%):</span>
+                  <span>الضريبة المضافة المطبقة ({selectedInvoice.lines && selectedInvoice.lines.length > 0 ? selectedInvoice.lines[0].tax_rate : (selectedInvoice.tax_rate || getOrgDefaultTaxRate(currentOrg))}%):</span>
                   <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(selectedInvoice.tax_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 

@@ -488,11 +488,14 @@ export const Onboarding: React.FC = () => {
               })}
             </div>
 
-            {/* Saudi compliance card */}
+            {/* Security and compliance card */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-right">
               <span className="text-[10px] font-bold text-brand-turquoise uppercase block">الأمن والامتثال</span>
               <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
-                مهيأ لاحقًا لتطوير ودعم متطلبات هيئة الزكاة والضريبة والجمارك ولائحة الفوترة الإلكترونية بالمملكة العربية السعودية.
+                {currentValues.country_code === 'YE'
+                  ? 'مهيأ لتلبية متطلبات الامتثال الضريبي ولائحة الفوترة والقوانين المالية للجمهورية اليمنية.'
+                  : 'مهيأ لتطوير ودعم متطلبات هيئة الزكاة والضريبة والجمارك ولائحة الفوترة الإلكترونية بالمملكة العربية السعودية.'
+                }
               </p>
             </div>
           </div>

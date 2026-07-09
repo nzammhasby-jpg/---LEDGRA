@@ -399,6 +399,7 @@ export interface Receipt {
   payment_method: PaymentMethod;
   cash_account_id: string | null;
   bank_account_id: string | null;
+  cash_bank_account_id: string | null;
   reference: string | null;
   notes: string | null;
   status: ReceiptStatus;
@@ -413,6 +414,7 @@ export interface Receipt {
   cancelled_by: string | null;
   customer?: Customer;
   allocations?: ReceiptAllocation[];
+  cash_bank_account?: CashBankAccount;
 }
 
 export interface ReceiptAllocation {
@@ -494,6 +496,7 @@ export interface Payment {
   payment_method: PaymentMethod;
   cash_account_id: string | null;
   bank_account_id: string | null;
+  cash_bank_account_id: string | null;
   reference: string | null;
   notes: string | null;
   status: PaymentStatusType;
@@ -508,6 +511,7 @@ export interface Payment {
   cancelled_by: string | null;
   vendor?: Vendor;
   allocations?: PaymentAllocation[];
+  cash_bank_account?: CashBankAccount;
 }
 
 export interface PaymentAllocation {
@@ -634,3 +638,95 @@ export interface ZatcaSigningProfile {
   created_at: string;
   updated_at: string;
 }
+
+export type CashBankAccountType = 'cash' | 'bank';
+
+export interface CashBankAccount {
+  id: string;
+  organization_id: string;
+  account_id: string;
+  type: CashBankAccountType;
+  name: string;
+  bank_name: string | null;
+  iban: string | null;
+  account_number: string | null;
+  currency_code: string;
+  opening_balance: number;
+  current_balance: number;
+  is_default: boolean;
+  is_active: boolean;
+  notes: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Join fields
+  account_code?: string;
+  account_name_ar?: string;
+  account_name_en?: string | null;
+}
+
+export interface CreateCashBankAccountInput {
+  organization_id: string;
+  account_id: string;
+  type: CashBankAccountType;
+  name: string;
+  bank_name?: string | null;
+  iban?: string | null;
+  account_number?: string | null;
+  opening_balance?: number;
+  is_default?: boolean;
+  notes?: string | null;
+}
+
+export interface UpdateCashBankAccountInput {
+  id: string;
+  name: string;
+  bank_name?: string | null;
+  iban?: string | null;
+  account_number?: string | null;
+  is_default?: boolean;
+  notes?: string | null;
+  is_active?: boolean;
+}
+
+export type CashBankTransferStatus = 'draft' | 'approved' | 'cancelled';
+
+export interface CashBankTransfer {
+  id: string;
+  transfer_number: string;
+  transfer_date: string;
+  from_cash_bank_account_id: string;
+  from_account_name: string;
+  from_account_type: 'cash' | 'bank';
+  from_bank_name: string | null;
+  to_cash_bank_account_id: string;
+  to_account_name: string;
+  to_account_type: 'cash' | 'bank';
+  to_bank_name: string | null;
+  amount: number;
+  currency_code: string;
+  description: string | null;
+  reference_number: string | null;
+  status: CashBankTransferStatus;
+  journal_entry_id: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCashBankTransferInput {
+  organization_id: string;
+  transfer_date: string;
+  from_cash_bank_account_id: string;
+  to_cash_bank_account_id: string;
+  amount: number;
+  description?: string | null;
+  reference_number?: string | null;
+}
+
+

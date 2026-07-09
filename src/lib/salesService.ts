@@ -31,6 +31,7 @@ export interface CreateReceiptInput {
   payment_method: PaymentMethod;
   cash_account_id?: string;
   bank_account_id?: string;
+  cash_bank_account_id?: string;
   reference?: string;
   notes?: string;
   allocations: Array<{
@@ -130,7 +131,7 @@ export const salesService = {
   async getReceipts(orgId: string): Promise<Receipt[]> {
     const { data, error } = await supabase
       .from('receipts')
-      .select('*, customer:customers(*)')
+      .select('*, customer:customers(*), cash_bank_account:cash_bank_accounts(*)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false });
 
@@ -141,7 +142,7 @@ export const salesService = {
   async getReceipt(orgId: string, receiptId: string): Promise<Receipt> {
     const { data, error } = await supabase
       .from('receipts')
-      .select('*, customer:customers(*), allocations:receipt_allocations(*, sales_invoice:sales_invoices(*))')
+      .select('*, customer:customers(*), cash_bank_account:cash_bank_accounts(*), allocations:receipt_allocations(*, sales_invoice:sales_invoices(*))')
       .eq('organization_id', orgId)
       .eq('id', receiptId)
       .single();
@@ -162,6 +163,7 @@ export const salesService = {
       p_reference: input.reference || null,
       p_notes: input.notes || null,
       p_allocations: input.allocations,
+      p_cash_bank_account_id: input.cash_bank_account_id || null,
     });
 
     if (error) throw error;
@@ -181,6 +183,7 @@ export const salesService = {
       p_reference: input.reference || null,
       p_notes: input.notes || null,
       p_allocations: input.allocations,
+      p_cash_bank_account_id: input.cash_bank_account_id || null,
     });
 
     if (error) throw error;

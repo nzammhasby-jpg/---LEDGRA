@@ -5,6 +5,7 @@ import { purchaseService } from '../../lib/purchaseService';
 import { Payment } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatNumberWithLatinDigits } from '../../lib/formatters';
+import { getCountryProfile } from '../../lib/countryProfiles';
 import { PrintActions } from './PrintActions';
 import { PrintHeader } from './PrintHeader';
 import { PrintFooter } from './PrintFooter';
@@ -83,6 +84,7 @@ export const PaymentPrint: React.FC = () => {
 
   const vendor = payment.vendor;
   const allocations = payment.allocations || [];
+  const profile = getCountryProfile(currentOrg?.country_code);
 
   return (
     <div className="bg-slate-100 min-h-screen">
@@ -116,6 +118,9 @@ export const PaymentPrint: React.FC = () => {
           </div>
           <div className="text-left font-sans text-xs space-y-1 text-slate-350" style={{ direction: 'rtl' }}>
             <div><span className="text-slate-450 font-bold ml-1.5">مستند الدفع:</span> {translateMethod(payment.payment_method)}</div>
+            {payment.cash_bank_account && (
+              <div><span className="text-slate-450 font-bold ml-1.5">الحساب المصدر:</span> {payment.cash_bank_account.name}</div>
+            )}
             {payment.reference && (
               <div><span className="text-slate-450 font-bold ml-1.5">المرجع الحركي:</span> <span className="font-mono font-bold">{payment.reference}</span></div>
             )}
@@ -134,7 +139,7 @@ export const PaymentPrint: React.FC = () => {
             </div>
             <div className="text-xs text-slate-650 pr-4 space-y-0.5 leading-relaxed font-mono">
               {vendor?.tax_number && (
-                <div><span className="font-bold text-slate-500 font-sans">الرقم الضريبي للمورد: </span> {vendor.tax_number}</div>
+                <div><span className="font-bold text-slate-500 font-sans">{profile.vatLabel} للمورد: </span> {vendor.tax_number}</div>
               )}
               {vendor?.phone && (
                 <div><span className="font-bold text-slate-500 font-sans">الجوال/الهاتف: </span> {vendor.phone}</div>

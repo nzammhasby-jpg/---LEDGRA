@@ -4,6 +4,7 @@ import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
 import { Vendor, Account, VendorType } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
+import { getCountryProfile } from '../../lib/countryProfiles';
 import { 
   formatNumberWithLatinDigits, 
   normalizeInputDigits,
@@ -344,7 +345,7 @@ export const VendorsPage: React.FC = () => {
           <div className="md:col-span-2 relative">
             <input
               type="text"
-              placeholder="البحث باسم المورد، الكود، الرقم الضريبي، الجوال..."
+              placeholder={`البحث باسم المورد، الكود، ${getCountryProfile(currentOrg?.country_code).vatLabel}، الجوال...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-9 py-2.5 text-slate-800 outline-none focus:border-brand-blue"
@@ -402,7 +403,7 @@ export const VendorsPage: React.FC = () => {
                   <th className="px-5 py-3">اسم المورد والشركة</th>
                   <th className="px-5 py-3">التصنيف</th>
                   <th className="px-5 py-3">الجوال / الهاتف</th>
-                  <th className="px-5 py-3">الرقم الضريبي</th>
+                  <th className="px-5 py-3">{getCountryProfile(currentOrg?.country_code).vatLabel}</th>
                   <th className="px-5 py-3">الحساب الدفتري (ذمم دائنة)</th>
                   <th className="px-5 py-3 text-left">الرصيد الافتتاحي</th>
                   <th className="px-5 py-3 text-center">حالة الملف</th>
@@ -588,27 +589,33 @@ export const VendorsPage: React.FC = () => {
 
                 {/* Tax Number */}
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">الرقم الضريبي للمورد (15 رقماً إنجليزياً)</label>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">
+                    {getCountryProfile(currentOrg?.country_code).vatLabel}
+                  </label>
                   <input
                     type="text"
                     value={taxNumber}
                     onChange={(e) => setTaxNumber(normalizeInputDigits(e.target.value))}
-                    maxLength={15}
+                    maxLength={getCountryProfile(currentOrg?.country_code).code === 'SA' ? 15 : undefined}
+                    inputMode={getCountryProfile(currentOrg?.country_code).code === 'SA' ? 'numeric' : 'text'}
                     className="w-full text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none focus:border-brand-blue"
-                    placeholder="الرقم الضريبي للمورد"
+                    placeholder={getCountryProfile(currentOrg?.country_code).code === 'SA' ? "الرقم الضريبي للمورد" : "الرقم الضريبي / رقم المكلّف"}
                     dir="ltr"
                   />
                 </div>
 
                 {/* Commercial Registration */}
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">رقم السجل التجاري (إنجليزي)</label>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">
+                    {getCountryProfile(currentOrg?.country_code).crLabel}
+                  </label>
                   <input
                     type="text"
                     value={commercialRegistration}
                     onChange={(e) => setCommercialRegistration(normalizeInputDigits(e.target.value))}
+                    inputMode={getCountryProfile(currentOrg?.country_code).code === 'SA' ? 'numeric' : 'text'}
                     className="w-full text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none focus:border-brand-blue"
-                    placeholder="رقم السجل التجاري"
+                    placeholder={getCountryProfile(currentOrg?.country_code).code === 'SA' ? "رقم السجل التجاري" : "رقم السجل / الترخيص"}
                     dir="ltr"
                   />
                 </div>

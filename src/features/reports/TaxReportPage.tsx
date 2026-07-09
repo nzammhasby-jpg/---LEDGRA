@@ -4,6 +4,7 @@ import { reportsService, TaxReportResult } from '../../lib/reportsService';
 import { accountingService } from '../../lib/accountingService';
 import { formatNumberWithLatinDigits } from '../../lib/formatters';
 import { getErrorMessage } from '../../lib/errors';
+import { getCountryProfile } from '../../lib/countryProfiles';
 import { FiscalYear } from '../../types';
 import { 
   Percent,
@@ -293,7 +294,12 @@ export const TaxReportPage: React.FC = () => {
                 {reportData.net_tax_due >= 0 ? (
                   <>
                     <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span className="text-slate-600 font-bold">ضريبة مستحقة للهيئة العامة للزكاة والضريبة ({currentOrg?.currency_code || ''})</span>
+                    <span className="text-slate-600 font-bold">
+                      {getCountryProfile(currentOrg?.country_code).code === 'YE'
+                        ? 'ضريبة مستحقة لمصلحة الضرائب اليمنية'
+                        : 'ضريبة مستحقة للهيئة العامة للزكاة والضريبة والجمارك'
+                      } ({currentOrg?.currency_code || ''})
+                    </span>
                   </>
                 ) : (
                   <>

@@ -5,6 +5,7 @@ import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
 import { Item, Account, ItemType } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
+import { getOrgDefaultTaxRate, getCountryProfile } from '../../lib/countryProfiles';
 import { 
   formatNumberWithLatinDigits, 
   normalizeInputDigits,
@@ -62,7 +63,7 @@ export const ItemsPage: React.FC = () => {
   const [barcode, setBarcode] = useState<string>('');
   const [sellingPrice, setSellingPrice] = useState<string>('0');
   const [purchasePrice, setPurchasePrice] = useState<string>('0');
-  const [taxRate, setTaxRate] = useState<number>(15.00); // Default Saudi VAT 15.00%
+  const [taxRate, setTaxRate] = useState<number>(0); // Default VAT
   const [salesAccountId, setSalesAccountId] = useState<string>('');
   const [serviceRevenueAccountId, setServiceRevenueAccountId] = useState<string>('');
   const [inventoryAccountId, setInventoryAccountId] = useState<string>('');
@@ -74,8 +75,9 @@ export const ItemsPage: React.FC = () => {
   useEffect(() => {
     if (currentOrg?.id) {
       loadData();
+      setTaxRate(getOrgDefaultTaxRate(currentOrg));
     }
-  }, [currentOrg?.id]);
+  }, [currentOrg]);
 
   const loadData = async () => {
     setLoading(true);
@@ -127,7 +129,7 @@ export const ItemsPage: React.FC = () => {
     setBarcode('');
     setSellingPrice('0');
     setPurchasePrice('0');
-    setTaxRate(15.00);
+    setTaxRate(getOrgDefaultTaxRate(currentOrg));
     setIsStockable(false);
     setIsActive(true);
 
@@ -655,7 +657,7 @@ export const ItemsPage: React.FC = () => {
 
                 {/* Selling Price */}
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">سعر البيع الافتراضي (ريال سعودي)</label>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">سعر البيع الافتراضي ({currentOrg?.currency_code || ''})</label>
                   <input
                     type="text"
                     value={sellingPrice}
@@ -668,7 +670,7 @@ export const ItemsPage: React.FC = () => {
 
                 {/* Purchase Price */}
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">تكلفة الشراء الافتراضية (ريال سعودي)</label>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">تكلفة الشراء الافتراضية ({currentOrg?.currency_code || ''})</label>
                   <input
                     type="text"
                     value={purchasePrice}
@@ -681,14 +683,22 @@ export const ItemsPage: React.FC = () => {
 
                 {/* Tax Rate (VAT Options) */}
                 <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1">معدل ضريبة الـ VAT</label>
+                  <label className="text-[11px] font-bold text-slate-500 block mb-1">معدل {getCountryProfile(currentOrg?.country_code).vatLabel}</label>
                   <select
                     value={taxRate}
                     onChange={(e) => setTaxRate(parseFloat(e.target.value))}
                     className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-slate-700 outline-none"
                   >
-                    <option value="15.00">الضريبة القياسية في المملكة (15%)</option>
-                    <option value="0.00">الضريبة الصفرية (0%)</option>
+                    {currentOrg?.is_vat_registered !== false ? (
+                      <>
+                        <option value={getOrgDefaultTaxRate(currentOrg).toFixed(2)}>الضريبة الافتراضية ({getOrgDefaultTaxRate(currentOrg)}%)</option>
+                        {getOrgDefaultTaxRate(currentOrg) !== 0 && (
+                          <option value="0.00">الضريبة الصفرية (0%)</option>
+                        )}
+                      </>
+                    ) : (
+                      <option value="0.00">الضريبة الصفرية (0%)</option>
+                    )}
                   </select>
                 </div>
 

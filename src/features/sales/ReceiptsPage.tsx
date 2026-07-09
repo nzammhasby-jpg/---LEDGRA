@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { salesService, CreateReceiptInput } from '../../lib/salesService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
+import { bankingService } from '../../lib/bankingService';
 import { auditService } from '../../lib/auditService';
 import { 
   Receipt, 
@@ -10,7 +11,8 @@ import {
   Account, 
   AccountingSettings,
   SalesInvoice,
-  PaymentMethod
+  PaymentMethod,
+  CashBankAccount
 } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { 
@@ -58,6 +60,7 @@ export const ReceiptsPage: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [cashBankAccounts, setCashBankAccounts] = useState<CashBankAccount[]>([]);
   const [settings, setSettings] = useState<AccountingSettings | null>(null);
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -81,6 +84,7 @@ export const ReceiptsPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank_transfer');
   const [cashAccountId, setCashAccountId] = useState<string>('');
   const [bankAccountId, setBankAccountId] = useState<string>('');
+  const [cashBankAccountId, setCashBankAccountId] = useState<string>('');
   const [reference, setReference] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
@@ -99,12 +103,13 @@ export const ReceiptsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [allReceipts, allCustomers, allInvoices, allAccounts, taxSettings] = await Promise.all([
+      const [allReceipts, allCustomers, allInvoices, allAccounts, taxSettings, allCashBankAccounts] = await Promise.all([
         salesService.getReceipts(currentOrg!.id),
         masterDataService.getCustomers(currentOrg!.id),
         salesService.getSalesInvoices(currentOrg!.id),
         accountingService.getAccounts(currentOrg!.id),
-        accountingService.getAccountingSettings(currentOrg!.id).catch(() => null)
+        accountingService.getAccountingSettings(currentOrg!.id).catch(() => null),
+        bankingService.listCashBankAccounts(currentOrg!.id).catch(() => [])
       ]);
 
       setReceipts(allReceipts);
@@ -112,6 +117,7 @@ export const ReceiptsPage: React.FC = () => {
       setInvoices(allInvoices);
       setAccounts(allAccounts.filter(a => a.is_active));
       setSettings(taxSettings);
+      setCashBankAccounts(allCashBankAccounts.filter(cba => cba.is_active));
 
       // Pre-select default assets accounts from settings
       if (taxSettings?.default_cash_account_id) {
@@ -201,6 +207,12 @@ export const ReceiptsPage: React.FC = () => {
     if (settings?.default_bank_account_id) {
       setBankAccountId(settings.default_bank_account_id);
     }
+    
+    // Select default bank account
+    const defaultAcc = cashBankAccounts.find(a => a.type === 'bank' && a.is_active && a.is_default) ||
+                       cashBankAccounts.find(a => a.type === 'bank' && a.is_active);
+    setCashBankAccountId(defaultAcc ? defaultAcc.id : '');
+
     setReference('');
     setNotes('');
     setAllocations({});
@@ -216,6 +228,7 @@ export const ReceiptsPage: React.FC = () => {
     setPaymentMethod(receipt.payment_method);
     setCashAccountId(receipt.cash_account_id || '');
     setBankAccountId(receipt.bank_account_id || '');
+    setCashBankAccountId(receipt.cash_bank_account_id || '');
     setReference(receipt.reference || '');
     setNotes(receipt.notes || '');
     const allocMap: Record<string, string> = {};
@@ -225,7 +238,7 @@ export const ReceiptsPage: React.FC = () => {
     setAllocations(allocMap);
     setFormError(null);
     setViewState('add');
-  }, []);
+  }, [cashBankAccounts]);
 
   const handleCreateCorrectionCopy = useCallback(async (oldReceipt: Receipt) => {
     if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من السند رقم ${oldReceipt.receipt_number}؟`)) return;
@@ -239,6 +252,7 @@ export const ReceiptsPage: React.FC = () => {
         payment_method: oldReceipt.payment_method,
         cash_account_id: oldReceipt.cash_account_id || undefined,
         bank_account_id: oldReceipt.bank_account_id || undefined,
+        cash_bank_account_id: oldReceipt.cash_bank_account_id || undefined,
         reference: oldReceipt.reference || undefined,
         notes: `نسخة تصحيحية من السند: ${oldReceipt.receipt_number}` + (oldReceipt.notes ? `\n\n${oldReceipt.notes}` : ''),
         allocations: (oldReceipt.allocations || []).map(al => ({
@@ -312,15 +326,9 @@ export const ReceiptsPage: React.FC = () => {
       return;
     }
 
-    // Account validations based on payment method
-    if (paymentMethod === 'cash' && !cashAccountId) {
-      setFormError('حساب الصندوق/النقد بالصندوق مطلوب للمدفوعات النقدية.');
-      setSaveLoading(false);
-      return;
-    }
-
-    if ((paymentMethod === 'bank_transfer' || paymentMethod === 'card') && !bankAccountId) {
-      setFormError('حساب البنك/المدفوعات الإلكترونية مطلوب للمعاملات البنكية.');
+    // Validate cash_bank_account_id
+    if (!cashBankAccountId) {
+      setFormError('يرجى اختيار حساب الصندوق/البنك الفعلي المعني بالعملية.');
       setSaveLoading(false);
       return;
     }
@@ -333,6 +341,7 @@ export const ReceiptsPage: React.FC = () => {
         payment_method: paymentMethod,
         cash_account_id: paymentMethod === 'cash' ? cashAccountId : undefined,
         bank_account_id: (paymentMethod === 'bank_transfer' || paymentMethod === 'card') ? bankAccountId : undefined,
+        cash_bank_account_id: cashBankAccountId || undefined,
         reference: reference || undefined,
         notes: notes || undefined,
         allocations: allocationPayload
@@ -887,7 +896,23 @@ export const ReceiptsPage: React.FC = () => {
                     <label className="text-[11px] font-bold text-slate-400">طريقة استلام النقد *</label>
                     <select
                       value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                      onChange={(e) => {
+                        const newMethod = e.target.value as PaymentMethod;
+                        setPaymentMethod(newMethod);
+                        const neededType = newMethod === 'cash' ? 'cash' : 'bank';
+                        const matches = cashBankAccounts.filter(a => a.is_active && a.type === neededType);
+                        const def = matches.find(a => a.is_default) || matches[0];
+                        setCashBankAccountId(def ? def.id : '');
+                        if (def) {
+                          if (def.type === 'cash') {
+                            setCashAccountId(def.account_id);
+                            setBankAccountId('');
+                          } else {
+                            setBankAccountId(def.account_id);
+                            setCashAccountId('');
+                          }
+                        }
+                      }}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:outline-none focus:border-brand-blue rounded-xl text-xs font-semibold text-slate-700"
                     >
                       <option value="bank_transfer">تحويل حساب بنكي</option>
@@ -897,38 +922,51 @@ export const ReceiptsPage: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Ledger Accounts options mapping */}
-                  {paymentMethod === 'cash' ? (
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-slate-400 font-bold text-brand-blue">حساب صندوق التحصيل *</label>
-                      <select
-                        value={cashAccountId}
-                        onChange={(e) => setCashAccountId(e.target.value)}
-                        required
-                        className="w-full px-3 py-2 bg-white border border-brand-blue/30 focus:outline-none focus:border-brand-blue rounded-xl text-xs font-semibold text-slate-700"
-                      >
-                        <option value="">-- اختر حساب النقد --</option>
-                        {accounts.filter(a => a.classification === 'assets').map(acc => (
-                          <option key={acc.id} value={acc.id}>{acc.code} - {acc.name_ar}</option>
+                  {/* Cash/Bank Accounts Selection */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-slate-400">
+                      {paymentMethod === 'cash' ? 'الصندوق المستلم *' : 'البنك المستلم *'}
+                    </label>
+                    <select
+                      value={cashBankAccountId}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setCashBankAccountId(selectedId);
+                        // Also populate legacy fields for absolute fallback safety
+                        const foundAcc = cashBankAccounts.find(a => a.id === selectedId);
+                        if (foundAcc) {
+                          if (foundAcc.type === 'cash') {
+                            setCashAccountId(foundAcc.account_id);
+                            setBankAccountId('');
+                          } else {
+                            setBankAccountId(foundAcc.account_id);
+                            setCashAccountId('');
+                          }
+                        } else {
+                          setCashAccountId('');
+                          setBankAccountId('');
+                        }
+                      }}
+                      required
+                      className={`w-full px-3 py-2 bg-white border focus:outline-none focus:border-brand-blue rounded-xl text-xs font-semibold text-slate-700 ${
+                        paymentMethod === 'cash' ? 'border-brand-blue/30' : 'border-blue-300'
+                      }`}
+                    >
+                      <option value="">
+                        {paymentMethod === 'cash' ? '-- اختر الصندوق --' : '-- اختر البنك --'}
+                      </option>
+                      {cashBankAccounts
+                        .filter(a =>
+                          a.is_active &&
+                          (paymentMethod === 'cash' ? a.type === 'cash' : a.type === 'bank')
+                        )
+                        .map(acc => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name} ({acc.current_balance?.toLocaleString('en-US', { minimumFractionDigits: 2 })} {acc.currency_code})
+                          </option>
                         ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold text-blue-500 font-bold">حساب البنك المستلم *</label>
-                      <select
-                        value={bankAccountId}
-                        onChange={(e) => setBankAccountId(e.target.value)}
-                        required
-                        className="w-full px-3 py-2 bg-white border border-blue-300 focus:outline-none focus:border-brand-blue rounded-xl text-xs font-semibold text-slate-700"
-                      >
-                        <option value="">-- اختر حساب البنك --</option>
-                        {accounts.filter(a => a.classification === 'assets').map(acc => (
-                          <option key={acc.id} value={acc.id}>{acc.code} - {acc.name_ar}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                    </select>
+                  </div>
 
                   {/* Reference */}
                   <div className="space-y-1.5">
@@ -1213,6 +1251,11 @@ export const ReceiptsPage: React.FC = () => {
               <div className="space-y-1">
                 <span className="font-bold text-slate-400 block">بيانات الاستلام وخزينة الدفع:</span>
                 <p className="font-extrabold text-slate-800">طريقة الاستلام: {selectedReceipt.payment_method === 'cash' ? 'صندوق النقد اليدوي' : 'حساب بنكي / بطاقة مدى إلكتروني'}</p>
+                {selectedReceipt.cash_bank_account_id && (
+                  <p className="text-blue-600 font-extrabold">
+                    الحساب المالي: {cashBankAccounts.find(a => a.id === selectedReceipt.cash_bank_account_id)?.name || 'تحميل الحساب...'}
+                  </p>
+                )}
                 <p className="text-slate-500">تاريخ تحرير السند: {formatArabicDateWithLatinDigits(selectedReceipt.receipt_date)}</p>
                 {selectedReceipt.reference && <p className="text-slate-500 font-sans">رقم العملية الشريحة: {selectedReceipt.reference}</p>}
               </div>

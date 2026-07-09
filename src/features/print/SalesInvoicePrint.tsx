@@ -8,6 +8,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { SalesInvoice } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatNumberWithLatinDigits, formatArabicDateWithLatinDigits } from '../../lib/formatters';
+import { getCountryProfile, getOrgDefaultTaxRate } from '../../lib/countryProfiles';
 import { PrintActions } from './PrintActions';
 import { PrintHeader } from './PrintHeader';
 import { PrintFooter } from './PrintFooter';
@@ -34,6 +35,16 @@ export const SalesInvoicePrint: React.FC = () => {
 
   useEffect(() => {
     if (currentOrg?.id && invoice?.id) {
+      const profile = getCountryProfile(currentOrg?.country_code);
+      const zatcaEnabled = profile.zatcaEnabled;
+
+      if (!zatcaEnabled) {
+        setZatcaSettings(null);
+        setArtifact(null);
+        setQrBase64(null);
+        return;
+      }
+
       const loadZatcaData = async () => {
         try {
           const settings = await zatcaService.getZatcaSettings(currentOrg.id);
@@ -125,6 +136,9 @@ export const SalesInvoicePrint: React.FC = () => {
 
   const customer = invoice.customer;
   const listItems = invoice.lines || [];
+  const profile = getCountryProfile(currentOrg?.country_code);
+  const isVat = currentOrg?.is_vat_registered !== false;
+  const docTitle = isVat ? (profile.taxInvoiceTitle || 'فاتورة ضريبية') : (profile.normalInvoiceTitle || 'فاتورة مبيعات');
 
   return (
     <div className="bg-slate-100 min-h-screen">
@@ -139,7 +153,7 @@ export const SalesInvoicePrint: React.FC = () => {
         {/* Corporate Header */}
         <PrintHeader
           currentOrg={currentOrg}
-          documentTitle="فاتورة مبيعات ضريبية"
+          documentTitle={docTitle}
           documentNumber={invoice.invoice_number}
           documentDate={invoice.invoice_date}
           extraMeta={[
@@ -174,12 +188,12 @@ export const SalesInvoicePrint: React.FC = () => {
 
           <div className="border-r border-slate-200 pr-6 space-y-1 text-[11px] text-slate-600">
             <div>
-              <span className="font-bold text-slate-500">الرقم الضريبي للعميل (VAT ID): </span>
+              <span className="font-bold text-slate-500">{profile.vatLabel} للعميل: </span>
               <span className="font-mono text-slate-800 font-extrabold">{customer?.tax_number || 'غير متوفر'}</span>
             </div>
             {customer?.commercial_registration && (
               <div>
-                <span className="font-bold text-slate-500">السجل التجاري للعميل: </span>
+                <span className="font-bold text-slate-500">{profile.crLabel} للعميل: </span>
                 <span className="font-mono text-slate-800 font-extrabold">{customer.commercial_registration}</span>
               </div>
             )}
@@ -233,34 +247,38 @@ export const SalesInvoicePrint: React.FC = () => {
         </div>
 
         {/* Bottom dynamic totals and ZATCA QR block */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 font-sans items-end" dir="rtl">
+        <div className="flex flex-col md:flex-row justify-between gap-6 mb-8 font-sans items-end" dir="rtl">
           
           {/* ZATCA QR code container */}
-          <div className="flex flex-col items-start gap-2 bg-slate-50 border border-slate-200/60 rounded-2xl p-4 w-fit md:w-auto">
-            <span className="text-[9px] font-black text-slate-400 block uppercase tracking-wider">رمز QR للفوترة الإلكترونية</span>
-            <div className="flex items-center gap-4">
-              {qrBase64 ? (
-                <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm print:shadow-none shrink-0 border-solid">
-                  <QRCodeSVG value={qrBase64} size={105} />
-                </div>
-              ) : (
-                <div className="w-[105px] h-[105px] bg-slate-100 rounded-xl border border-slate-200 border-dashed flex items-center justify-center text-center text-[10px] text-slate-400 p-2 shrink-0">
-                  جاري احتساب الرمز...
-                </div>
-              )}
-              <div className="text-[10px] text-slate-500 leading-relaxed">
-                <p className="font-extrabold text-slate-700">بيانات الفاتورة الضريبية</p>
-                <p className="mt-1">صنف الفاتورة: {zatcaSettings?.invoice_type_default === 'standard' ? 'ضريبية قياسية (B2B)' : 'ضريبية مبسطة (B2C)'}</p>
-                <p className="mt-0.5">البنية الرقمية: XML أولي محسّن للفحص الداخلي</p>
-                {artifact?.id && (
-                  <p className="mt-1 text-[9px] text-brand-blue font-semibold">مستند رقمي رقم: {artifact.id.substring(0, 8)}</p>
+          {profile.zatcaEnabled ? (
+            <div className="flex flex-col items-start gap-2 bg-slate-50 border border-slate-200/60 rounded-2xl p-4 w-fit md:w-auto">
+              <span className="text-[9px] font-black text-slate-400 block uppercase tracking-wider">رمز QR للفوترة الإلكترونية</span>
+              <div className="flex items-center gap-4">
+                {qrBase64 ? (
+                  <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm print:shadow-none shrink-0 border-solid">
+                    <QRCodeSVG value={qrBase64} size={105} />
+                  </div>
+                ) : (
+                  <div className="w-[105px] h-[105px] bg-slate-100 rounded-xl border border-slate-200 border-dashed flex items-center justify-center text-center text-[10px] text-slate-400 p-2 shrink-0">
+                    جاري احتساب الرمز...
+                  </div>
                 )}
+                <div className="text-[10px] text-slate-500 leading-relaxed">
+                  <p className="font-extrabold text-slate-700">بيانات الفاتورة الضريبية</p>
+                  <p className="mt-1">صنف الفاتورة: {zatcaSettings?.invoice_type_default === 'standard' ? 'ضريبية قياسية (B2B)' : 'ضريبية مبسطة (B2C)'}</p>
+                  <p className="mt-0.5">البنية الرقمية: XML أولي محسّن للفحص الداخلي</p>
+                  {artifact?.id && (
+                    <p className="mt-1 text-[9px] text-brand-blue font-semibold">مستند رقمي رقم: {artifact.id.substring(0, 8)}</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="hidden md:block flex-1" />
+          )}
 
           {/* Right Column computations */}
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2 text-xs select-none">
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2 text-xs select-none w-full md:w-80 shrink-0">
             
             <div className="flex justify-between font-bold text-slate-600">
               <span>الإجمالي قبل الخصم:</span>
@@ -277,10 +295,12 @@ export const SalesInvoicePrint: React.FC = () => {
               <span className="font-mono text-slate-900">{formatNumberWithLatinDigits(invoice.subtotal - invoice.discount_total)}</span>
             </div>
 
-            <div className="flex justify-between font-bold text-slate-600 border-b border-slate-200 pb-2">
-              <span>إجمالي ضريبة القيمة المضافة (15%):</span>
-              <span className="font-mono text-slate-900">{formatNumberWithLatinDigits(invoice.tax_total)}</span>
-            </div>
+            {!(profile.code === 'YE' && currentOrg?.is_vat_registered === false && invoice.tax_total === 0) && (
+              <div className="flex justify-between font-bold text-slate-600 border-b border-slate-200 pb-2">
+                <span>إجمالي {profile.vatLabel} ({formatNumberWithLatinDigits(getOrgDefaultTaxRate(currentOrg), 0)}%):</span>
+                <span className="font-mono text-slate-900">{formatNumberWithLatinDigits(invoice.tax_total)}</span>
+              </div>
+            )}
 
             <div className="flex justify-between font-black text-slate-900 text-sm border-b border-double border-slate-300 pb-2">
               <span>صافي قيمة الفاتورة النهائي:</span>

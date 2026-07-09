@@ -33,6 +33,7 @@ export interface CreatePaymentInput {
   payment_method: PaymentMethod;
   cash_account_id?: string;
   bank_account_id?: string;
+  cash_bank_account_id?: string;
   reference?: string;
   notes?: string;
   allocations: Array<{
@@ -134,7 +135,7 @@ export const purchaseService = {
   async getPayments(orgId: string): Promise<Payment[]> {
     const { data, error } = await supabase
       .from('payments')
-      .select('*, vendor:vendors(*)')
+      .select('*, vendor:vendors(*), cash_bank_account:cash_bank_accounts(*)')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false });
 
@@ -145,7 +146,7 @@ export const purchaseService = {
   async getPayment(orgId: string, paymentId: string): Promise<Payment> {
     const { data, error } = await supabase
       .from('payments')
-      .select('*, vendor:vendors(*), allocations:payment_allocations(*, purchase_bill:purchase_bills(*))')
+      .select('*, vendor:vendors(*), cash_bank_account:cash_bank_accounts(*), allocations:payment_allocations(*, purchase_bill:purchase_bills(*))')
       .eq('organization_id', orgId)
       .eq('id', paymentId)
       .single();
@@ -166,6 +167,7 @@ export const purchaseService = {
       p_reference: input.reference || null,
       p_notes: input.notes || null,
       p_allocations: input.allocations,
+      p_cash_bank_account_id: input.cash_bank_account_id || null,
     });
 
     if (error) throw error;
@@ -185,6 +187,7 @@ export const purchaseService = {
       p_reference: input.reference || null,
       p_notes: input.notes || null,
       p_allocations: input.allocations,
+      p_cash_bank_account_id: input.cash_bank_account_id || null,
     });
 
     if (error) throw error;

@@ -5,6 +5,7 @@ import { purchaseService } from '../../lib/purchaseService';
 import { PurchaseBill } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatNumberWithLatinDigits } from '../../lib/formatters';
+import { getCountryProfile, getOrgDefaultTaxRate } from '../../lib/countryProfiles';
 import { PrintActions } from './PrintActions';
 import { PrintHeader } from './PrintHeader';
 import { PrintFooter } from './PrintFooter';
@@ -74,6 +75,9 @@ export const PurchaseBillPrint: React.FC = () => {
 
   const vendor = bill.vendor;
   const listItems = bill.lines || [];
+  const profile = getCountryProfile(currentOrg?.country_code);
+  const isVat = currentOrg?.is_vat_registered !== false;
+  const docTitle = isVat ? 'فاتورة شراء ضريبية' : 'فاتورة شراء';
 
   return (
     <div className="bg-slate-100 min-h-screen">
@@ -88,7 +92,7 @@ export const PurchaseBillPrint: React.FC = () => {
         {/* Corporate Header */}
         <PrintHeader
           currentOrg={currentOrg}
-          documentTitle="فاتورة شراء ضريبية"
+          documentTitle={docTitle}
           documentNumber={bill.bill_number}
           documentDate={bill.bill_date}
           extraMeta={[
@@ -124,12 +128,12 @@ export const PurchaseBillPrint: React.FC = () => {
 
           <div className="border-r border-slate-200 pr-6 space-y-1 text-[11px] text-slate-600">
             <div>
-              <span className="font-bold text-slate-500 font-sans">الرقم الضريبي للمورد: </span>
+              <span className="font-bold text-slate-500 font-sans">{profile.vatLabel} للمورد: </span>
               <span className="font-mono text-slate-800 font-extrabold">{vendor?.tax_number || 'غير متوفر'}</span>
             </div>
             {vendor?.commercial_registration && (
               <div>
-                <span className="font-bold text-slate-500 font-sans">رقم السجل التجاري: </span>
+                <span className="font-bold text-slate-500 font-sans">{profile.crLabel} للمورد: </span>
                 <span className="font-mono text-slate-800 font-extrabold">{vendor.commercial_registration}</span>
               </div>
             )}
@@ -197,14 +201,16 @@ export const PurchaseBillPrint: React.FC = () => {
             </div>
 
             <div className="flex justify-between font-bold text-slate-600 border-b border-slate-200 pb-2">
-              <span>الوعاء الخاضع لضريبة المدخلات:</span>
+              <span>الوعاء الخاضع ل{profile.vatLabel} المدخلات:</span>
               <span className="font-mono text-slate-900">{formatNumberWithLatinDigits(bill.subtotal - bill.discount_total)}</span>
             </div>
 
-            <div className="flex justify-between font-bold text-slate-600 border-b border-slate-200 pb-2">
-              <span>إجمالي ضريبة القيمة المضافة لمدخلات السلع (15%):</span>
-              <span className="font-mono text-slate-900">{formatNumberWithLatinDigits(bill.tax_total)}</span>
-            </div>
+            {!(profile.code === 'YE' && currentOrg?.is_vat_registered === false && bill.tax_total === 0) && (
+              <div className="flex justify-between font-bold text-slate-600 border-b border-slate-200 pb-2">
+                <span>إجمالي {profile.vatLabel} لمدخلات السلع ({formatNumberWithLatinDigits(getOrgDefaultTaxRate(currentOrg), 0)}%):</span>
+                <span className="font-mono text-slate-900">{formatNumberWithLatinDigits(bill.tax_total)}</span>
+              </div>
+            )}
 
             <div className="flex justify-between font-black text-slate-900 text-sm border-b border-double border-slate-300 pb-2">
               <span>صافي قيمة فاتورة المشتريات:</span>
@@ -233,7 +239,7 @@ export const PurchaseBillPrint: React.FC = () => {
         )}
 
         {/* Corporate signatures */}
-        <PrintFooter description="مستند مالي داخلي يثبت استلام البضائع أو الخدمات المفوترة من المورد المدرج أعلاه. هذا المستند مُرحل لتقرير القيمة المضافة (مدخلات) ومطابق لشروط مصلحة الجمارك والزكاة والضريبة." />
+        <PrintFooter description={profile.code === 'YE' ? "مستند مالي داخلي يثبت استلام البضائع أو الخدمات المفوترة من المورد المدرج أعلاه. هذا المستند مُرحل لتقرير الضريبة ومطابق لشروط مصلحة الضرائب اليمنية." : "مستند مالي داخلي يثبت استلام البضائع أو الخدمات المفوترة من المورد المدرج أعلاه. هذا المستند مُرحل لتقرير القيمة المضافة (مدخلات) ومطابق لشروط هيئة الزكاة والضريبة والجمارك."} />
 
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { purchaseService, CreatePaymentInput } from '../../lib/purchaseService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
+import { bankingService } from '../../lib/bankingService';
 import { auditService } from '../../lib/auditService';
 import { 
   Payment, 
@@ -11,7 +12,8 @@ import {
   Account, 
   AccountingSettings,
   PurchaseBill,
-  PaymentMethod
+  PaymentMethod,
+  CashBankAccount
 } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { 
@@ -59,6 +61,7 @@ export const PaymentsPage: React.FC = () => {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [bills, setBills] = useState<PurchaseBill[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [cashBankAccounts, setCashBankAccounts] = useState<CashBankAccount[]>([]);
   const [settings, setSettings] = useState<AccountingSettings | null>(null);
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -82,6 +85,7 @@ export const PaymentsPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank_transfer');
   const [cashAccountId, setCashAccountId] = useState<string>('');
   const [bankAccountId, setBankAccountId] = useState<string>('');
+  const [cashBankAccountId, setCashBankAccountId] = useState<string>('');
   const [reference, setReference] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
@@ -100,12 +104,13 @@ export const PaymentsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [allPayments, allVendors, allBills, allAccounts, taxSettings] = await Promise.all([
+      const [allPayments, allVendors, allBills, allAccounts, taxSettings, allCashBankAccounts] = await Promise.all([
         purchaseService.getPayments(currentOrg!.id),
         masterDataService.getVendors(currentOrg!.id),
         purchaseService.getPurchaseBills(currentOrg!.id),
         accountingService.getAccounts(currentOrg!.id),
-        accountingService.getAccountingSettings(currentOrg!.id).catch(() => null)
+        accountingService.getAccountingSettings(currentOrg!.id).catch(() => null),
+        bankingService.listCashBankAccounts(currentOrg!.id).catch(() => [])
       ]);
 
       setPayments(allPayments);
@@ -113,6 +118,7 @@ export const PaymentsPage: React.FC = () => {
       setBills(allBills);
       setAccounts(allAccounts.filter(a => a.is_active));
       setSettings(taxSettings);
+      setCashBankAccounts(allCashBankAccounts.filter(cba => cba.is_active));
 
       // Pre-select default assets accounts from settings
       if (taxSettings?.default_cash_account_id) {
@@ -208,7 +214,12 @@ export const PaymentsPage: React.FC = () => {
     if (settings?.default_bank_account_id) {
       setBankAccountId(settings.default_bank_account_id);
     }
-  }, [settings]);
+
+    // Select default bank account
+    const defaultAcc = cashBankAccounts.find(a => a.type === 'bank' && a.is_active && a.is_default) ||
+                       cashBankAccounts.find(a => a.type === 'bank' && a.is_active);
+    setCashBankAccountId(defaultAcc ? defaultAcc.id : '');
+  }, [settings, cashBankAccounts]);
 
   const handleStartEditPayment = useCallback((payment: Payment) => {
     setEditingPayment(payment);
@@ -218,6 +229,7 @@ export const PaymentsPage: React.FC = () => {
     setPaymentMethod(payment.payment_method);
     setCashAccountId(payment.cash_account_id || '');
     setBankAccountId(payment.bank_account_id || '');
+    setCashBankAccountId(payment.cash_bank_account_id || '');
     setReference(payment.reference || '');
     setNotes(payment.notes || '');
     const allocMap: Record<string, string> = {};
@@ -227,7 +239,7 @@ export const PaymentsPage: React.FC = () => {
     setAllocations(allocMap);
     setFormError(null);
     setViewState('add');
-  }, []);
+  }, [cashBankAccounts]);
 
   const handleCreateCorrectionCopy = useCallback(async (oldPayment: Payment) => {
     if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من سند الصرف رقم ${oldPayment.payment_number}؟`)) return;
@@ -241,6 +253,7 @@ export const PaymentsPage: React.FC = () => {
         payment_method: oldPayment.payment_method,
         cash_account_id: oldPayment.cash_account_id || undefined,
         bank_account_id: oldPayment.bank_account_id || undefined,
+        cash_bank_account_id: oldPayment.cash_bank_account_id || undefined,
         reference: oldPayment.reference || undefined,
         notes: `نسخة تصحيحية من سند الصرف: ${oldPayment.payment_number}` + (oldPayment.notes ? `\n\n${oldPayment.notes}` : ''),
         allocations: (oldPayment.allocations || []).map(al => ({
@@ -298,12 +311,8 @@ export const PaymentsPage: React.FC = () => {
       return;
     }
 
-    if (paymentMethod === 'cash' && !cashAccountId) {
-      setFormError('يرجى اختيار الصندوق أو الخزينة النقدية للصرف.');
-      return;
-    }
-    if (paymentMethod === 'bank_transfer' && !bankAccountId) {
-      setFormError('يرجى اختيار الحساب البنكي للصرف.');
+    if (!cashBankAccountId) {
+      setFormError('يرجى اختيار حساب الصندوق/البنك الفعلي للصرف.');
       return;
     }
 
@@ -350,6 +359,7 @@ export const PaymentsPage: React.FC = () => {
         payment_method: paymentMethod,
         cash_account_id: paymentMethod === 'cash' ? cashAccountId : undefined,
         bank_account_id: (paymentMethod === 'bank_transfer' || paymentMethod === 'card') ? bankAccountId : undefined,
+        cash_bank_account_id: cashBankAccountId || undefined,
         reference: reference || undefined,
         notes: notes || undefined,
         allocations: processedAllocations
@@ -851,7 +861,23 @@ export const PaymentsPage: React.FC = () => {
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">طريقة الدفع والصرف *</label>
                 <select
                   value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                  onChange={(e) => {
+                    const newMethod = e.target.value as PaymentMethod;
+                    setPaymentMethod(newMethod);
+                    const neededType = newMethod === 'cash' ? 'cash' : 'bank';
+                    const matches = cashBankAccounts.filter(a => a.is_active && a.type === neededType);
+                    const def = matches.find(a => a.is_default) || matches[0];
+                    setCashBankAccountId(def ? def.id : '');
+                    if (def) {
+                      if (def.type === 'cash') {
+                        setCashAccountId(def.account_id);
+                        setBankAccountId('');
+                      } else {
+                        setBankAccountId(def.account_id);
+                        setCashAccountId('');
+                      }
+                    }
+                  }}
                   required
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue"
                 >
@@ -862,39 +888,48 @@ export const PaymentsPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Cash account conditional Selector */}
-              {paymentMethod === 'cash' ? (
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">رقم حساب الصندوق النقدى *</label>
-                  <select
-                    value={cashAccountId}
-                    onChange={(e) => setCashAccountId(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
-                  >
-                    <option value="">— اختر حساب الصندوق —</option>
-                    {accounts.filter(a => a.classification === 'assets' && a.code.startsWith('1101')).map(a => (
-                      <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>
+              {/* Cash/Bank Accounts Selection */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  {paymentMethod === 'cash' ? 'حساب الصندوق المصدر *' : 'حساب البنك المصدر *'}
+                </label>
+                <select
+                  value={cashBankAccountId}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    setCashBankAccountId(selectedId);
+                    const foundAcc = cashBankAccounts.find(a => a.id === selectedId);
+                    if (foundAcc) {
+                      if (foundAcc.type === 'cash') {
+                        setCashAccountId(foundAcc.account_id);
+                        setBankAccountId('');
+                      } else {
+                        setBankAccountId(foundAcc.account_id);
+                        setCashAccountId('');
+                      }
+                    } else {
+                      setCashAccountId('');
+                      setBankAccountId('');
+                    }
+                  }}
+                  required
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue"
+                >
+                  <option value="">
+                    {paymentMethod === 'cash' ? '— اختر الصندوق —' : '— اختر البنك —'}
+                  </option>
+                  {cashBankAccounts
+                    .filter(a =>
+                      a.is_active &&
+                      (paymentMethod === 'cash' ? a.type === 'cash' : a.type === 'bank')
+                    )
+                    .map(acc => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.current_balance?.toLocaleString('en-US', { minimumFractionDigits: 2 })} {acc.currency_code})
+                      </option>
                     ))}
-                  </select>
-                </div>
-              ) : (
-                /* Bank Account conditional selector */
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">رقم حساب البنوك والأموال *</label>
-                  <select
-                    value={bankAccountId}
-                    onChange={(e) => setBankAccountId(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
-                  >
-                    <option value="">— اختر حساب البنك —</option>
-                    {accounts.filter(a => a.classification === 'assets' && a.code.startsWith('1102')).map(a => (
-                      <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+                </select>
+              </div>
 
               {/* Reference */}
               <div>
@@ -1099,6 +1134,11 @@ export const PaymentsPage: React.FC = () => {
                 <div>
                   <span className="text-slate-400 block mb-1">طريقة الصرف</span>
                   <span className="font-bold text-slate-800">{getMethodText(selectedPayment.payment_method)}</span>
+                  {selectedPayment.cash_bank_account_id && (
+                    <span className="block text-[10px] text-blue-600 font-bold mt-1">
+                      {cashBankAccounts.find(a => a.id === selectedPayment.cash_bank_account_id)?.name || 'تحميل الحساب...'}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className="text-slate-400 block mb-1">الرقم المرجعي / الحوالة</span>

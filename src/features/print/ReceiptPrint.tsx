@@ -5,6 +5,7 @@ import { salesService } from '../../lib/salesService';
 import { Receipt } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatNumberWithLatinDigits } from '../../lib/formatters';
+import { getCountryProfile } from '../../lib/countryProfiles';
 import { PrintActions } from './PrintActions';
 import { PrintHeader } from './PrintHeader';
 import { PrintFooter } from './PrintFooter';
@@ -83,6 +84,7 @@ export const ReceiptPrint: React.FC = () => {
 
   const customer = receipt.customer;
   const allocations = receipt.allocations || [];
+  const profile = getCountryProfile(currentOrg?.country_code);
 
   return (
     <div className="bg-slate-100 min-h-screen">
@@ -116,6 +118,9 @@ export const ReceiptPrint: React.FC = () => {
           </div>
           <div className="text-left font-sans text-xs space-y-1 text-slate-300" style={{ direction: 'rtl' }}>
             <div><span className="text-slate-450 font-bold ml-1.5">طريقة القبض:</span> {translateMethod(receipt.payment_method)}</div>
+            {receipt.cash_bank_account && (
+              <div><span className="text-slate-450 font-bold ml-1.5">الحساب المستلم:</span> {receipt.cash_bank_account.name}</div>
+            )}
             {receipt.reference && (
               <div><span className="text-slate-450 font-bold ml-1.5">رقم المرجع:</span> <span className="font-mono">{receipt.reference}</span></div>
             )}
@@ -134,7 +139,7 @@ export const ReceiptPrint: React.FC = () => {
             </div>
             <div className="text-xs text-slate-600 pl-4 space-y-0.5 leading-relaxed font-mono">
               {customer?.tax_number && (
-                <div><span className="font-bold text-slate-500 font-sans">الرقم الضريبي العميل: </span> {customer.tax_number}</div>
+                <div><span className="font-bold text-slate-500 font-sans">{profile.vatLabel} للعميل: </span> {customer.tax_number}</div>
               )}
               {customer?.phone && (
                 <div><span className="font-bold text-slate-500 font-sans">الجوال: </span> {customer.phone}</div>
