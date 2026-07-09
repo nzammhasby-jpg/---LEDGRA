@@ -287,6 +287,37 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger, 
     }
   };
 
+  // Verify and complete Chart Of Accounts
+  const handleVerifyAndCompleteCOA = async () => {
+    if (!currentOrg) return;
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const industryType = currentOrg.activity_type || 'general_trading';
+      const res = await accountingService.ensureDefaultChartOfAccounts(currentOrg.id, industryType);
+      
+      if (res && res.status === 'already_initialized') {
+        setSuccess('شجرة الحسابات موجودة بالفعل ولا تحتاج إلى إنشاء جديد.');
+      } else if (res && res.status === 'success') {
+        const count = res.inserted_accounts || 0;
+        if (count > 0) {
+          setSuccess(`تم فحص دليل الحسابات واستكمال الحسابات الناقصة بنجاح (تم إنشاء ${count} حساب جديد).`);
+        } else {
+          setSuccess('شجرة الحسابات موجودة بالفعل ولا تحتاج إلى إنشاء جديد.');
+        }
+      } else {
+        setSuccess('شجرة الحسابات موجودة بالفعل ولا تحتاج إلى إنشاء جديد.');
+      }
+      await loadAccounts();
+    } catch (err: any) {
+      console.error('Error verifying and completing COA:', err);
+      setError(err.message || 'فشلت عملية فحص واستكمال شجرة الحسابات.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Convert flat array into nested tree structured list
   const accountTree = useMemo(() => {
     const map: { [id: string]: Account & { children: Account[] } } = {};
@@ -968,6 +999,17 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger, 
               >
                 <Lock className="w-4 h-4 text-brand-blue" />
                 <span>ربط الحسابات الافتراضية</span>
+              </button>
+            )}
+
+            {canManage && (
+              <button 
+                onClick={handleVerifyAndCompleteCOA}
+                className="text-xs bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 text-slate-600 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer font-sans w-1/2 sm:w-auto justify-center"
+                title="فحص واستكمال شجرة الحسابات"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>فحص واستكمال شجرة الحسابات</span>
               </button>
             )}
           </div>
