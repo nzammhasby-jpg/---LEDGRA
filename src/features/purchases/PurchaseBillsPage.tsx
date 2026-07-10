@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { purchaseService, CreatePurchaseBillInput } from '../../lib/purchaseService';
 import { masterDataService } from '../../lib/masterDataService';
@@ -44,6 +45,7 @@ import {
 
 export const PurchaseBillsPage: React.FC = () => {
   const { currentOrg, roleInCurrentOrg, profile } = useAuth();
+  const navigate = useNavigate();
   
   // Checking permissions: Owner, admin, accountant can approve/cancel; viewers cannot edit.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
@@ -1205,6 +1207,17 @@ export const PurchaseBillsPage: React.FC = () => {
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>نسخة تصحيحية</span>
+                </button>
+              )}
+
+              {/* Return Bill (Debit Note) button if approved and not sales role */}
+              {selectedBill.status === 'approved' && roleInCurrentOrg !== 'sales' && (
+                <button
+                  onClick={() => navigate(`/purchases/debit-notes?billId=${selectedBill.id}`)}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>إرجاع مشتريات (إشعار مدين)</span>
                 </button>
               )}
               

@@ -475,6 +475,53 @@ export interface SalesCreditNoteLine {
   item?: Item;
 }
 
+export type PurchaseDebitNoteStatus = 'draft' | 'approved' | 'cancelled';
+
+export interface PurchaseDebitNote {
+  id: string;
+  organization_id: string;
+  original_bill_id: string;
+  vendor_id: string;
+  debit_note_number: string;
+  debit_note_date: string;
+  status: PurchaseDebitNoteStatus;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  currency_code: string;
+  reason: string | null;
+  notes: string | null;
+  journal_entry_id: string | null;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  vendor?: Vendor;
+  original_bill?: PurchaseBill;
+  lines?: PurchaseDebitNoteLine[];
+}
+
+export interface PurchaseDebitNoteLine {
+  id: string;
+  organization_id: string;
+  debit_note_id: string;
+  original_bill_line_id: string;
+  item_id: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  created_at: string;
+  item?: Item;
+}
+
 
 
 // ==========================================

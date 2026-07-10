@@ -5,7 +5,8 @@ import {
   PaymentStatus, 
   Payment, 
   PaymentMethod,
-  PaymentStatusType
+  PaymentStatusType,
+  PurchaseDebitNote
 } from '../types';
 
 export interface CreatePurchaseBillInput {
@@ -216,6 +217,82 @@ export const purchaseService = {
     const { data, error } = await supabase.rpc('cancel_payment', {
       p_org_id: orgId,
       p_payment_id: paymentId,
+    });
+
+    if (error) throw error;
+    return data as string;
+  },
+
+  // ==========================================
+  // Purchase Debit Notes (إشعارات المشتريات المدينة)
+  // ==========================================
+  async getPurchaseDebitNotes(orgId: string): Promise<PurchaseDebitNote[]> {
+    const { data, error } = await supabase
+      .from('purchase_debit_notes')
+      .select('*, vendor:vendors(*)')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []) as PurchaseDebitNote[];
+  },
+
+  async getPurchaseDebitNote(orgId: string, debitNoteId: string): Promise<PurchaseDebitNote> {
+    const { data, error } = await supabase
+      .from('purchase_debit_notes')
+      .select('*, vendor:vendors(*), original_bill:purchase_bills(*), lines:purchase_debit_note_lines(*, item:items(*))')
+      .eq('organization_id', orgId)
+      .eq('id', debitNoteId)
+      .single();
+
+    if (error) throw error;
+    return data as PurchaseDebitNote;
+  },
+
+  async createPurchaseDebitNote(
+    orgId: string,
+    input: { original_bill_id: string; debit_note_date: string; reason?: string; notes?: string }
+  ): Promise<string> {
+    const { data, error } = await supabase.rpc('create_purchase_debit_note', {
+      p_organization_id: orgId,
+      p_original_bill_id: input.original_bill_id,
+      p_debit_note_date: input.debit_note_date,
+      p_reason: input.reason || null,
+      p_notes: input.notes || null,
+    });
+
+    if (error) throw error;
+    return data as string;
+  },
+
+  async addPurchaseDebitNoteLine(
+    debitNoteId: string,
+    originalBillLineId: string,
+    quantity: number
+  ): Promise<string> {
+    const { data, error } = await supabase.rpc('add_purchase_debit_note_line', {
+      p_debit_note_id: debitNoteId,
+      p_original_bill_line_id: originalBillLineId,
+      p_quantity: quantity,
+    });
+
+    if (error) throw error;
+    return data as string;
+  },
+
+  async approvePurchaseDebitNote(debitNoteId: string): Promise<string> {
+    const { data, error } = await supabase.rpc('approve_purchase_debit_note', {
+      p_debit_note_id: debitNoteId,
+    });
+
+    if (error) throw error;
+    return data as string;
+  },
+
+  async cancelPurchaseDebitNote(debitNoteId: string, reason: string): Promise<string> {
+    const { data, error } = await supabase.rpc('cancel_purchase_debit_note', {
+      p_debit_note_id: debitNoteId,
+      p_reason: reason,
     });
 
     if (error) throw error;

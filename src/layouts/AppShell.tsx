@@ -115,6 +115,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     if (location.pathname.startsWith('/purchases/payments')) {
       return 'سندات الصرف';
     }
+    if (location.pathname.startsWith('/purchases/debit-notes')) {
+      return 'الإشعارات المدينة للموردين';
+    }
     if (location.pathname.startsWith('/inventory/balances')) {
       return 'رصيد المخزون';
     }
@@ -153,6 +156,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { name: 'سندات القبض', path: '/sales/receipts', icon: ArrowRightLeft, isSoon: false },
     { name: 'فواتير المشتريات', path: '/purchases/bills', icon: ShoppingCart, isSoon: false },
     { name: 'سندات الصرف', path: '/purchases/payments', icon: CreditCard, isSoon: false },
+    ...(roleInCurrentOrg !== 'sales' ? [
+      { name: 'الإشعارات المدينة', path: '/purchases/debit-notes', icon: FileMinus, isSoon: false }
+    ] : []),
     { name: t('sidebar.items'), path: '/items', icon: FileText, isSoon: false },
     { name: 'رصيد المخزون', path: '/inventory/balances', icon: Package, isSoon: false },
     { name: t('sidebar.customers'), path: '/customers', icon: Users, isSoon: false },
