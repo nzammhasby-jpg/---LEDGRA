@@ -54,6 +54,10 @@ export const PurchaseBillsPage: React.FC = () => {
 
   // Data State
   const [bills, setBills] = useState<PurchaseBill[]>([]);
+  const [showDeleted, setShowDeleted] = useState<boolean>(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteReason, setDeleteReason] = useState<string>('');
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -99,14 +103,14 @@ export const PurchaseBillsPage: React.FC = () => {
     if (currentOrg?.id) {
       loadData();
     }
-  }, [currentOrg?.id]);
+  }, [currentOrg?.id, showDeleted]);
 
   const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
       const [allBills, allVendors, allItems, allAccounts, taxSettings] = await Promise.all([
-        purchaseService.getPurchaseBills(currentOrg!.id),
+        purchaseService.getPurchaseBills(currentOrg!.id, { showDeleted }),
         masterDataService.getVendors(currentOrg!.id),
         masterDataService.getItems(currentOrg!.id),
         accountingService.getAccounts(currentOrg!.id),
@@ -457,14 +461,26 @@ export const PurchaseBillsPage: React.FC = () => {
 
   // Secure Action: Delete Draft Bill
   const handleDeleteBill = async (billId: string) => {
-    if (!window.confirm('هل تريد حذف مسودة الفاتورة نهائياً؟')) return;
-    setActionLoading(billId);
+    setDeletingId(billId);
+    setDeleteReason('');
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmSoftDelete = async () => {
+    if (!deletingId) return;
+    if (!deleteReason.trim()) {
+      alert('يرجى إدخال سبب الحذف نظامياً.');
+      return;
+    }
+    setActionLoading('delete');
     setError(null);
     try {
-      await purchaseService.deleteDraftPurchaseBill(currentOrg!.id, billId);
+      await purchaseService.softDeletePurchaseBill(deletingId, deleteReason);
       setViewState('list');
       setSelectedBill(null);
       loadData();
+      setDeleteConfirmOpen(false);
+      setDeletingId(null);
     } catch (err: any) {
       setError(getErrorMessage(err));
     } finally {
@@ -624,6 +640,19 @@ export const PurchaseBillsPage: React.FC = () => {
                 <option value="paid">مدفوعة بالكامل</option>
               </select>
             </div>
+
+            {/* Show Deleted filter toggle for Owner/Admin/Accountant */}
+            {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
+              <label className="flex items-center gap-1.5 shrink-0 text-xs font-semibold text-slate-750 cursor-pointer select-none bg-white px-3 py-2 rounded-xl border border-slate-200">
+                <input
+                  type="checkbox"
+                  checked={showDeleted}
+                  onChange={(e) => setShowDeleted(e.target.checked)}
+                  className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue w-3.5 h-3.5 cursor-pointer"
+                />
+                <span>إظهار المحذوفة</span>
+              </label>
+            )}
           </div>
 
           {/* Table Container */}
@@ -1448,6 +1477,63 @@ export const PurchaseBillsPage: React.FC = () => {
 
           </div>
 
+        </div>
+      )}
+
+      {/* Soft Delete Reason Modal */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" id="soft-delete-modal-purchase-bills">
+          <div className="w-full max-w-md bg-white border border-slate-100 p-6 rounded-3xl shadow-2xl space-y-5 animate-fade-in text-right" style={{ direction: 'rtl' }}>
+            <div className="flex items-start gap-3">
+              <div className="bg-amber-50 p-2.5 rounded-2xl text-amber-600 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900">نقل المستند المالي إلى سلة المحذوفات</h3>
+                <p className="text-xs text-slate-400">
+                  سيتم تعليق هذا المستند المالي ونقله إلى سلة المحذوفات بشكل آمن لضمان سلامة المحاسبة والقيود.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500">سبب الحذف أو الاستبعاد *</label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="يرجى كتابة سبب تفصيلي واضح لنقل هذا المستند إلى المحذوفات..."
+                rows={3}
+                className="w-full p-3 bg-slate-50 border border-slate-200 focus:outline-none focus:border-brand-blue rounded-xl text-xs font-semibold text-slate-700 font-sans"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleConfirmSoftDelete}
+                disabled={actionLoading !== null || !deleteReason.trim()}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-extrabold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition shadow-md"
+              >
+                {actionLoading !== null ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                <span>نقل للمحذوفات</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmOpen(false);
+                  setDeletingId(null);
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition border border-slate-200"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

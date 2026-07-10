@@ -12,6 +12,7 @@ import { Onboarding } from './features/onboarding/Onboarding';
 import { Dashboard } from './features/dashboard/Dashboard';
 import { Settings } from './features/settings/Settings';
 import { AccountingLayout } from './features/accounting/AccountingLayout';
+import { TrashPage } from './features/accounting/TrashPage';
 import { QATestingPage } from './features/accounting/QATestingPage';
 import { CustomersPage } from './features/customers/CustomersPage';
 import { VendorsPage } from './features/vendors/VendorsPage';
@@ -459,6 +460,7 @@ export default function App() {
             <Route path="/banking" element={<BankingPage />} />
             <Route path="/banking/transfers" element={<CashBankTransfersPage />} />
             <Route path="/accounting" element={<AccountingLayout />} />
+            <Route path="/trash" element={<TrashPage />} />
             <Route path="/qa-testing" element={<QATestingPage />} />
             <Route path="/reports" element={<ReportsLayout />} />
             <Route path="/reports-soon" element={<SoonModule />} />

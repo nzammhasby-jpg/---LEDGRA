@@ -56,6 +56,10 @@ export const CreditNotesPage: React.FC = () => {
   // Search/Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showDeleted, setShowDeleted] = useState<boolean>(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteReason, setDeleteReason] = useState<string>('');
 
   // Loading triggers
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
@@ -66,7 +70,7 @@ export const CreditNotesPage: React.FC = () => {
     if (currentOrg?.id) {
       loadData();
     }
-  }, [currentOrg?.id]);
+  }, [currentOrg?.id, showDeleted]);
 
   // Check query params if navigated from an invoice
   useEffect(() => {
@@ -84,7 +88,7 @@ export const CreditNotesPage: React.FC = () => {
     setError(null);
     try {
       const [notesData, invoicesData] = await Promise.all([
-        salesService.getCreditNotes(currentOrg!.id),
+        salesService.getCreditNotes(currentOrg!.id, { showDeleted }),
         salesService.getSalesInvoices(currentOrg!.id)
       ]);
       setCreditNotes(notesData);
@@ -231,6 +235,38 @@ export const CreditNotesPage: React.FC = () => {
     }
   };
 
+  const handleDeleteDraftCreditNote = (id: string) => {
+    setDeletingId(id);
+    setDeleteReason('');
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmSoftDelete = async () => {
+    if (!deletingId) return;
+    if (!deleteReason.trim()) {
+      alert('يرجى إدخال سبب الحذف نظامياً.');
+      return;
+    }
+    setActionLoading('delete');
+    setError(null);
+    try {
+      await salesService.softDeleteSalesCreditNote(deletingId, deleteReason);
+      
+      if (selectedNote && selectedNote.id === deletingId) {
+        setSelectedNote(null);
+        setViewState('list');
+      }
+
+      loadData();
+      setDeleteConfirmOpen(false);
+      setDeletingId(null);
+    } catch (err: any) {
+      setError(getErrorMessage(err));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleSelectInvoiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const invId = e.target.value;
     const inv = approvedInvoices.find(i => i.id === invId);
@@ -320,6 +356,19 @@ export const CreditNotesPage: React.FC = () => {
                 <option value="approved">معتمد</option>
                 <option value="cancelled">ملغى</option>
               </select>
+
+              {/* Show Deleted filter toggle for Owner/Admin/Accountant */}
+              {(roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant') && (
+                <label className="flex items-center gap-1.5 shrink-0 text-xs font-semibold text-slate-750 cursor-pointer select-none bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={showDeleted}
+                    onChange={(e) => setShowDeleted(e.target.checked)}
+                    className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>إظهار المحذوفة</span>
+                </label>
+              )}
             </div>
           </div>
 
@@ -402,6 +451,17 @@ export const CreditNotesPage: React.FC = () => {
                             >
                               <Printer className="w-4 h-4" />
                             </button>
+
+                            {cn.status === 'draft' && (
+                              <button
+                                onClick={() => handleDeleteDraftCreditNote(cn.id)}
+                                className="p-1 px-2 text-red-600 hover:bg-red-50 rounded transition text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                                title="نقل إلى سلة المحذوفات"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>حذف</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -757,6 +817,64 @@ export const CreditNotesPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Soft Delete Reason Modal */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4" id="soft-delete-modal-credit-notes">
+          <div className="w-full max-w-md bg-white border border-slate-100 p-6 rounded-3xl shadow-2xl space-y-5 animate-fade-in text-right" style={{ direction: 'rtl' }}>
+            <div className="flex items-start gap-3">
+              <div className="bg-amber-50 p-2.5 rounded-2xl text-amber-600 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900">نقل المستند المالي إلى سلة المحذوفات</h3>
+                <p className="text-xs text-slate-400">
+                  سيتم تعليق هذا المستند المالي ونقله إلى سلة المحذوفات بشكل آمن لضمان سلامة المحاسبة والقيود.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-500">سبب الحذف أو الاستبعاد *</label>
+              <textarea
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="يرجى كتابة سبب تفصيلي واضح لنقل هذا المستند إلى المحذوفات..."
+                rows={3}
+                className="w-full p-3 bg-slate-50 border border-slate-200 focus:outline-none focus:border-brand-blue rounded-xl text-xs font-semibold text-slate-700 font-sans"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleConfirmSoftDelete}
+                disabled={actionLoading !== null || !deleteReason.trim()}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-extrabold rounded-xl text-xs flex items-center gap-1 cursor-pointer transition shadow-md"
+              >
+                {actionLoading !== null ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                <span>نقل للمحذوفات</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmOpen(false);
+                  setDeletingId(null);
+                }}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer transition border border-slate-200"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

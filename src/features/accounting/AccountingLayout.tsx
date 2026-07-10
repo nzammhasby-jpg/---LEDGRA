@@ -5,13 +5,14 @@ import { AccountingSettings } from './AccountingSettings';
 import { JournalEntries } from './JournalEntries';
 import { LedgerReport } from './LedgerReport';
 import { TrialBalance } from './TrialBalance';
+import { OpeningBalancesWizard } from './OpeningBalancesWizard';
 import { useTranslation } from '../../i18n/translations';
-import { FolderTree, Calendar, Sparkles, Settings, FileText, BookOpen, Activity, Lock, AlertCircle } from 'lucide-react';
+import { FolderTree, Calendar, Sparkles, Settings, FileText, BookOpen, Activity, Lock, AlertCircle, Coins } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const AccountingLayout: React.FC = () => {
   const { roleInCurrentOrg } = useAuth();
-  const [activeTab, setActiveTab] = useState<'chart' | 'fiscal' | 'settings' | 'journal' | 'ledger' | 'trial'>('journal');
+  const [activeTab, setActiveTab] = useState<'chart' | 'fiscal' | 'settings' | 'journal' | 'ledger' | 'trial' | 'opening_balances'>('journal');
   const [preselectedAccountId, setPreselectedAccountId] = useState<string | null>(null);
   const { t } = useTranslation('ar');
 
@@ -111,6 +112,18 @@ export const AccountingLayout: React.FC = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('opening_balances')}
+          className={`py-3 px-4.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap outline-none ${
+            activeTab === 'opening_balances'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Coins className="w-4 h-4 shrink-0 text-amber-500" />
+          <span>الأرصدة الافتتاحية والتهيئة (Opening Balances)</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('settings')}
           className={`py-3 px-4.5 text-xs font-extrabold border-b-2 flex items-center gap-2 transition cursor-pointer whitespace-nowrap outline-none ${
             activeTab === 'settings'
@@ -144,6 +157,8 @@ export const AccountingLayout: React.FC = () => {
           />
         ) : activeTab === 'trial' ? (
           <TrialBalance />
+        ) : activeTab === 'opening_balances' ? (
+          <OpeningBalancesWizard />
         ) : (
           <AccountingSettings />
         )}

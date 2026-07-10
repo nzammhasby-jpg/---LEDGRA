@@ -38,7 +38,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   MessageCircle,
-  Landmark
+  Landmark,
+  Trash2
 } from 'lucide-react';
 
 interface AppShellProps {
@@ -143,6 +144,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         return 'إدارة الموردين والشركاء';
       case '/items':
         return 'المنتجات والخدمات';
+      case '/trash':
+        return 'سلة المحذوفات الآمنة';
       default:
         return 'لوحة التحكم';
     }
@@ -168,6 +171,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       { name: 'التحويلات الداخلية', path: '/banking/transfers', icon: ArrowRightLeft, isSoon: false }
     ] : []),
     { name: t('sidebar.accounting'), path: '/accounting', icon: FileSpreadsheet, isSoon: false },
+    { name: 'سلة المحذوفات', path: '/trash', icon: Trash2, isSoon: false },
     { name: t('sidebar.reports'), path: '/reports', icon: SlidersHorizontal, isSoon: false },
     { name: t('sidebar.settings'), path: '/settings', icon: Settings, isSoon: false }
   ];

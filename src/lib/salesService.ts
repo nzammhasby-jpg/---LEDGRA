@@ -45,12 +45,19 @@ export const salesService = {
   // ==========================================
   // Sales Invoices (فواتير المبيعات)
   // ==========================================
-  async getSalesInvoices(orgId: string): Promise<SalesInvoice[]> {
-    const { data, error } = await supabase
+  async getSalesInvoices(orgId: string, options?: { showDeleted?: boolean; onlyDeleted?: boolean }): Promise<SalesInvoice[]> {
+    let query = supabase
       .from('sales_invoices')
       .select('*, customer:customers(*)')
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: false });
+      .eq('organization_id', orgId);
+
+    if (options?.onlyDeleted) {
+      query = query.not('deleted_at', 'is', null);
+    } else if (!options?.showDeleted) {
+      query = query.is('deleted_at', null);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data || []) as SalesInvoice[];
@@ -105,6 +112,21 @@ export const salesService = {
     if (error) throw error;
   },
 
+  async softDeleteSalesInvoice(invoiceId: string, reason: string): Promise<void> {
+    const { error } = await supabase.rpc('soft_delete_sales_invoice', {
+      p_invoice_id: invoiceId,
+      p_reason: reason,
+    });
+    if (error) throw error;
+  },
+
+  async restoreSalesInvoice(invoiceId: string): Promise<void> {
+    const { error } = await supabase.rpc('restore_sales_invoice', {
+      p_invoice_id: invoiceId,
+    });
+    if (error) throw error;
+  },
+
   async approveSalesInvoice(orgId: string, invoiceId: string): Promise<string> {
     const { data, error } = await supabase.rpc('approve_sales_invoice', {
       p_org_id: orgId,
@@ -129,12 +151,19 @@ export const salesService = {
   // ==========================================
   // Receipts (سندات القبض)
   // ==========================================
-  async getReceipts(orgId: string): Promise<Receipt[]> {
-    const { data, error } = await supabase
+  async getReceipts(orgId: string, options?: { showDeleted?: boolean; onlyDeleted?: boolean }): Promise<Receipt[]> {
+    let query = supabase
       .from('receipts')
       .select('*, customer:customers(*), cash_bank_account:cash_bank_accounts(*)')
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: false });
+      .eq('organization_id', orgId);
+
+    if (options?.onlyDeleted) {
+      query = query.not('deleted_at', 'is', null);
+    } else if (!options?.showDeleted) {
+      query = query.is('deleted_at', null);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data || []) as Receipt[];
@@ -199,6 +228,21 @@ export const salesService = {
     if (error) throw error;
   },
 
+  async softDeleteReceipt(receiptId: string, reason: string): Promise<void> {
+    const { error } = await supabase.rpc('soft_delete_receipt', {
+      p_receipt_id: receiptId,
+      p_reason: reason,
+    });
+    if (error) throw error;
+  },
+
+  async restoreReceipt(receiptId: string): Promise<void> {
+    const { error } = await supabase.rpc('restore_receipt', {
+      p_receipt_id: receiptId,
+    });
+    if (error) throw error;
+  },
+
   async approveReceipt(orgId: string, receiptId: string): Promise<string> {
     const { data, error } = await supabase.rpc('approve_receipt', {
       p_org_id: orgId,
@@ -222,12 +266,19 @@ export const salesService = {
   // ==========================================
   // Sales Credit Notes (إشعارات المبيعات الدائنة)
   // ==========================================
-  async getCreditNotes(orgId: string): Promise<SalesCreditNote[]> {
-    const { data, error } = await supabase
+  async getCreditNotes(orgId: string, options?: { showDeleted?: boolean; onlyDeleted?: boolean }): Promise<SalesCreditNote[]> {
+    let query = supabase
       .from('sales_credit_notes')
       .select('*, customer:customers(*), original_invoice:sales_invoices(*)')
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: false });
+      .eq('organization_id', orgId);
+
+    if (options?.onlyDeleted) {
+      query = query.not('deleted_at', 'is', null);
+    } else if (!options?.showDeleted) {
+      query = query.is('deleted_at', null);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data || []) as SalesCreditNote[];
@@ -296,5 +347,20 @@ export const salesService = {
 
     if (error) throw error;
     return data as string;
+  },
+
+  async softDeleteSalesCreditNote(creditNoteId: string, reason: string): Promise<void> {
+    const { error } = await supabase.rpc('soft_delete_sales_credit_note', {
+      p_credit_note_id: creditNoteId,
+      p_reason: reason,
+    });
+    if (error) throw error;
+  },
+
+  async restoreSalesCreditNote(creditNoteId: string): Promise<void> {
+    const { error } = await supabase.rpc('restore_sales_credit_note', {
+      p_credit_note_id: creditNoteId,
+    });
+    if (error) throw error;
   }
 };

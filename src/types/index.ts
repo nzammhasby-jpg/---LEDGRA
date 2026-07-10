@@ -363,6 +363,11 @@ export interface SalesInvoice {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+  restored_at?: string | null;
+  restored_by?: string | null;
   customer?: Customer;
   lines?: SalesInvoiceLine[];
 }
@@ -412,6 +417,11 @@ export interface Receipt {
   approved_by: string | null;
   cancelled_at: string | null;
   cancelled_by: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+  restored_at?: string | null;
+  restored_by?: string | null;
   customer?: Customer;
   allocations?: ReceiptAllocation[];
   cash_bank_account?: CashBankAccount;
@@ -453,6 +463,11 @@ export interface SalesCreditNote {
   cancel_reason: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+  restored_at?: string | null;
+  restored_by?: string | null;
   customer?: Customer;
   original_invoice?: SalesInvoice;
   lines?: SalesCreditNoteLine[];
@@ -500,6 +515,11 @@ export interface PurchaseDebitNote {
   cancel_reason: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+  restored_at?: string | null;
+  restored_by?: string | null;
   vendor?: Vendor;
   original_bill?: PurchaseBill;
   lines?: PurchaseDebitNoteLine[];
@@ -556,6 +576,11 @@ export interface PurchaseBill {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+  restored_at?: string | null;
+  restored_by?: string | null;
   vendor?: Vendor;
   lines?: PurchaseBillLine[];
 }
@@ -605,6 +630,11 @@ export interface Payment {
   approved_by: string | null;
   cancelled_at: string | null;
   cancelled_by: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+  restored_at?: string | null;
+  restored_by?: string | null;
   vendor?: Vendor;
   allocations?: PaymentAllocation[];
   cash_bank_account?: CashBankAccount;
