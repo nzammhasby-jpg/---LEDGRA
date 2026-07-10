@@ -427,6 +427,55 @@ export interface ReceiptAllocation {
   sales_invoice?: SalesInvoice;
 }
 
+export type SalesCreditNoteStatus = 'draft' | 'approved' | 'cancelled';
+
+export interface SalesCreditNote {
+  id: string;
+  organization_id: string;
+  original_invoice_id: string;
+  customer_id: string;
+  credit_note_number: string;
+  credit_note_date: string;
+  status: SalesCreditNoteStatus;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  currency_code: string;
+  reason: string | null;
+  notes: string | null;
+  journal_entry_id: string | null;
+  cogs_journal_entry_id: string | null;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  customer?: Customer;
+  original_invoice?: SalesInvoice;
+  lines?: SalesCreditNoteLine[];
+}
+
+export interface SalesCreditNoteLine {
+  id: string;
+  organization_id: string;
+  credit_note_id: string;
+  original_invoice_line_id: string;
+  item_id: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  created_at: string;
+  item?: Item;
+}
+
+
 
 // ==========================================
 // Phase 6: Purchase Bills and Payments (المشتريات والمدفوعات)

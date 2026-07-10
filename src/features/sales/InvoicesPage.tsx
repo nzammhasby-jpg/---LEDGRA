@@ -1006,6 +1006,18 @@ export const InvoicesPage: React.FC = () => {
                               </button>
                             )}
 
+                            {/* Credit Note option if approved */}
+                            {inv.status === 'approved' && (
+                              <button
+                                onClick={() => navigate(`/sales/credit-notes?invoiceId=${inv.id}`)}
+                                className="p-1 px-1.5 text-slate-800 bg-slate-100 hover:bg-slate-200 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                title="عمل إشعار دائن / إرجاع مبيعات"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>مرتجع مبيعات</span>
+                              </button>
+                            )}
+
                             {/* Delete Option if draft */}
                             {inv.status === 'draft' && (
                               <button
@@ -1369,7 +1381,7 @@ export const InvoicesPage: React.FC = () => {
                         <span className="font-bold text-slate-800 text-right">{selectedCustomerInfo.name}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400 font-medium">الرقم الضريبي العميل:</span>
+                        <span className="text-slate-400 font-medium">{getCountryProfile(currentOrg?.country_code).vatLabel} العميل:</span>
                         <span className="font-bold text-slate-800 font-mono text-[11px]">{selectedCustomerInfo.tax_number || 'غير متوفر'}</span>
                       </div>
                     </div>
@@ -1542,6 +1554,17 @@ export const InvoicesPage: React.FC = () => {
                 >
                   <Ban className="w-4 h-4" />
                   <span>إلغاء واعتماد القيد العكسي</span>
+                </button>
+              )}
+
+              {selectedInvoice.status === 'approved' && (
+                <button
+                  onClick={() => navigate(`/sales/credit-notes?invoiceId=${selectedInvoice.id}`)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                  style={{ backgroundColor: '#1E293B' }}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>إنشاء إشعار دائن (مرتجع مبيعات)</span>
                 </button>
               )}
 
@@ -2015,7 +2038,7 @@ export const InvoicesPage: React.FC = () => {
                 <p className="text-slate-500">رقم العميل: {selectedInvoice.customer?.code}</p>
                 <p className="text-slate-500">العنوان: {selectedInvoice.customer?.city || 'غير متوفر'}, {selectedInvoice.customer?.address || 'غير متوفر'}</p>
                 <p className="text-slate-500">الهاتف والجوال: {selectedInvoice.customer?.phone || selectedInvoice.customer?.mobile || 'غير متوفر'}</p>
-                <p className="text-slate-500">الرقم الضريبي المستفيد: {selectedInvoice.customer?.tax_number || 'لا يوجد'}</p>
+                <p className="text-slate-500">{getCountryProfile(currentOrg?.country_code).vatLabel} للعميل: {selectedInvoice.customer?.tax_number || 'لا يوجد'}</p>
               </div>
             </div>
 

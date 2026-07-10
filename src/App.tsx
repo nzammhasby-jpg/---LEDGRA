@@ -17,6 +17,7 @@ import { CustomersPage } from './features/customers/CustomersPage';
 import { VendorsPage } from './features/vendors/VendorsPage';
 import { ItemsPage } from './features/items/ItemsPage';
 import { InvoicesPage } from './features/sales/InvoicesPage';
+import { CreditNotesPage } from './features/sales/CreditNotesPage';
 import { ReceiptsPage } from './features/sales/ReceiptsPage';
 import { PurchaseBillsPage } from './features/purchases/PurchaseBillsPage';
 import { PaymentsPage } from './features/purchases/PaymentsPage';
@@ -45,6 +46,7 @@ import { BalanceSheetPrint } from './features/print/BalanceSheetPrint';
 import { InventoryReportPrint } from './features/print/InventoryReportPrint';
 import { JournalEntryPrint } from './features/print/JournalEntryPrint';
 import { GeneralLedgerPrint } from './features/print/GeneralLedgerPrint';
+import { SalesCreditNotePrint } from './features/print/SalesCreditNotePrint';
 
 
 // Beautiful configuration missing notice for development when secrets are not set
@@ -439,6 +441,7 @@ export default function App() {
             
             {/* Sales Invoices & Receipts Module */}
             <Route path="/sales/invoices" element={<InvoicesPage />} />
+            <Route path="/sales/credit-notes" element={<CreditNotesPage />} />
             <Route path="/sales/receipts" element={<ReceiptsPage />} />
             <Route path="/purchases/bills" element={<PurchaseBillsPage />} />
             <Route path="/purchases/payments" element={<PaymentsPage />} />
@@ -462,6 +465,7 @@ export default function App() {
           {/* Protected Financial A4 Clean Print Templates (Without Sidebar/Header AppShell) */}
           <Route element={<ProtectedPrintRoute />}>
             <Route path="/print/sales-invoice/:id" element={<SalesInvoicePrint />} />
+            <Route path="/print/sales-credit-note/:id" element={<SalesCreditNotePrint />} />
             <Route path="/print/receipt/:id" element={<ReceiptPrint />} />
             <Route path="/print/purchase-bill/:id" element={<PurchaseBillPrint />} />
             <Route path="/print/payment/:id" element={<PaymentPrint />} />

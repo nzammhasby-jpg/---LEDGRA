@@ -21,6 +21,7 @@ import {
   toEnglishDigits,
   normalizeDecimalInput
 } from '../../lib/formatters';
+import { getCountryProfile } from '../../lib/countryProfiles';
 import { 
   CreditCard, 
   Search, 
@@ -1264,7 +1265,7 @@ export const ReceiptsPage: React.FC = () => {
                 <span className="font-bold text-slate-400 block pb-1 text-right">العميل المُسدِّد:</span>
                 <p className="font-extrabold text-slate-800">{selectedReceipt.customer?.name}</p>
                 <p className="text-slate-500">رقم الكود: {selectedReceipt.customer?.code}</p>
-                <p className="text-slate-500">الرقم الضريبي المستفيد: {selectedReceipt.customer?.tax_number || 'غير متوفر'}</p>
+                <p className="text-slate-500">{getCountryProfile(currentOrg?.country_code).vatLabel} للعميل: {selectedReceipt.customer?.tax_number || 'غير متوفر'}</p>
               </div>
             </div>
 

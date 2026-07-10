@@ -6,12 +6,28 @@ import { JournalEntries } from './JournalEntries';
 import { LedgerReport } from './LedgerReport';
 import { TrialBalance } from './TrialBalance';
 import { useTranslation } from '../../i18n/translations';
-import { FolderTree, Calendar, Sparkles, Settings, FileText, BookOpen, Activity } from 'lucide-react';
+import { FolderTree, Calendar, Sparkles, Settings, FileText, BookOpen, Activity, Lock, AlertCircle } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export const AccountingLayout: React.FC = () => {
+  const { roleInCurrentOrg } = useAuth();
   const [activeTab, setActiveTab] = useState<'chart' | 'fiscal' | 'settings' | 'journal' | 'ledger' | 'trial'>('journal');
   const [preselectedAccountId, setPreselectedAccountId] = useState<string | null>(null);
   const { t } = useTranslation('ar');
+
+  if (roleInCurrentOrg === 'sales') {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-white border border-slate-100 rounded-3xl shadow-sm text-center max-w-2xl mx-auto my-12 space-y-4 font-sans" dir="rtl">
+        <div className="bg-rose-50 p-4 rounded-full border border-rose-100">
+          <Lock className="w-8 h-8 text-rose-500 animate-pulse" />
+        </div>
+        <h3 className="text-base font-black text-slate-800">صلاحيات غير كافية للدخول</h3>
+        <p className="text-xs text-slate-500 leading-relaxed max-w-md">
+          عذراً، صلاحياتك التشغيلية الحالية كـ <strong className="text-slate-700">مسؤول مبيعات (Sales Role)</strong> لا تسمح لك بالوصول إلى دفاتر اليومية العامة، شجرة الحسابات، أو إدارة الدورات والسنوات المالية للمنظمة. يرجى مراجعة مالك المنشأة لتعديل صلاحياتك.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 text-right font-sans" dir="rtl">

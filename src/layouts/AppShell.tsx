@@ -23,6 +23,7 @@ import {
   Bell, 
   Settings, 
   ChevronDown, 
+  FileMinus, 
   Menu, 
   X,
   Building,
@@ -99,6 +100,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     if (location.pathname.startsWith('/sales/invoices')) {
       return 'فواتير المبيعات';
     }
+    if (location.pathname.startsWith('/sales/credit-notes')) {
+      return 'الإشعارات الدائنة';
+    }
     if (location.pathname.startsWith('/reports')) {
       return 'التقارير المالية والتحليلات الجارية';
     }
@@ -145,6 +149,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const sidebarItems = [
     { name: t('sidebar.home'), path: '/', icon: Home, isSoon: false },
     { name: 'فواتير المبيعات', path: '/sales/invoices', icon: Tag, isSoon: false },
+    { name: 'الإشعارات الدائنة', path: '/sales/credit-notes', icon: FileMinus, isSoon: false },
     { name: 'سندات القبض', path: '/sales/receipts', icon: ArrowRightLeft, isSoon: false },
     { name: 'فواتير المشتريات', path: '/purchases/bills', icon: ShoppingCart, isSoon: false },
     { name: 'سندات الصرف', path: '/purchases/payments', icon: CreditCard, isSoon: false },

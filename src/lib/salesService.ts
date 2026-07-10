@@ -5,7 +5,8 @@ import {
   PaymentStatus, 
   Receipt, 
   PaymentMethod,
-  ReceiptStatus
+  ReceiptStatus,
+  SalesCreditNote
 } from '../types';
 
 export interface CreateInvoiceInput {
@@ -217,4 +218,83 @@ export const salesService = {
     if (error) throw error;
     return data as string;
   },
+
+  // ==========================================
+  // Sales Credit Notes (إشعارات المبيعات الدائنة)
+  // ==========================================
+  async getCreditNotes(orgId: string): Promise<SalesCreditNote[]> {
+    const { data, error } = await supabase
+      .from('sales_credit_notes')
+      .select('*, customer:customers(*), original_invoice:sales_invoices(*)')
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []) as SalesCreditNote[];
+  },
+
+  async getCreditNote(orgId: string, id: string): Promise<SalesCreditNote> {
+    const { data, error } = await supabase
+      .from('sales_credit_notes')
+      .select('*, customer:customers(*), original_invoice:sales_invoices(*), lines:sales_credit_note_lines(*, item:items(*))')
+      .eq('organization_id', orgId)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data as SalesCreditNote;
+  },
+
+  async createCreditNote(
+    orgId: string,
+    invoiceId: string,
+    date?: string,
+    reason?: string,
+    notes?: string
+  ): Promise<string> {
+    const { data, error } = await supabase.rpc('create_sales_credit_note', {
+      p_organization_id: orgId,
+      p_original_invoice_id: invoiceId,
+      p_credit_note_date: date || new Date().toISOString().split('T')[0],
+      p_reason: reason || null,
+      p_notes: notes || null
+    });
+
+    if (error) throw error;
+    return data as string;
+  },
+
+  async addCreditNoteLine(
+    creditNoteId: string,
+    invoiceLineId: string,
+    quantity: number
+  ): Promise<string> {
+    const { data, error } = await supabase.rpc('add_sales_credit_note_line', {
+      p_credit_note_id: creditNoteId,
+      p_original_invoice_line_id: invoiceLineId,
+      p_quantity: quantity
+    });
+
+    if (error) throw error;
+    return data as string;
+  },
+
+  async approveCreditNote(creditNoteId: string): Promise<string> {
+    const { data, error } = await supabase.rpc('approve_sales_credit_note', {
+      p_credit_note_id: creditNoteId
+    });
+
+    if (error) throw error;
+    return data as string;
+  },
+
+  async cancelCreditNote(creditNoteId: string, reason: string): Promise<string> {
+    const { data, error } = await supabase.rpc('cancel_sales_credit_note', {
+      p_credit_note_id: creditNoteId,
+      p_reason: reason
+    });
+
+    if (error) throw error;
+    return data as string;
+  }
 };

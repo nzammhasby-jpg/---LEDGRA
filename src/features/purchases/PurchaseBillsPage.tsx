@@ -12,7 +12,7 @@ import {
   AccountingSettings 
 } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
-import { getOrgDefaultTaxRate } from '../../lib/countryProfiles';
+import { getOrgDefaultTaxRate, getCountryProfile } from '../../lib/countryProfiles';
 import { 
   formatNumberWithLatinDigits, 
   formatArabicDateWithLatinDigits, 
@@ -1252,7 +1252,7 @@ export const PurchaseBillsPage: React.FC = () => {
                   <span className="font-bold text-slate-800">{selectedBill.vendor?.name}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block mb-1">الرقم الضريبي للمورد</span>
+                  <span className="text-slate-400 block mb-1">{getCountryProfile(currentOrg?.country_code).vatLabel} للمورد</span>
                   <span className="font-mono font-bold text-slate-800">{selectedBill.vendor?.vat_number || 'غير مسجل ضريبياً'}</span>
                 </div>
                 <div>
