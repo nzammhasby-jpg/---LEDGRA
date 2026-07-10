@@ -127,6 +127,13 @@ export const salesService = {
     if (error) throw error;
   },
 
+  async permanentlyDeleteSalesInvoice(invoiceId: string): Promise<void> {
+    const { error } = await supabase.rpc('permanently_delete_sales_invoice', {
+      p_invoice_id: invoiceId,
+    });
+    if (error) throw error;
+  },
+
   async approveSalesInvoice(orgId: string, invoiceId: string): Promise<string> {
     const { data, error } = await supabase.rpc('approve_sales_invoice', {
       p_org_id: orgId,
@@ -238,6 +245,13 @@ export const salesService = {
 
   async restoreReceipt(receiptId: string): Promise<void> {
     const { error } = await supabase.rpc('restore_receipt', {
+      p_receipt_id: receiptId,
+    });
+    if (error) throw error;
+  },
+
+  async permanentlyDeleteReceipt(receiptId: string): Promise<void> {
+    const { error } = await supabase.rpc('permanently_delete_receipt', {
       p_receipt_id: receiptId,
     });
     if (error) throw error;
@@ -359,6 +373,13 @@ export const salesService = {
 
   async restoreSalesCreditNote(creditNoteId: string): Promise<void> {
     const { error } = await supabase.rpc('restore_sales_credit_note', {
+      p_credit_note_id: creditNoteId,
+    });
+    if (error) throw error;
+  },
+
+  async permanentlyDeleteSalesCreditNote(creditNoteId: string): Promise<void> {
+    const { error } = await supabase.rpc('permanently_delete_sales_credit_note', {
       p_credit_note_id: creditNoteId,
     });
     if (error) throw error;

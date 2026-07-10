@@ -131,6 +131,13 @@ export const purchaseService = {
     if (error) throw error;
   },
 
+  async permanentlyDeletePurchaseBill(billId: string): Promise<void> {
+    const { error } = await supabase.rpc('permanently_delete_purchase_bill', {
+      p_bill_id: billId,
+    });
+    if (error) throw error;
+  },
+
   async approvePurchaseBill(orgId: string, billId: string): Promise<string> {
     const { data, error } = await supabase.rpc('approve_purchase_bill', {
       p_org_id: orgId,
@@ -242,6 +249,13 @@ export const purchaseService = {
 
   async restorePayment(paymentId: string): Promise<void> {
     const { error } = await supabase.rpc('restore_payment', {
+      p_payment_id: paymentId,
+    });
+    if (error) throw error;
+  },
+
+  async permanentlyDeletePayment(paymentId: string): Promise<void> {
+    const { error } = await supabase.rpc('permanently_delete_payment', {
       p_payment_id: paymentId,
     });
     if (error) throw error;
@@ -360,6 +374,13 @@ export const purchaseService = {
 
   async restorePurchaseDebitNote(debitNoteId: string): Promise<void> {
     const { error } = await supabase.rpc('restore_purchase_debit_note', {
+      p_debit_note_id: debitNoteId,
+    });
+    if (error) throw error;
+  },
+
+  async permanentlyDeletePurchaseDebitNote(debitNoteId: string): Promise<void> {
+    const { error } = await supabase.rpc('permanently_delete_purchase_debit_note', {
       p_debit_note_id: debitNoteId,
     });
     if (error) throw error;
