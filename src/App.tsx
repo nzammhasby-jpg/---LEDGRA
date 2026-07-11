@@ -25,6 +25,7 @@ import { PaymentsPage } from './features/purchases/PaymentsPage';
 import { DebitNotesPage } from './features/purchases/DebitNotesPage';
 import { InventoryBalancesPage } from './features/inventory/InventoryBalancesPage';
 import { InventoryMovementsPage } from './features/inventory/InventoryMovementsPage';
+import { InventoryAdjustmentsPage } from './features/inventory/InventoryAdjustmentsPage';
 import { ReportsLayout } from './features/reports/ReportsLayout';
 import { BankingPage } from './features/banking/BankingPage';
 import { CashBankTransfersPage } from './features/banking/CashBankTransfersPage';
@@ -50,6 +51,7 @@ import { JournalEntryPrint } from './features/print/JournalEntryPrint';
 import { GeneralLedgerPrint } from './features/print/GeneralLedgerPrint';
 import { SalesCreditNotePrint } from './features/print/SalesCreditNotePrint';
 import { PurchaseDebitNotePrint } from './features/print/PurchaseDebitNotePrint';
+import { InventoryAdjustmentPrint } from './features/print/InventoryAdjustmentPrint';
 
 
 // Beautiful configuration missing notice for development when secrets are not set
@@ -453,6 +455,7 @@ export default function App() {
             {/* Basic Inventory Module */}
             <Route path="/inventory/balances" element={<InventoryBalancesPage />} />
             <Route path="/inventory/movements" element={<InventoryMovementsPage />} />
+            <Route path="/inventory/adjustments" element={<InventoryAdjustmentsPage />} />
 
             <Route path="/items" element={<ItemsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
@@ -482,6 +485,7 @@ export default function App() {
             <Route path="/print/inventory-report" element={<InventoryReportPrint />} />
             <Route path="/print/journal-entry/:id" element={<JournalEntryPrint />} />
             <Route path="/print/general-ledger" element={<GeneralLedgerPrint />} />
+            <Route path="/print/inventory-adjustment/:id" element={<InventoryAdjustmentPrint />} />
           </Route>
 
           {/* Absolute Fallback Redirect */}

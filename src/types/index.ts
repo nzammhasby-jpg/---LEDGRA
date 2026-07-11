@@ -855,4 +855,48 @@ export interface CreateCashBankTransferInput {
   reference_number?: string | null;
 }
 
+// ==========================================
+// Phase 13: Inventory Adjustments & Stock Count
+// ==========================================
+export type InventoryAdjustmentType = 'increase' | 'decrease' | 'stock_count';
+export type InventoryAdjustmentStatus = 'draft' | 'approved' | 'cancelled';
+
+export interface InventoryAdjustment {
+  id: string;
+  organization_id: string;
+  adjustment_number: string;
+  adjustment_date: string;
+  adjustment_type: InventoryAdjustmentType;
+  reason: string;
+  status: InventoryAdjustmentStatus;
+  total_amount: number;
+  currency_code: string;
+  notes: string | null;
+  journal_entry_id: string | null;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  lines?: InventoryAdjustmentLine[];
+}
+
+export interface InventoryAdjustmentLine {
+  id: string;
+  adjustment_id: string;
+  item_id: string;
+  system_quantity: number;
+  actual_quantity: number | null;
+  adjustment_quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  notes: string | null;
+  created_at: string;
+  item?: Item;
+}
+
+
 
