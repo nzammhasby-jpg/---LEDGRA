@@ -268,6 +268,38 @@ export const reportsService = {
 
     if (error) throw error;
     return data as LedgerReportResult;
+  },
+
+  // ==========================================
+  // 10. CUSTOMER AGING REPORT (أعمار ذمم العملاء)
+  // ==========================================
+  async getCustomerAgingReport(
+    orgId: string,
+    asOfDate: string
+  ): Promise<CustomerAgingRow[]> {
+    const { data, error } = await supabase.rpc('get_customer_aging_report', {
+      p_organization_id: orgId,
+      p_as_of_date: asOfDate
+    });
+
+    if (error) throw error;
+    return (data || []) as CustomerAgingRow[];
+  },
+
+  // ==========================================
+  // 11. VENDOR AGING REPORT (أعمار ذمم الموردين)
+  // ==========================================
+  async getVendorAgingReport(
+    orgId: string,
+    asOfDate: string
+  ): Promise<VendorAgingRow[]> {
+    const { data, error } = await supabase.rpc('get_vendor_aging_report', {
+      p_organization_id: orgId,
+      p_as_of_date: asOfDate
+    });
+
+    if (error) throw error;
+    return (data || []) as VendorAgingRow[];
   }
 };
 
@@ -389,5 +421,39 @@ export interface TaxReportResult {
   net_tax_due: number;
   output_tax_movements: TaxMovement[];
   input_tax_movements: TaxMovement[];
+}
+
+export interface CustomerAgingRow {
+  customer_id: string;
+  customer_name: string;
+  customer_code: string;
+  total_due: number;
+  not_due: number;
+  bucket_0_30: number;
+  bucket_31_60: number;
+  bucket_61_90: number;
+  bucket_over_90: number;
+  last_invoice_number: string | null;
+  last_invoice_date: string | null;
+  last_receipt_number: string | null;
+  last_receipt_date: string | null;
+  currency_code: string;
+}
+
+export interface VendorAgingRow {
+  vendor_id: string;
+  vendor_name: string;
+  vendor_code: string;
+  total_due: number;
+  not_due: number;
+  bucket_0_30: number;
+  bucket_31_60: number;
+  bucket_61_90: number;
+  bucket_over_90: number;
+  last_bill_number: string | null;
+  last_bill_date: string | null;
+  last_payment_number: string | null;
+  last_payment_date: string | null;
+  currency_code: string;
 }
 

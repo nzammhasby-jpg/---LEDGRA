@@ -3,7 +3,9 @@ import { useAuth } from '../../context/AuthContext';
 import { IncomeStatementPage } from './IncomeStatementPage';
 import { BalanceSheetPage } from './BalanceSheetPage';
 import { CustomerStatementPage } from './CustomerStatementPage';
+import { CustomerAgingPage } from './CustomerAgingPage';
 import { VendorStatementPage } from './VendorStatementPage';
+import { VendorAgingPage } from './VendorAgingPage';
 import { InventoryReportPage } from './InventoryReportPage';
 import { TaxReportPage } from './TaxReportPage';
 import { TrialBalancePage } from './TrialBalancePage';
@@ -19,14 +21,18 @@ import {
   Lock,
   Percent,
   FolderTree,
-  ArrowRightLeft
+  ArrowRightLeft,
+  CalendarDays,
+  History
 } from 'lucide-react';
 
 type ReportTab = 
   | 'income_statement' 
   | 'balance_sheet' 
   | 'customer_statement' 
+  | 'customer_aging'
   | 'vendor_statement' 
+  | 'vendor_aging'
   | 'inventory_report' 
   | 'vat_tax_report'
   | 'trial_balance'
@@ -121,6 +127,23 @@ export const ReportsLayout: React.FC = () => {
           {isSales && <Lock className="w-3 h-3 text-slate-400 absolute left-1 top-2" />}
         </button>
 
+        {/* Customer Aging TAB */}
+        <button
+          onClick={() => !isSales && setActiveTab('customer_aging')}
+          disabled={isSales}
+          className={`py-3 px-4 text-xs font-extrabold border-b-2 flex items-center gap-2 transition whitespace-nowrap outline-none relative ${
+            isSales ? 'opacity-40 cursor-not-allowed text-slate-400' : 'cursor-pointer'
+          } ${
+            activeTab === 'customer_aging'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4 shrink-0" />
+          <span>أعمار ذمم العملاء (Customer Aging)</span>
+          {isSales && <Lock className="w-3 h-3 text-slate-400 absolute left-1 top-2" />}
+        </button>
+
         {/* Vendor Statement TAB */}
         <button
           onClick={() => !isSales && setActiveTab('vendor_statement')}
@@ -135,6 +158,23 @@ export const ReportsLayout: React.FC = () => {
         >
           <Truck className="w-4 h-4 shrink-0" />
           <span>كشف حساب مورد (Vendor Statement)</span>
+          {isSales && <Lock className="w-3 h-3 text-slate-400 absolute left-1 top-2" />}
+        </button>
+
+        {/* Vendor Aging TAB */}
+        <button
+          onClick={() => !isSales && setActiveTab('vendor_aging')}
+          disabled={isSales}
+          className={`py-3 px-4 text-xs font-extrabold border-b-2 flex items-center gap-2 transition whitespace-nowrap outline-none relative ${
+            isSales ? 'opacity-40 cursor-not-allowed text-slate-400' : 'cursor-pointer'
+          } ${
+            activeTab === 'vendor_aging'
+              ? 'border-brand-blue text-brand-blue'
+              : 'border-transparent text-slate-400 hover:text-slate-750'
+          }`}
+        >
+          <History className="w-4 h-4 shrink-0" />
+          <span>أعمار ذمم الموردين (Vendor Aging)</span>
           {isSales && <Lock className="w-3 h-3 text-slate-400 absolute left-1 top-2" />}
         </button>
 
@@ -214,8 +254,12 @@ export const ReportsLayout: React.FC = () => {
           <BalanceSheetPage />
         ) : activeTab === 'customer_statement' && !isSales ? (
           <CustomerStatementPage />
+        ) : activeTab === 'customer_aging' && !isSales ? (
+          <CustomerAgingPage />
         ) : activeTab === 'vendor_statement' && !isSales ? (
           <VendorStatementPage />
+        ) : activeTab === 'vendor_aging' && !isSales ? (
+          <VendorAgingPage />
         ) : activeTab === 'vat_tax_report' && !isSales ? (
           <TaxReportPage />
         ) : activeTab === 'trial_balance' && !isSales ? (

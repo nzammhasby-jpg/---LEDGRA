@@ -52,6 +52,8 @@ import { GeneralLedgerPrint } from './features/print/GeneralLedgerPrint';
 import { SalesCreditNotePrint } from './features/print/SalesCreditNotePrint';
 import { PurchaseDebitNotePrint } from './features/print/PurchaseDebitNotePrint';
 import { InventoryAdjustmentPrint } from './features/print/InventoryAdjustmentPrint';
+import { CustomerAgingPrint } from './features/print/CustomerAgingPrint';
+import { VendorAgingPrint } from './features/print/VendorAgingPrint';
 
 
 // Beautiful configuration missing notice for development when secrets are not set
@@ -486,6 +488,8 @@ export default function App() {
             <Route path="/print/journal-entry/:id" element={<JournalEntryPrint />} />
             <Route path="/print/general-ledger" element={<GeneralLedgerPrint />} />
             <Route path="/print/inventory-adjustment/:id" element={<InventoryAdjustmentPrint />} />
+            <Route path="/print/customer-aging" element={<CustomerAgingPrint />} />
+            <Route path="/print/vendor-aging" element={<VendorAgingPrint />} />
           </Route>
 
           {/* Absolute Fallback Redirect */}
