@@ -131,6 +131,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     if (location.pathname.startsWith('/banking/transfers')) {
       return 'التحويلات الداخلية بين الحسابات';
     }
+    if (location.pathname.startsWith('/banking/reconciliations')) {
+      return 'مطابقة الحسابات البنكية والصناديق';
+    }
     if (location.pathname.startsWith('/banking')) {
       return 'الحسابات البنكية والصناديق';
     }
@@ -172,7 +175,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     { name: t('sidebar.vendors'), path: '/vendors', icon: Truck, isSoon: false },
     ...(roleInCurrentOrg !== 'sales' ? [
       { name: 'الحسابات البنكية والصناديق', path: '/banking', icon: Landmark, isSoon: false },
-      { name: 'التحويلات الداخلية', path: '/banking/transfers', icon: ArrowRightLeft, isSoon: false }
+      { name: 'التحويلات الداخلية', path: '/banking/transfers', icon: ArrowRightLeft, isSoon: false },
+      { name: 'مطابقة الحسابات', path: '/banking/reconciliations', icon: CheckCircle, isSoon: false }
     ] : []),
     { name: t('sidebar.accounting'), path: '/accounting', icon: FileSpreadsheet, isSoon: false },
     { name: 'سلة المحذوفات', path: '/trash', icon: Trash2, isSoon: false },

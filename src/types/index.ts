@@ -898,5 +898,51 @@ export interface InventoryAdjustmentLine {
   item?: Item;
 }
 
+// ==========================================
+// Phase 14: Bank Reconciliation (مطابقة الحسابات البنكية)
+// ==========================================
+export type BankReconciliationStatus = 'draft' | 'completed' | 'cancelled';
+export type BankReconciliationSourceType = 'receipt' | 'payment' | 'transfer' | 'journal_entry';
+
+export interface BankReconciliation {
+  id: string;
+  organization_id: string;
+  cash_bank_account_id: string;
+  account_name: string;
+  account_type: 'cash' | 'bank';
+  currency_code?: string;
+  reconciliation_date: string;
+  book_balance: number;
+  statement_balance: number;
+  difference: number;
+  status: BankReconciliationStatus;
+  notes: string | null;
+  matched_count?: number;
+  unmatched_count?: number;
+  created_at: string;
+  created_by_name?: string | null;
+  completed_at?: string | null;
+  completed_by_name?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by_name?: string | null;
+  cancel_reason?: string | null;
+}
+
+export interface BankReconciliationLine {
+  id: string;
+  reconciliation_id: string;
+  source_type: BankReconciliationSourceType;
+  source_id: string;
+  transaction_date: string;
+  description: string;
+  debit_amount: number;
+  credit_amount: number;
+  amount: number;
+  is_matched: boolean;
+  matched_at: string | null;
+  notes: string | null;
+}
+
+
 
 

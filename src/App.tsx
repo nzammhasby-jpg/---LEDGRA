@@ -29,6 +29,7 @@ import { InventoryAdjustmentsPage } from './features/inventory/InventoryAdjustme
 import { ReportsLayout } from './features/reports/ReportsLayout';
 import { BankingPage } from './features/banking/BankingPage';
 import { CashBankTransfersPage } from './features/banking/CashBankTransfersPage';
+import { BankReconciliationsPage } from './features/banking/BankReconciliationsPage';
 import { SoonModule } from './components/SoonModule';
 import { HelpPanel } from './components/HelpPanel';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
@@ -54,6 +55,7 @@ import { PurchaseDebitNotePrint } from './features/print/PurchaseDebitNotePrint'
 import { InventoryAdjustmentPrint } from './features/print/InventoryAdjustmentPrint';
 import { CustomerAgingPrint } from './features/print/CustomerAgingPrint';
 import { VendorAgingPrint } from './features/print/VendorAgingPrint';
+import { BankReconciliationPrint } from './features/print/BankReconciliationPrint';
 
 
 // Beautiful configuration missing notice for development when secrets are not set
@@ -464,6 +466,7 @@ export default function App() {
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/banking" element={<BankingPage />} />
             <Route path="/banking/transfers" element={<CashBankTransfersPage />} />
+            <Route path="/banking/reconciliations" element={<BankReconciliationsPage />} />
             <Route path="/accounting" element={<AccountingLayout />} />
             <Route path="/trash" element={<TrashPage />} />
             <Route path="/qa-testing" element={<QATestingPage />} />
@@ -490,6 +493,7 @@ export default function App() {
             <Route path="/print/inventory-adjustment/:id" element={<InventoryAdjustmentPrint />} />
             <Route path="/print/customer-aging" element={<CustomerAgingPrint />} />
             <Route path="/print/vendor-aging" element={<VendorAgingPrint />} />
+            <Route path="/print/bank-reconciliation/:id" element={<BankReconciliationPrint />} />
           </Route>
 
           {/* Absolute Fallback Redirect */}
