@@ -82,11 +82,27 @@ export const BankingPage: React.FC = () => {
 
       setAccounts(bankAccounts);
 
-      // Filter Chart of Accounts: Assets classification, active, and allow_direct_posting
-      const validAssets = allLedgerAccounts.filter(
-        acc => acc.classification === 'assets' && acc.allow_direct_posting && acc.is_active
-      );
-      setLedgerAccounts(validAssets);
+      // Filter Chart of Accounts: Assets classification, active, allow_direct_posting,
+      // and prefer Cash & Bank or Cash Equivalents (النقدية وما في حكمها)
+      const validAssets = allLedgerAccounts.filter(acc => {
+        const isAsset = acc.classification === 'assets' && acc.allow_direct_posting && acc.is_active;
+        if (!isAsset) return false;
+
+        const nameLower = ((acc.name_ar || '') + ' ' + (acc.name_en || '')).toLowerCase();
+        const matchesKeyword = /صندوق|بنك|نقد|كاش|خزينة|خزنه|عهد|مصرف|جاري|تسوية|cash|bank|vault|petty/i.test(nameLower);
+
+        return matchesKeyword;
+      });
+
+      if (validAssets.length === 0) {
+        // Fallback to all direct-posting active asset accounts if no specific cash/bank keyword matches are found
+        const fallbackAssets = allLedgerAccounts.filter(
+          acc => acc.classification === 'assets' && acc.allow_direct_posting && acc.is_active
+        );
+        setLedgerAccounts(fallbackAssets);
+      } else {
+        setLedgerAccounts(validAssets);
+      }
     } catch (err: any) {
       setError(getErrorMessage(err));
     } finally {
@@ -208,6 +224,11 @@ export const BankingPage: React.FC = () => {
       return;
     }
 
+    if (!currentOrg?.id) {
+      setFormError('خطأ: لم يتم تحديد المنشأة الحالية.');
+      return;
+    }
+
     if (!name.trim()) {
       setFormError('يرجى إدخال اسم الحساب/الصندوق بالكامل.');
       return;
@@ -218,15 +239,24 @@ export const BankingPage: React.FC = () => {
       return;
     }
 
+    const opBal = typeof openingBalance === 'number' && !isNaN(openingBalance) ? openingBalance : 0;
+
+    let cleanBankName: string | null = null;
+    let cleanAccountNumber: string | null = null;
+    let cleanIban: string | null = null;
+
     if (type === 'bank') {
-      if (!bankName.trim()) {
+      if (!bankName || !bankName.trim()) {
         setFormError('يرجى إدخال اسم البنك.');
         return;
       }
-      if (!accountNumber.trim()) {
+      if (!accountNumber || !accountNumber.trim()) {
         setFormError('يرجى إدخال رقم الحساب البنكي.');
         return;
       }
+      cleanBankName = bankName.trim();
+      cleanAccountNumber = accountNumber.trim();
+      cleanIban = iban ? iban.replace(/\s+/g, '') : null;
     }
 
     setSaveLoading(true);
@@ -235,34 +265,50 @@ export const BankingPage: React.FC = () => {
     try {
       if (modalMode === 'create') {
         await bankingService.createCashBankAccount({
-          organization_id: currentOrg!.id,
+          organization_id: currentOrg.id,
           account_id: accountId,
           type,
-          name,
-          bank_name: type === 'bank' ? bankName : null,
-          iban: type === 'bank' ? iban : null,
-          account_number: type === 'bank' ? accountNumber : null,
-          opening_balance: openingBalance,
-          is_default: isDefault,
-          notes: notes || null
+          name: name.trim(),
+          bank_name: type === 'bank' ? cleanBankName : null,
+          iban: type === 'bank' ? cleanIban : null,
+          account_number: type === 'bank' ? cleanAccountNumber : null,
+          opening_balance: opBal,
+          is_default: !!isDefault,
+          notes: notes?.trim() || null
         });
       } else if (modalMode === 'edit' && editingAccount) {
         await bankingService.updateCashBankAccount({
           id: editingAccount.id,
-          name,
-          bank_name: type === 'bank' ? bankName : null,
-          iban: type === 'bank' ? iban : null,
-          account_number: type === 'bank' ? accountNumber : null,
-          is_default: isDefault,
-          notes: notes || null,
-          is_active: isActive
+          name: name.trim(),
+          bank_name: type === 'bank' ? cleanBankName : null,
+          iban: type === 'bank' ? cleanIban : null,
+          account_number: type === 'bank' ? cleanAccountNumber : null,
+          is_default: !!isDefault,
+          notes: notes?.trim() || null,
+          is_active: !!isActive
         });
       }
 
       setIsModalOpen(false);
       await loadData();
     } catch (err: any) {
-      setFormError(getErrorMessage(err));
+      const errMsg = err?.message || '';
+      let displayErrorMsg = errMsg;
+      if (err instanceof TypeError || errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('fetch')) {
+        displayErrorMsg = 'تعذر الاتصال بالخادم. تحقق من الاتصال أو أعد تحميل الصفحة ثم حاول مرة أخرى.';
+      }
+      setFormError(displayErrorMsg);
+
+      // Detailed logging for development debugging
+      console.error('DEVELOPER ERROR REPORT:', {
+        rpcName: modalMode === 'create' ? 'create_cash_bank_account' : 'update_cash_bank_account',
+        organizationId: currentOrg?.id || null,
+        accountId: accountId || null,
+        type: type,
+        openingBalance: opBal,
+        roleInCurrentOrg: roleInCurrentOrg || null,
+        fullError: err
+      });
     } finally {
       setSaveLoading(false);
     }
@@ -804,19 +850,25 @@ export const BankingPage: React.FC = () => {
                   {modalMode !== 'create' && <span className="text-[10px] text-amber-600">لا يمكن تعديل الحساب المرتبط بعد الإنشاء</span>}
                 </label>
                 {modalMode === 'create' ? (
-                  <select
-                    value={accountId}
-                    onChange={(e) => setAccountId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-brand-blue focus:bg-white text-right"
-                    required
-                  >
-                    <option value="">-- اختر الحساب المرتبط بالأصول من دليل الحسابات --</option>
-                    {ledgerAccounts.map(acc => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.code} - {acc.name_ar} {acc.name_en ? `(${acc.name_en})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={accountId}
+                      onChange={(e) => setAccountId(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-brand-blue focus:bg-white text-right"
+                      required
+                    >
+                      <option value="">-- اختر الحساب المرتبط بالأصول من دليل الحسابات --</option>
+                      {ledgerAccounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.code} - {acc.name_ar} {acc.name_en ? `(${acc.name_en})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1 font-bold">
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      <span>اختر حسابًا من النقدية وما في حكمها، وليس الأصول الثابتة.</span>
+                    </p>
+                  </>
                 ) : (
                   <div className="w-full bg-slate-100 border border-slate-200 text-slate-600 rounded-lg px-3 py-2 text-xs flex items-center justify-between font-bold">
                     <span>

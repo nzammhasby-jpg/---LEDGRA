@@ -52,11 +52,11 @@ export const PrintHeader: React.FC<PrintHeaderProps> = ({
   const profile = getCountryProfile(currentOrg.country_code);
 
   return (
-    <div className="border-b-2 pb-5 mb-6 text-right font-sans" style={{ borderBottomColor: primaryColor }} dir="rtl">
+    <div className="border-b-2 pb-5 print:pb-2.5 mb-6 print:mb-3 text-right font-sans" style={{ borderBottomColor: primaryColor }} dir="rtl">
       <div className="flex justify-between items-start gap-8">
         
         {/* Right side: Corporation official record info */}
-        <div className="space-y-1.5 flex-1 select-none">
+        <div className="space-y-1.5 print:space-y-0.5 flex-1 select-none">
           <div className="text-lg font-black text-slate-900">{currentOrg.name_ar}</div>
           {currentOrg.name_en && (
             <div className="text-xs font-bold text-slate-500 font-mono tracking-tight uppercase">
@@ -64,7 +64,7 @@ export const PrintHeader: React.FC<PrintHeaderProps> = ({
             </div>
           )}
           
-          <div className="text-[11px] text-slate-600 space-y-0.5 pt-1.5 font-sans leading-relaxed">
+          <div className="text-[11px] text-slate-600 space-y-0.5 pt-1.5 print:pt-0.5 font-sans leading-relaxed">
             {showCR && currentOrg.cr_number && (
               <div>
                 <span className="font-bold text-slate-700">{profile.crLabel}: </span>
@@ -117,7 +117,7 @@ export const PrintHeader: React.FC<PrintHeaderProps> = ({
 
         {/* Center: Brand Logo (Only if showLogo and url exists) */}
         {showLogo && currentOrg.logo_url && logoUrl && (
-          <div className="hidden sm:flex justify-center items-center h-20 w-32 shrink-0 select-none">
+          <div className="hidden sm:flex justify-center items-center h-20 print:h-12 w-32 shrink-0 select-none">
             <img 
               src={logoUrl} 
               alt="Logo" 
@@ -129,27 +129,27 @@ export const PrintHeader: React.FC<PrintHeaderProps> = ({
         )}
 
         {/* Left side: Document identity & type descriptors */}
-        <div className="text-left space-y-2 shrink-0 select-none" style={{ direction: 'ltr' }}>
+        <div className="text-left space-y-2 print:space-y-1 shrink-0 select-none" style={{ direction: 'ltr' }}>
           
-          <div className="text-white font-black text-sm px-4 py-2 rounded-lg text-center" style={{ direction: 'rtl', backgroundColor: primaryColor }}>
+          <div className="text-white font-black text-sm px-4 py-2 print:py-1 rounded-lg text-center" style={{ direction: 'rtl', backgroundColor: primaryColor }}>
             {documentTitle}
           </div>
 
-          <div className="text-xs text-slate-600 space-y-1 leading-normal" style={{ direction: 'rtl' }}>
+          <div className="text-xs text-slate-600 space-y-1 print:space-y-0.5 leading-normal" style={{ direction: 'rtl' }}>
             {documentNumber && (
-              <div className="flex justify-between gap-4 border-b border-dashed border-slate-200 pb-1">
+              <div className="flex justify-between gap-4 border-b border-dashed border-slate-200 pb-1 print:pb-0.5">
                 <span className="text-slate-450 font-bold">الرقم:</span>
                 <span className="font-mono font-black text-slate-900">{documentNumber}</span>
               </div>
             )}
             {documentDate && (
-              <div className="flex justify-between gap-4 border-b border-dashed border-slate-200 pb-1">
+              <div className="flex justify-between gap-4 border-b border-dashed border-slate-200 pb-1 print:pb-0.5">
                 <span className="text-slate-450 font-bold">التاريخ:</span>
                 <span className="font-mono font-black text-slate-900">{documentDate}</span>
               </div>
             )}
             {extraMeta.map((meta, i) => (
-              <div key={i} className="flex justify-between gap-4 border-b border-dashed border-slate-200 pb-1">
+              <div key={i} className="flex justify-between gap-4 border-b border-dashed border-slate-200 pb-1 print:pb-0.5">
                 <span className="text-slate-450 font-bold">{meta.label}:</span>
                 <span className="font-black text-slate-900">{meta.value}</span>
               </div>

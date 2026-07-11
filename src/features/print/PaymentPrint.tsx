@@ -109,7 +109,7 @@ export const PaymentPrint: React.FC = () => {
         />
 
         {/* Highlight Payment Amount block */}
-        <div className="bg-slate-950 text-white rounded-2xl p-5 mb-8 flex justify-between items-center text-right font-sans select-none" dir="rtl">
+        <div className="bg-slate-950 text-white rounded-2xl p-5 print:p-3.5 mb-8 print:mb-4 flex justify-between items-center text-right font-sans select-none" dir="rtl">
           <div>
             <span className="text-[10px] text-slate-400 font-extrabold block mb-1">صافي القيمة المصروفة:</span>
             <span className="text-2xl font-black tracking-tight">
@@ -128,7 +128,7 @@ export const PaymentPrint: React.FC = () => {
         </div>
 
         {/* Supplier identification details */}
-        <div className="border border-slate-200 rounded-2xl p-4.5 mb-8 text-right font-sans" dir="rtl">
+        <div className="border border-slate-200 rounded-2xl p-4.5 print:p-3 mb-8 print:mb-4 text-right font-sans" dir="rtl">
           <span className="text-[10px] font-black text-slate-400 block mb-1.5 font-sans">صُرف للمستفيد أدناه:</span>
           <div className="flex justify-between items-start">
             <div>
@@ -150,7 +150,7 @@ export const PaymentPrint: React.FC = () => {
 
         {/* Table of allocations */}
         {allocations.length > 0 ? (
-          <div className="mb-8 font-sans" dir="rtl">
+          <div className="mb-8 print:mb-4 font-sans" dir="rtl">
             <span className="text-[10px] font-black text-slate-400 block mb-2">تخصيص سند الصرف وتسوية فواتير المشتريات:</span>
             <table className="w-full border-collapse text-xs select-none">
               <thead>
@@ -188,14 +188,14 @@ export const PaymentPrint: React.FC = () => {
             </table>
           </div>
         ) : (
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-center text-xs text-slate-500 mb-8 font-sans">
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 print:p-2.5 text-center text-xs text-slate-500 mb-8 print:mb-4 font-sans">
             لم يتم ترحيل أو تخصيص هذا السند تجاه فواتير مشتريات عينية سابقة. صُرف كدفعة مقدمة تحت الحساب للمورد.
           </div>
         )}
 
         {/* Note block */}
         {(payment.notes || currentOrg?.default_payment_note) && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-6 font-sans select-none" dir="rtl">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 print:p-2 mb-6 print:mb-3 font-sans select-none" dir="rtl">
             <span className="text-[10px] font-black text-slate-400 block mb-1">البيان والشرح التفصيلي للصرف:</span>
             <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed text-right">
               {payment.notes || currentOrg?.default_payment_note}

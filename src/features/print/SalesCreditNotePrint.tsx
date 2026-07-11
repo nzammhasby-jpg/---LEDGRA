@@ -137,7 +137,7 @@ export const SalesCreditNotePrint: React.FC = () => {
         />
 
         {/* Client details box */}
-        <div className="grid grid-cols-2 gap-6 bg-slate-50 border border-slate-200 rounded-2xl p-4.5 mb-8 text-right font-sans" dir="rtl">
+        <div className="grid grid-cols-2 gap-6 bg-slate-50 border border-slate-200 rounded-2xl p-4.5 print:p-3 mb-8 print:mb-4 text-right font-sans" dir="rtl">
           <div>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">العميل الموجه إليه:</span>
             <span className="text-xs font-black text-slate-800 block">{customer?.name || 'غير محدد'}</span>
@@ -180,7 +180,7 @@ export const SalesCreditNotePrint: React.FC = () => {
         </div>
 
         {/* Credit Note lines list table */}
-        <div className="mb-8 overflow-x-auto text-right font-sans" dir="rtl">
+        <div className="mb-8 print:mb-4 overflow-x-auto text-right font-sans" dir="rtl">
           <table className="w-full border-collapse text-xs select-none">
             <thead>
               <tr className="bg-slate-900 text-white rounded-lg">
@@ -226,7 +226,7 @@ export const SalesCreditNotePrint: React.FC = () => {
             )}
           </div>
 
-          <div className="col-span-5 bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4">
+          <div className="col-span-5 bg-slate-50 border border-slate-200 rounded-3xl p-6 print:p-4 space-y-4 print:space-y-2">
             <div className="flex justify-between items-center text-xs font-semibold text-slate-500">
               <span>المجموع الفرعي (غير شامل للضريبة):</span>
               <span className="font-mono font-black text-slate-800">{formatNumberWithLatinDigits(creditNote.subtotal)} {creditNote.currency_code}</span>

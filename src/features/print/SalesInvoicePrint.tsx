@@ -164,7 +164,7 @@ export const SalesInvoicePrint: React.FC = () => {
         />
 
         {/* Client details box */}
-        <div className="grid grid-cols-2 gap-6 bg-slate-50 border border-slate-200 rounded-2xl p-4.5 mb-8 text-right font-sans" dir="rtl">
+        <div className="grid grid-cols-2 gap-6 print:gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-4.5 print:p-3 mb-8 print:mb-4 text-right font-sans" dir="rtl">
           <div>
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">العميل الموجه إليه:</span>
             <span className="text-xs font-black text-slate-800 block">{customer?.name || 'غير محدد'}</span>
@@ -207,7 +207,7 @@ export const SalesInvoicePrint: React.FC = () => {
         </div>
 
         {/* Sales lines list table */}
-        <div className="mb-8 overflow-x-auto text-right font-sans" dir="rtl">
+        <div className="mb-8 print:mb-4 overflow-x-auto text-right font-sans" dir="rtl">
           <table className="w-full border-collapse text-xs select-none">
             <thead>
               <tr className="bg-slate-900 text-white rounded-lg">
@@ -247,11 +247,11 @@ export const SalesInvoicePrint: React.FC = () => {
         </div>
 
         {/* Bottom dynamic totals and ZATCA QR block */}
-        <div className="flex flex-col md:flex-row justify-between gap-6 mb-8 font-sans items-end" dir="rtl">
+        <div className="flex flex-col md:flex-row justify-between gap-6 print:gap-4 mb-8 print:mb-4 font-sans items-end" dir="rtl">
           
           {/* ZATCA QR code container */}
           {profile.zatcaEnabled ? (
-            <div className="flex flex-col items-start gap-2 bg-slate-50 border border-slate-200/60 rounded-2xl p-4 w-fit md:w-auto">
+            <div className="flex flex-col items-start gap-2 print:gap-1 bg-slate-50 border border-slate-200/60 rounded-2xl p-4 print:p-3 w-fit md:w-auto">
               <span className="text-[9px] font-black text-slate-400 block uppercase tracking-wider">رمز QR للفوترة الإلكترونية</span>
               <div className="flex items-center gap-4">
                 {qrBase64 ? (
@@ -265,8 +265,8 @@ export const SalesInvoicePrint: React.FC = () => {
                 )}
                 <div className="text-[10px] text-slate-500 leading-relaxed">
                   <p className="font-extrabold text-slate-700">بيانات الفاتورة الضريبية</p>
-                  <p className="mt-1">صنف الفاتورة: {zatcaSettings?.invoice_type_default === 'standard' ? 'ضريبية قياسية (B2B)' : 'ضريبية مبسطة (B2C)'}</p>
-                  <p className="mt-0.5">البنية الرقمية: XML أولي محسّن للفحص الداخلي</p>
+                  <p className="mt-1 text-[9px]">صنف الفاتورة: {zatcaSettings?.invoice_type_default === 'standard' ? 'ضريبية قياسية (B2B)' : 'ضريبية مبسطة (B2C)'}</p>
+                  <p className="mt-0.5 text-[9px]">البنية الرقمية: XML أولي محسّن للفحص الداخلي</p>
                   {artifact?.id && (
                     <p className="mt-1 text-[9px] text-brand-blue font-semibold">مستند رقمي رقم: {artifact.id.substring(0, 8)}</p>
                   )}
@@ -278,7 +278,7 @@ export const SalesInvoicePrint: React.FC = () => {
           )}
 
           {/* Right Column computations */}
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2 text-xs select-none w-full md:w-80 shrink-0">
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 print:p-3 space-y-2 print:space-y-1 text-xs select-none w-full md:w-80 shrink-0">
             
             <div className="flex justify-between font-bold text-slate-600">
               <span>الإجمالي قبل الخصم:</span>
@@ -322,7 +322,7 @@ export const SalesInvoicePrint: React.FC = () => {
 
         {/* Invoice notes */}
         {(invoice.notes || currentOrg?.default_invoice_note) && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-6 select-none" dir="rtl">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 print:p-2 mb-6 print:mb-3 select-none" dir="rtl">
             <span className="text-[10px] font-black text-slate-400 block mb-1">شروط وملاحظات:</span>
             <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed text-right">
               {invoice.notes || currentOrg?.default_invoice_note}

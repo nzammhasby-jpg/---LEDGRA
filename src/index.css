@@ -44,23 +44,30 @@ body {
 /* Print CSS Styles */
 @page {
   size: A4;
-  margin: 12mm;
+  margin: 8mm;
 }
 
 @media print {
   html,
   body {
-    width: 210mm;
-    min-height: 297mm;
-    margin: 0;
-    padding: 0;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  .no-print {
+  * {
+    box-sizing: border-box !important;
+  }
+
+  .no-print,
+  .print\:hidden {
     display: none !important;
   }
 
@@ -78,12 +85,21 @@ body {
   }
 
   table {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
     page-break-inside: auto;
+  }
+
+  th,
+  td {
+    overflow-wrap: anywhere;
+    word-break: normal;
   }
 
   tr {
     page-break-inside: avoid;
-    page-break-after: auto;
+    break-inside: avoid;
   }
 
   thead {

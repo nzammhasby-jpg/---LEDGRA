@@ -109,7 +109,7 @@ export const ReceiptPrint: React.FC = () => {
         />
 
         {/* Highlight Amount Block */}
-        <div className="bg-slate-900 text-white rounded-2xl p-5 mb-8 flex justify-between items-center text-right font-sans select-none" dir="rtl">
+        <div className="bg-slate-900 text-white rounded-2xl p-5 print:p-3.5 mb-8 print:mb-4 flex justify-between items-center text-right font-sans select-none" dir="rtl">
           <div>
             <span className="text-[10px] text-slate-400 font-extrabold uppercase block mb-1">المبلغ المقبوض:</span>
             <span className="text-2xl font-black tracking-tight">
@@ -128,7 +128,7 @@ export const ReceiptPrint: React.FC = () => {
         </div>
 
         {/* Customer details info */}
-        <div className="border border-slate-200 rounded-2xl p-4.5 mb-8 text-right font-sans" dir="rtl">
+        <div className="border border-slate-200 rounded-2xl p-4.5 print:p-3 mb-8 print:mb-4 text-right font-sans" dir="rtl">
           <span className="text-[10px] font-black text-slate-400 block mb-1.5">استلمنا من السيد / السادة:</span>
           <div className="flex justify-between items-start">
             <div>
@@ -150,9 +150,9 @@ export const ReceiptPrint: React.FC = () => {
 
         {/* Allocations information */}
         {allocations.length > 0 ? (
-          <div className="mb-8 font-sans" dir="rtl">
+          <div className="mb-8 print:mb-4 font-sans" dir="rtl">
             <span className="text-[10px] font-black text-slate-400 block mb-2">تخصيص السند وتسوية الفواتير الضريبية:</span>
-            <table className="w-full border-collapse text-xs select-none/100">
+            <table className="w-full border-collapse text-xs select-none">
               <thead>
                 <tr className="bg-slate-100 text-slate-700">
                   <th className="py-2 px-3 border border-slate-200 font-black text-right w-8">#</th>
@@ -188,14 +188,14 @@ export const ReceiptPrint: React.FC = () => {
             </table>
           </div>
         ) : (
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-center text-xs text-slate-500 mb-8 font-sans">
+          <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 print:p-2.5 text-center text-xs text-slate-500 mb-8 print:mb-4 font-sans">
             لم يتم ترحيل أو تخصيص هذا السند تجاه فواتير مبيعات سابقة. تم إيداعه دفعة تحت الحساب (أرصدة دائنة للعميل).
           </div>
         )}
 
         {/* Note section */}
         {(receipt.notes || currentOrg?.default_receipt_note) && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-6 font-sans select-none" dir="rtl">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 print:p-2 mb-6 print:mb-3 font-sans select-none" dir="rtl">
             <span className="text-[10px] font-black text-slate-400 block mb-1">البيان وملاحظات السند:</span>
             <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed text-right">
               {receipt.notes || currentOrg?.default_receipt_note}

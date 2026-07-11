@@ -104,7 +104,7 @@ export const PurchaseBillPrint: React.FC = () => {
         />
 
         {/* Supplier details box */}
-        <div className="grid grid-cols-2 gap-6 bg-slate-50 border border-slate-200 rounded-2xl p-4.5 mb-8 text-right font-sans" dir="rtl">
+        <div className="grid grid-cols-2 gap-6 print:gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-4.5 print:p-3 mb-8 print:mb-4 text-right font-sans" dir="rtl">
           <div>
             <span className="text-[10px] font-black text-slate-400 uppercase block mb-1">المورد / البائع:</span>
             <span className="text-xs font-black text-slate-800 block">{vendor?.name || 'غير محدد'}</span>
@@ -139,7 +139,7 @@ export const PurchaseBillPrint: React.FC = () => {
             )}
             {(vendor?.city || vendor?.address) && (
               <div className="pt-1">
-                <span className="font-bold text-slate-500 font-sans">عنوان المورد: </span>
+                <span className="font-bold text-slate-500 font-sans">العنوان: </span>
                 <span>{[vendor.city, vendor.address].filter(Boolean).join(' - ')}</span>
               </div>
             )}
@@ -147,7 +147,7 @@ export const PurchaseBillPrint: React.FC = () => {
         </div>
 
         {/* Purchase billing lines */}
-        <div className="mb-8 overflow-x-auto text-right font-sans" dir="rtl">
+        <div className="mb-8 print:mb-4 overflow-x-auto text-right font-sans" dir="rtl">
           <table className="w-full border-collapse text-xs select-none">
             <thead>
               <tr className="bg-slate-900 text-white rounded-lg">
@@ -187,8 +187,8 @@ export const PurchaseBillPrint: React.FC = () => {
         </div>
 
         {/* Totals Section */}
-        <div className="flex justify-end mb-8 font-sans" dir="rtl">
-          <div className="w-80 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs select-none">
+        <div className="flex justify-end mb-8 print:mb-4 font-sans" dir="rtl">
+          <div className="w-80 bg-slate-50 border border-slate-200 rounded-2xl p-4 print:p-3 space-y-2 print:space-y-1 text-xs select-none">
             
             <div className="flex justify-between font-bold text-slate-600">
               <span>الإجمالي قبل الخصم والضريبة:</span>
@@ -223,7 +223,7 @@ export const PurchaseBillPrint: React.FC = () => {
             </div>
 
             <div className="flex justify-between font-extrabold text-slate-800">
-              <span>المتبقي المطل وب تسويته للمستقبل:</span>
+              <span>المتبقي المطلوب تسويته للمستقبل:</span>
               <span className="font-mono font-bold text-slate-900">{formatNumberWithLatinDigits(bill.balance_due)}</span>
             </div>
 
@@ -232,7 +232,7 @@ export const PurchaseBillPrint: React.FC = () => {
 
         {/* Note block */}
         {bill.notes && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-6 font-sans select-none" dir="rtl">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 print:p-2 mb-6 print:mb-3 font-sans select-none" dir="rtl">
             <span className="text-[10px] font-black text-slate-400 block mb-1">ملاحظات وبيان المشتريات:</span>
             <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed text-right">{bill.notes}</p>
           </div>
