@@ -13,10 +13,12 @@ import {
   Bookmark,
   TrendingUp,
   Tag,
-  ArrowRightLeft
+  ArrowRightLeft,
+  RotateCcw
 } from 'lucide-react';
 import { ReportHeader } from './components/ReportHeader';
 import { ReportActions } from './components/ReportActions';
+import { ReportSignatures } from './components/ReportSignatures';
 import { generateCSV, downloadCSV, generateReportFilename } from '../../lib/exportUtils';
 
 export const LedgerReportPage: React.FC = () => {
@@ -148,6 +150,15 @@ export const LedgerReportPage: React.FC = () => {
     fetchReport();
   };
 
+  const handleResetFilters = async () => {
+    setExcludeClosingEntries(false);
+    if (accounts.length > 0) {
+      setSelectedAccountId(accounts[0].id);
+    }
+    // Re-initialize dates
+    await initSetup();
+  };
+
   const getClassificationLabel = (classification?: string) => {
     if (!classification) return '';
     switch (classification) {
@@ -218,15 +229,28 @@ export const LedgerReportPage: React.FC = () => {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            id="btn-refresh-ledger"
-          >
-            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            <span>استعراض كشف الأستاذ</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              id="btn-refresh-ledger"
+            >
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              <span>استعراض كشف الأستاذ</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              disabled={loading}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer"
+              title="إعادة ضبط الفلاتر لقيمها الافتراضية"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>إعادة ضبط</span>
+            </button>
+          </div>
         </div>
 
         {/* Closing entries exclusion filter */}
@@ -441,6 +465,8 @@ export const LedgerReportPage: React.FC = () => {
               </table>
             </div>
           </div>
+
+          <ReportSignatures />
         </>
       )}
 

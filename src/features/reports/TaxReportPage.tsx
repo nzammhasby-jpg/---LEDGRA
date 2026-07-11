@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { ReportHeader } from './components/ReportHeader';
 import { ReportActions } from './components/ReportActions';
+import { ReportSignatures } from './components/ReportSignatures';
 import { generateCSV, downloadCSV, generateReportFilename } from '../../lib/exportUtils';
 
 export const TaxReportPage: React.FC = () => {
@@ -407,6 +408,10 @@ export const TaxReportPage: React.FC = () => {
           </div>
 
         </div>
+      )}
+
+      {reportData && !loading && (
+        <ReportSignatures />
       )}
 
     </div>

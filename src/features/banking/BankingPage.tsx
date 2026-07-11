@@ -6,6 +6,14 @@ import { bankingService } from '../../lib/bankingService';
 import { accountingService } from '../../lib/accountingService';
 import { CashBankAccount, Account, CashBankAccountType } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
+
+const getFriendlyErrorMessage = (err: any): string => {
+  const errMsg = (err?.message || '').toLowerCase();
+  if (err instanceof TypeError || errMsg.includes('failed to fetch') || errMsg.includes('network') || errMsg.includes('fetch') || errMsg.includes('load failed')) {
+    return 'تعذر الاتصال بالخادم. تحقق من الاتصال بالإنترنت أو حاول مجددًا.';
+  }
+  return getErrorMessage(err);
+};
 import { 
   Landmark, 
   Wallet, 
@@ -104,7 +112,7 @@ export const BankingPage: React.FC = () => {
         setLedgerAccounts(validAssets);
       }
     } catch (err: any) {
-      setError(getErrorMessage(err));
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -182,7 +190,7 @@ export const BankingPage: React.FC = () => {
       });
       await loadData();
     } catch (err: any) {
-      setError(getErrorMessage(err));
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -205,7 +213,7 @@ export const BankingPage: React.FC = () => {
       });
       await loadData();
     } catch (err: any) {
-      setError(getErrorMessage(err));
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -292,12 +300,7 @@ export const BankingPage: React.FC = () => {
       setIsModalOpen(false);
       await loadData();
     } catch (err: any) {
-      const errMsg = err?.message || '';
-      let displayErrorMsg = errMsg;
-      if (err instanceof TypeError || errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('fetch')) {
-        displayErrorMsg = 'تعذر الاتصال بالخادم. تحقق من الاتصال أو أعد تحميل الصفحة ثم حاول مرة أخرى.';
-      }
-      setFormError(displayErrorMsg);
+      setFormError(getFriendlyErrorMessage(err));
 
       // Detailed logging for development debugging
       console.error('DEVELOPER ERROR REPORT:', {

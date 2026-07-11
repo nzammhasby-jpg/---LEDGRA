@@ -15,8 +15,13 @@ import {
   TrendingDown,
   ArrowRight,
   Printer,
-  Info
+  Info,
+  RotateCcw
 } from 'lucide-react';
+import { ReportHeader } from './components/ReportHeader';
+import { ReportActions } from './components/ReportActions';
+import { ReportSignatures } from './components/ReportSignatures';
+import { generateCSV, downloadCSV, generateReportFilename } from '../../lib/exportUtils';
 
 export const CustomerStatementPage: React.FC = () => {
   const { currentOrg } = useAuth();
@@ -64,7 +69,11 @@ export const CustomerStatementPage: React.FC = () => {
   };
 
   const fetchReport = async (custId = selectedCustomerId, from = dateFrom, to = dateTo) => {
-    if (!currentOrg || !custId || !from || !to) return;
+    if (!currentOrg) return;
+    if (!custId || !from || !to) {
+      setErrorCode('الرجاء اختيار العميل وفترة التقرير كاملة.');
+      return;
+    }
     setLoadingReport(true);
     setErrorCode(null);
     try {
@@ -78,15 +87,72 @@ export const CustomerStatementPage: React.FC = () => {
     }
   };
 
+  const handleResetFilters = () => {
+    const cy = new Date().getFullYear();
+    setDateFrom(`${cy}-01-01`);
+    setDateTo(new Date().toISOString().split('T')[0]);
+    if (customers.length > 0) {
+      setSelectedCustomerId(customers[0].id);
+      fetchReport(customers[0].id, `${cy}-01-01`, new Date().toISOString().split('T')[0]);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (!reportData) return;
+    const currency = currentOrg?.currency_code || '';
+    const csvRows: any[][] = [
+      ['منشأة', currentOrg?.name_ar || currentOrg?.name || ''],
+      ['التقرير', `كشف حساب عميل: ${reportData.customer_name}`],
+      ['كود العميل', reportData.customer_code || ''],
+      ['الفترة من', dateFrom],
+      ['الفترة إلى', dateTo],
+      ['العملة', currency],
+      [],
+      ['الرصيد الافتتاحي', reportData.opening_balance],
+      ['مجموع مدين (+)', reportData.total_debit],
+      ['مجموع دائن (-)', reportData.total_credit],
+      ['صافي الرصيد المستحق', reportData.closing_balance],
+      [],
+      ['التاريخ', 'المستند / القيد', 'المرجع', 'البيان', 'مدين', 'دائن', 'الرصيد التراكمي'],
+      ...reportData.movements.map(m => [
+        m.date,
+        m.journal_number,
+        m.reference || '',
+        m.description,
+        m.debit,
+        m.credit,
+        m.running_balance
+      ])
+    ];
+
+    const headers = ['كشف حساب عميل تفصيلي', 'التفاصيل'];
+    const csvContent = generateCSV(headers, csvRows);
+    const filename = generateReportFilename(`كشف_حساب_${reportData.customer_name}`, dateFrom, dateTo);
+    downloadCSV(csvContent, filename);
+  };
+
+  const handlePrint = () => {
+    if (!selectedCustomerId || !dateFrom || !dateTo) return;
+    window.open(`#/print/customer-statement?id=${selectedCustomerId}&dateFrom=${dateFrom}&dateTo=${dateTo}`, '_blank');
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchReport();
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6 text-right font-sans" dir="rtl">
       
-      {/* Controls */}
+      {/* Report Header Intro */}
+      <div className="space-y-1">
+        <h3 className="text-lg font-black text-slate-800">تقرير كشف حساب العميل بالتفصيل</h3>
+        <p className="text-xs text-slate-500">
+          استخرج كشفاً تفصيلياً بالحركات التجارية، المبيعات والمدفوعات والمستحقات التراكمية الخاصة بأي عميل محدد خلال الفترة المالية.
+        </p>
+      </div>
+
+      {/* Controls Card */}
       <form onSubmit={handleSubmit} className="bg-white p-5 rounded-2xl border border-slate-100 flex flex-wrap gap-4 items-end shadow-sm">
         
         {/* Customer select */}
@@ -96,7 +162,7 @@ export const CustomerStatementPage: React.FC = () => {
             <select
               value={selectedCustomerId}
               onChange={(e) => setSelectedCustomerId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2 pr-9 outline-none focus:border-brand-blue appearance-none"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 pr-9 outline-none focus:border-brand-blue appearance-none font-bold"
               required
             >
               <option value="" disabled>--- إختر عميل ---</option>
@@ -106,7 +172,7 @@ export const CustomerStatementPage: React.FC = () => {
                 </option>
               ))}
             </select>
-            <Users className="w-4 h-4 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+            <Users className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
           </div>
         </div>
 
@@ -140,26 +206,26 @@ export const CustomerStatementPage: React.FC = () => {
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={loadingReport || loadingList}
-          className="bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-        >
-          {loadingReport ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          <span>تحديث التقرير</span>
-        </button>
-
-        {reportData && (
-          <a
-            href={`#/print/customer-statement?id=${selectedCustomerId}&dateFrom=${dateFrom}&dateTo=${dateTo}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer animate-fade-in"
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={loadingReport || loadingList}
+            className="bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            <Printer className="w-4.5 h-4.5" />
-            <span>طباعة كشف حركات العميل A4</span>
-          </a>
-        )}
+            {loadingReport ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            <span>عرض التقرير</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer"
+            title="إعادة ضبط الفلاتر لقيمها الافتراضية"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>إعادة ضبط</span>
+          </button>
+        </div>
       </form>
 
       {errorCode && (
@@ -169,11 +235,31 @@ export const CustomerStatementPage: React.FC = () => {
         </div>
       )}
 
+      {/* Action buttons row */}
+      {reportData && !loadingReport && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 print:hidden">
+          <span className="text-xs font-bold text-slate-500">خيارات تصدير وطباعة التقرير:</span>
+          <ReportActions
+            onPrint={handlePrint}
+            onExportCSV={handleExportCSV}
+            onRefresh={() => fetchReport()}
+            loading={loadingReport}
+          />
+        </div>
+      )}
+
       {/* Customer Report Result Card */}
-      {reportData && (
+      {loadingReport && (
+        <div className="bg-white p-12 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center justify-center gap-3 text-slate-500">
+          <RefreshCw className="w-8 h-8 animate-spin text-brand-blue" />
+          <span className="text-xs font-bold">جاري تجميع حركات كشف حساب العميل والتحقق من الأرصدة...</span>
+        </div>
+      )}
+
+      {reportData && !loadingReport && (
         <div className="space-y-6">
           
-          {/* Top Info metrics */}
+          {/* Executive Summary */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-1">
@@ -227,10 +313,10 @@ export const CustomerStatementPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="w-4 h-4 text-brand-navy" />
                 <h3 className="text-sm font-extrabold text-slate-800">
-                  كشف حركات الحساب التفصيلي للعميل: <span className="text-brand-blue">{reportData.customer_name}</span>
+                  كشف حركات الحساب التفصيلي للعميل: <span className="text-brand-blue font-black">{reportData.customer_name}</span>
                 </h3>
               </div>
-              <span className="font-mono text-[10px] text-slate-450 font-bold bg-slate-205/60 px-2 py-0.75 rounded-full">
+              <span className="font-mono text-[10px] text-slate-450 font-bold bg-slate-100 px-2.5 py-1 rounded-full">
                 كود العميل: {reportData.customer_code || '---'}
               </span>
             </div>
@@ -253,11 +339,11 @@ export const CustomerStatementPage: React.FC = () => {
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   
                   {/* Opening line */}
-                  <tr className="bg-slate-50/30 text-slate-500 font-bold">
+                  <tr className="bg-slate-50/30 text-slate-550 font-bold">
                     <td className="py-2.5 px-4 font-mono">{formatDateWithEnglishDigits(dateFrom)}</td>
                     <td className="py-2.5 px-4">رصيد افتتاحي</td>
                     <td className="py-2.5 px-4">---</td>
-                    <td className="py-2.5 px-4 italic text-[11px] text-slate-450">رصيد بداية الفترة المدخل أو التراكمي المسبق</td>
+                    <td className="py-2.5 px-4 italic text-[11px] text-slate-400 font-normal">رصيد بداية الفترة المدخل أو التراكمي المسبق</td>
                     <td className="py-2.5 px-4 text-left font-mono">---</td>
                     <td className="py-2.5 px-4 text-left font-mono">---</td>
                     <td className="py-2.5 px-4 text-left font-mono font-extrabold text-slate-750 bg-slate-50/50" style={{ direction: 'ltr' }}>
@@ -281,13 +367,13 @@ export const CustomerStatementPage: React.FC = () => {
                         </td>
                         <td className="py-2.5 px-4 text-slate-500 font-mono">{mov.reference || '---'}</td>
                         <td className="py-2.5 px-4 text-slate-600 font-bold">{mov.description}</td>
-                        <td className="py-2.5 px-4 text-left font-mono text-emerald-650 font-bold" style={{ direction: 'ltr' }}>
+                        <td className="py-2.5 px-4 text-left font-mono text-emerald-650 font-bold font-sans" style={{ direction: 'ltr' }}>
                           {mov.debit > 0 ? formatNumberWithLatinDigits(mov.debit) : '0.00'}
                         </td>
-                        <td className="py-2.5 px-4 text-left font-mono text-red-600 font-bold" style={{ direction: 'ltr' }}>
+                        <td className="py-2.5 px-4 text-left font-mono text-red-600 font-bold font-sans" style={{ direction: 'ltr' }}>
                           {mov.credit > 0 ? formatNumberWithLatinDigits(mov.credit) : '0.00'}
                         </td>
-                        <td className="py-2.5 px-4 text-left font-mono font-bold text-slate-800 bg-slate-50/30" style={{ direction: 'ltr' }}>
+                        <td className="py-2.5 px-4 text-left font-mono font-bold text-slate-800 bg-slate-50/30 font-sans" style={{ direction: 'ltr' }}>
                           {formatNumberWithLatinDigits(mov.running_balance)}
                         </td>
                       </tr>
@@ -297,7 +383,7 @@ export const CustomerStatementPage: React.FC = () => {
                   {/* Summary / Totals line */}
                   <tr className="bg-slate-100/30 border-t border-slate-200 font-extrabold text-slate-800">
                     <td colSpan={4} className="py-3 px-4 text-right">مجموع حركات الفترة الحالية فقط</td>
-                    <td className="py-3 px-4 text-left font-sans text-emerald-600" style={{ direction: 'ltr' }}>
+                    <td className="py-3 px-4 text-left font-sans text-emerald-650" style={{ direction: 'ltr' }}>
                       {formatNumberWithLatinDigits(reportData.total_debit)}
                     </td>
                     <td className="py-3 px-4 text-left font-sans text-red-600" style={{ direction: 'ltr' }}>
@@ -320,6 +406,7 @@ export const CustomerStatementPage: React.FC = () => {
 
           </div>
 
+          <ReportSignatures />
         </div>
       )}
 

@@ -14,10 +14,12 @@ import {
   AlertTriangle,
   FolderTree,
   Eye,
-  EyeOff
+  EyeOff,
+  RotateCcw
 } from 'lucide-react';
 import { ReportHeader } from './components/ReportHeader';
 import { ReportActions } from './components/ReportActions';
+import { ReportSignatures } from './components/ReportSignatures';
 import { generateCSV, downloadCSV, generateReportFilename } from '../../lib/exportUtils';
 
 export const TrialBalancePage: React.FC = () => {
@@ -144,6 +146,13 @@ export const TrialBalancePage: React.FC = () => {
     fetchReport();
   };
 
+  const handleResetFilters = async () => {
+    setIncludeZeroAccounts(false);
+    setIncludeParentAccounts(true);
+    setExcludeClosingEntries(true);
+    await initDateRange();
+  };
+
   const getClassificationLabel = (classification: string) => {
     switch (classification) {
       case 'assets': return 'أصول';
@@ -200,15 +209,28 @@ export const TrialBalancePage: React.FC = () => {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            id="btn-refresh-trial-balance"
-          >
-            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            <span>تحديث التقرير</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-brand-blue hover:bg-brand-blue/90 text-white text-xs font-bold px-5 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              id="btn-refresh-trial-balance"
+            >
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              <span>تحديث التقرير</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              disabled={loading}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold px-4 py-2.25 rounded-xl transition flex items-center gap-2 cursor-pointer"
+              title="إعادة ضبط الفلاتر لقيمها الافتراضية"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>إعادة ضبط</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter switches/options */}
@@ -475,6 +497,8 @@ export const TrialBalancePage: React.FC = () => {
               </table>
             </div>
           </div>
+
+          <ReportSignatures />
         </>
       )}
 

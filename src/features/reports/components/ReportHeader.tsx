@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { Calendar, Tag, Info, ShieldAlert } from 'lucide-react';
+import { Calendar, Tag, Info, ShieldAlert, User as UserIcon } from 'lucide-react';
 
 interface ReportHeaderProps {
   reportName: string;
@@ -17,7 +17,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
   excludeClosingEntries,
   yearStatus
 }) => {
-  const { currentOrg } = useAuth();
+  const { currentOrg, profile } = useAuth();
   const printDate = new Date().toLocaleString('ar-SA', {
     year: 'numeric',
     month: 'long',
@@ -77,10 +77,17 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
 
         {/* Meta details */}
         <div className="text-xs space-y-1.5 md:text-left text-slate-500 print:text-slate-700 md:self-end">
-          <p className="font-semibold">
+          <p className="font-semibold flex items-center gap-1 md:justify-end">
             <span>تاريخ توليد التقرير: </span>
             <span className="font-sans font-bold">{printDate}</span>
           </p>
+          {profile?.full_name && (
+            <p className="font-semibold text-slate-400 print:text-slate-600 flex items-center gap-1 md:justify-end text-[11px]">
+              <UserIcon className="w-3.5 h-3.5" />
+              <span>مُصدر التقرير: </span>
+              <span className="font-bold">{profile.full_name}</span>
+            </p>
+          )}
           <div className="flex flex-wrap gap-2 md:justify-end">
             {/* Year Status Badge */}
             {yearStatus && (
