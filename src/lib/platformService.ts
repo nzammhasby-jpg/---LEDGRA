@@ -308,66 +308,106 @@ export const platformService = {
   },
 
   /**
+   * Fetch read-only documents using unified platform list organization documents RPC
+   */
+  async listOrgDocuments(orgId: string, type: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_organization_documents', {
+      p_org_id: orgId,
+      p_document_type: type
+    });
+    if (error) {
+      console.error('Unified document fetch error details:', {
+        organizationId: orgId,
+        documentType: type,
+        rpcName: 'platform_list_organization_documents',
+        error
+      });
+      throw error;
+    }
+
+    // Ensure full compatibility with rendering properties in AdminDashboard.tsx
+    return (data || []).map((doc: any) => {
+      const mapped: any = {
+        ...doc,
+        currency: doc.currency_code,
+        total: doc.amount,
+        amount: doc.amount
+      };
+
+      if (type === 'sales_invoice') {
+        mapped.invoice_number = doc.document_number;
+        mapped.invoice_date = doc.document_date;
+      } else if (type === 'purchase_bill') {
+        mapped.bill_number = doc.document_number;
+        mapped.bill_date = doc.document_date;
+      } else if (type === 'receipt') {
+        mapped.receipt_number = doc.document_number;
+        mapped.receipt_date = doc.document_date;
+      } else if (type === 'payment') {
+        mapped.payment_number = doc.document_number;
+        mapped.payment_date = doc.document_date;
+      } else if (type === 'credit_note') {
+        mapped.note_number = doc.document_number;
+        mapped.note_date = doc.document_date;
+      } else if (type === 'debit_note') {
+        mapped.note_number = doc.document_number;
+        mapped.note_date = doc.document_date;
+      } else if (type === 'journal_entry') {
+        mapped.entry_number = doc.document_number;
+        mapped.entry_date = doc.document_date;
+      }
+
+      return mapped;
+    });
+  },
+
+  /**
    * Get sales invoices for an organization (read-only)
    */
   async listOrgSalesInvoices(orgId: string): Promise<any[]> {
-    const { data, error } = await supabase.rpc('platform_list_org_sales_invoices', { p_org_id: orgId });
-    if (error) throw error;
-    return data || [];
+    return this.listOrgDocuments(orgId, 'sales_invoice');
   },
 
   /**
    * Get purchase bills for an organization (read-only)
    */
   async listOrgPurchaseBills(orgId: string): Promise<any[]> {
-    const { data, error } = await supabase.rpc('platform_list_org_purchase_bills', { p_org_id: orgId });
-    if (error) throw error;
-    return data || [];
+    return this.listOrgDocuments(orgId, 'purchase_bill');
   },
 
   /**
    * Get receipts for an organization (read-only)
    */
   async listOrgReceipts(orgId: string): Promise<any[]> {
-    const { data, error } = await supabase.rpc('platform_list_org_receipts', { p_org_id: orgId });
-    if (error) throw error;
-    return data || [];
+    return this.listOrgDocuments(orgId, 'receipt');
   },
 
   /**
    * Get payments for an organization (read-only)
    */
   async listOrgPayments(orgId: string): Promise<any[]> {
-    const { data, error } = await supabase.rpc('platform_list_org_payments', { p_org_id: orgId });
-    if (error) throw error;
-    return data || [];
+    return this.listOrgDocuments(orgId, 'payment');
   },
 
   /**
    * Get credit notes for an organization (read-only)
    */
   async listOrgCreditNotes(orgId: string): Promise<any[]> {
-    const { data, error } = await supabase.rpc('platform_list_org_credit_notes', { p_org_id: orgId });
-    if (error) throw error;
-    return data || [];
+    return this.listOrgDocuments(orgId, 'credit_note');
   },
 
   /**
    * Get debit notes for an organization (read-only)
    */
   async listOrgDebitNotes(orgId: string): Promise<any[]> {
-    const { data, error } = await supabase.rpc('platform_list_org_debit_notes', { p_org_id: orgId });
-    if (error) throw error;
-    return data || [];
+    return this.listOrgDocuments(orgId, 'debit_note');
   },
 
   /**
    * Get journal entries for an organization (read-only)
    */
   async listOrgJournalEntries(orgId: string): Promise<any[]> {
-    const { data, error } = await supabase.rpc('platform_list_org_journal_entries', { p_org_id: orgId });
-    if (error) throw error;
-    return data || [];
+    return this.listOrgDocuments(orgId, 'journal_entry');
   },
 
   /**

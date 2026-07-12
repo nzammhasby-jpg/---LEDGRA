@@ -260,8 +260,21 @@ export const AdminDashboard: React.FC = () => {
       }
       setOrgDocs(data);
     } catch (err: any) {
-      console.error('Failed fetching org read-only docs:', err);
-      setOrgDocsError('فشل في جلب مستندات العميل الحالية لقراءة التشخيص الفني.');
+      console.error('Failed fetching org read-only docs:', {
+        organizationId: orgId,
+        documentType: type,
+        rpcName: 'platform_list_organization_documents',
+        error: err
+      });
+
+      const errMsg = err?.message || '';
+      if (type === 'debit_note' && (errMsg.includes('debit_note') || errMsg.includes('الإشعارات المدينة') || errMsg.includes('Relation does not exist'))) {
+        setOrgDocsError('جدول الإشعارات المدينة غير متاح أو لم يتم تشغيل Migration الخاص به.');
+      } else if (type === 'credit_note' && (errMsg.includes('credit_note') || errMsg.includes('الإشعارات الدائنة') || errMsg.includes('Relation does not exist'))) {
+        setOrgDocsError('جدول الإشعارات الدائنة غير متاح أو لم يتم تشغيل Migration الخاص به.');
+      } else {
+        setOrgDocsError(err?.message || 'فشل في جلب مستندات العميل الحالية لقراءة التشخيص الفني.');
+      }
     } finally {
       setLoadingOrgDocs(false);
     }
