@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { bankReconciliationService } from '../../lib/bankReconciliationService';
 import { bankingService } from '../../lib/bankingService';
-import { BankReconciliation, BankReconciliationLine, CashBankAccount } from '../../types';
+import { accountingService } from '../../lib/accountingService';
+import { BankReconciliation, BankReconciliationLine, CashBankAccount, Account, BankReconciliationAdjustmentType } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { 
   CheckCircle2, 
@@ -36,6 +37,7 @@ export const BankReconciliationsPage: React.FC = () => {
   // State
   const [reconciliations, setReconciliations] = useState<BankReconciliation[]>([]);
   const [accounts, setAccounts] = useState<CashBankAccount[]>([]);
+  const [ledgerAccounts, setLedgerAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,12 +46,14 @@ export const BankReconciliationsPage: React.FC = () => {
   const [selectedRecId, setSelectedRecId] = useState<string | null>(null);
   const [activeRec, setActiveRec] = useState<BankReconciliation | null>(null);
   const [recLines, setRecLines] = useState<BankReconciliationLine[]>([]);
+  const [adjustments, setAdjustments] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'inflow' | 'outflow'>('all');
   const [lineSearch, setLineSearch] = useState<string>('');
 
   // Modals / Actions state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState<boolean>(false);
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState<boolean>(false);
   const [cancelReason, setCancelReason] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -59,6 +63,14 @@ export const BankReconciliationsPage: React.FC = () => {
   const [reconciliationDate, setReconciliationDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [statementBalance, setStatementBalance] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+
+  // Adjustment Form State
+  const [adjType, setAdjType] = useState<BankReconciliationAdjustmentType>('bank_fee');
+  const [adjDescription, setAdjDescription] = useState<string>('');
+  const [adjAccountId, setAdjAccountId] = useState<string>('');
+  const [adjAmount, setAdjAmount] = useState<string>('');
+  const [adjDirection, setAdjDirection] = useState<'debit' | 'credit'>('debit');
+  const [adjNotes, setAdjNotes] = useState<string>('');
 
   // Number Formatter (Latin Digits)
   const formatNumber = (num: number | undefined | null) => {
@@ -72,16 +84,46 @@ export const BankReconciliationsPage: React.FC = () => {
     }
   }, [currentOrg?.id, isSales]);
 
+  // Auto-suggest accounting code based on adjustment type
+  useEffect(() => {
+    if (!isAdjustmentModalOpen) return;
+    
+    let searchWord = '';
+    if (adjType === 'bank_fee' || adjType === 'transfer_charge') {
+      searchWord = 'رسوم';
+      setAdjDirection('debit');
+    } else if (adjType === 'bank_interest') {
+      searchWord = 'عوائد';
+      setAdjDirection('credit');
+    } else if (adjType === 'rounding_difference') {
+      searchWord = 'فروقات';
+      setAdjDirection('debit');
+    }
+    
+    if (searchWord) {
+      const matched = ledgerAccounts.find(acc => acc.name_ar?.includes(searchWord) || acc.name_en?.toLowerCase().includes(searchWord.toLowerCase()));
+      if (matched) {
+        setAdjAccountId(matched.id);
+      } else {
+        setAdjAccountId(ledgerAccounts[0]?.id || '');
+      }
+    } else {
+      setAdjAccountId(ledgerAccounts[0]?.id || '');
+    }
+  }, [adjType, isAdjustmentModalOpen, ledgerAccounts]);
+
   const loadInitialData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [recs, allAccounts] = await Promise.all([
+      const [recs, allAccounts, allLedger] = await Promise.all([
         bankReconciliationService.listBankReconciliations(currentOrg!.id),
-        bankingService.listCashBankAccounts(currentOrg!.id)
+        bankingService.listCashBankAccounts(currentOrg!.id),
+        accountingService.getAccounts(currentOrg!.id)
       ]);
       setReconciliations(recs);
       setAccounts(allAccounts.filter(a => a.is_active));
+      setLedgerAccounts(allLedger.filter(a => a.allow_direct_posting && a.is_active));
       if (allAccounts.length > 0) {
         setSelectedAccountId(allAccounts[0].id);
       }
@@ -96,12 +138,14 @@ export const BankReconciliationsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [recData, linesData] = await Promise.all([
+      const [recData, linesData, adjData] = await Promise.all([
         bankReconciliationService.getBankReconciliation(id),
-        bankReconciliationService.listBankReconciliationLines(id)
+        bankReconciliationService.listBankReconciliationLines(id),
+        bankReconciliationService.listBankReconciliationAdjustments(id)
       ]);
       setActiveRec(recData);
       setRecLines(linesData);
+      setAdjustments(adjData);
       setSelectedRecId(id);
       setView('detail');
     } catch (err: any) {
@@ -183,6 +227,81 @@ export const BankReconciliationsPage: React.FC = () => {
       // Revert optimistic update
       setRecLines(recLines);
       setError(getErrorMessage(err));
+    }
+  };
+
+  const handleAddAdjustment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManage || !activeRec) return;
+    if (!adjDescription.trim()) {
+      setActionError('يرجى إدخال وصف التسوية البنكية.');
+      return;
+    }
+    if (!adjAccountId) {
+      setActionError('يرجى اختيار الحساب المقابل في شجرة الحسابات.');
+      return;
+    }
+    const parsedAmount = Number(adjAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setActionError('يرجى إدخال قيمة صحيحة أكبر من الصفر.');
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError(null);
+
+    const debitAmount = adjDirection === 'debit' ? parsedAmount : 0;
+    const creditAmount = adjDirection === 'credit' ? parsedAmount : 0;
+
+    try {
+      await bankReconciliationService.addBankReconciliationAdjustment({
+        reconciliation_id: activeRec.id,
+        adjustment_type: adjType,
+        description: adjDescription,
+        account_id: adjAccountId,
+        debit_amount: debitAmount,
+        credit_amount: creditAmount,
+        notes: adjNotes || null
+      });
+
+      // Clear form
+      setAdjDescription('');
+      setAdjAmount('');
+      setAdjNotes('');
+      setIsAdjustmentModalOpen(false);
+
+      // Refresh reconciliation details & adjustments
+      const [recData, adjData] = await Promise.all([
+        bankReconciliationService.getBankReconciliation(activeRec.id),
+        bankReconciliationService.listBankReconciliationAdjustments(activeRec.id)
+      ]);
+      setActiveRec(recData);
+      setAdjustments(adjData);
+    } catch (err: any) {
+      setActionError(getErrorMessage(err));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveAdjustment = async (adjId: string) => {
+    if (!canManage || !activeRec || activeRec.status !== 'draft') return;
+    
+    setActionLoading(true);
+    try {
+      await bankReconciliationService.removeBankReconciliationAdjustment(adjId);
+      
+      // Refresh reconciliation details & adjustments
+      const [recData, adjData] = await Promise.all([
+        bankReconciliationService.getBankReconciliation(activeRec.id),
+        bankReconciliationService.listBankReconciliationAdjustments(activeRec.id)
+      ]);
+      setActiveRec(recData);
+      setAdjustments(adjData);
+    } catch (err: any) {
+      setError(getErrorMessage(err));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -578,135 +697,285 @@ export const BankReconciliationsPage: React.FC = () => {
             </div>
           )}
 
-          {/* Matching workspace / lines ledger */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            
-            {/* Table Navigation and Filters */}
-            <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              
-              {/* Category tabs */}
-              <div className="flex border-b border-slate-100 self-start">
-                <button
-                  onClick={() => setActiveTab('all')}
-                  className={`px-4 py-2 text-xs font-bold transition border-b-2 cursor-pointer ${
-                    activeTab === 'all' ? 'border-brand-navy text-brand-navy' : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  الحركات الشاملة ({recLines.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('inflow')}
-                  className={`px-4 py-2 text-xs font-bold transition border-b-2 cursor-pointer ${
-                    activeTab === 'inflow' ? 'border-green-600 text-green-600' : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  المدفوعات الداخلة ({recLines.filter(l => Number(l.debit_amount) > 0).length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('outflow')}
-                  className={`px-4 py-2 text-xs font-bold transition border-b-2 cursor-pointer ${
-                    activeTab === 'outflow' ? 'border-amber-600 text-amber-600' : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  المدفوعات الخارجة ({recLines.filter(l => Number(l.credit_amount) > 0).length})
-                </button>
-              </div>
+          {/* Calculations for Adjustments and Book Sum */}
+          {(() => {
+            const totalDebits = adjustments.reduce((sum, adj) => sum + Number(adj.debit_amount), 0);
+            const totalCredits = adjustments.reduce((sum, adj) => sum + Number(adj.credit_amount), 0);
+            const bookSum = Number(activeRec.statement_balance) + Number(activeRec.difference) + totalDebits - totalCredits;
 
-              {/* Search input inside table */}
-              <div className="relative w-full md:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="البحث في الحركات..."
-                  value={lineSearch}
-                  onChange={(e) => setLineSearch(e.target.value)}
-                  className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-slate-300 transition"
-                />
-              </div>
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                
+                {/* Column 1 & 2: Matching workspace / lines ledger */}
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden self-start">
+                  
+                  {/* Table Navigation and Filters */}
+                  <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    
+                    {/* Category tabs */}
+                    <div className="flex border-b border-slate-100 self-start">
+                      <button
+                        onClick={() => setActiveTab('all')}
+                        className={`px-4 py-2 text-xs font-bold transition border-b-2 cursor-pointer ${
+                          activeTab === 'all' ? 'border-brand-navy text-brand-navy' : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        الحركات الشاملة ({recLines.length})
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('inflow')}
+                        className={`px-4 py-2 text-xs font-bold transition border-b-2 cursor-pointer ${
+                          activeTab === 'inflow' ? 'border-green-600 text-green-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        المدفوعات الداخلة ({recLines.filter(l => Number(l.debit_amount) > 0).length})
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('outflow')}
+                        className={`px-4 py-2 text-xs font-bold transition border-b-2 cursor-pointer ${
+                          activeTab === 'outflow' ? 'border-amber-600 text-amber-600' : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        المدفوعات الخارجة ({recLines.filter(l => Number(l.credit_amount) > 0).length})
+                      </button>
+                    </div>
 
-            </div>
+                    {/* Search input inside table */}
+                    <div className="relative w-full md:w-64">
+                      <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="البحث في الحركات..."
+                        value={lineSearch}
+                        onChange={(e) => setLineSearch(e.target.value)}
+                        className="w-full pl-3 pr-9 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-slate-300 transition"
+                      />
+                    </div>
 
-            {/* Lines Table */}
-            {filteredLines.length === 0 ? (
-              <div className="p-12 text-center text-slate-400">
-                <Info className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <span className="text-xs">لا توجد حركات مطابقة في هذا الفرز.</span>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-50/50 text-slate-500 uppercase font-bold border-b border-slate-100">
-                    <tr>
+                  </div>
+
+                  {/* Lines Table */}
+                  {filteredLines.length === 0 ? (
+                    <div className="p-12 text-center text-slate-400">
+                      <Info className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                      <span className="text-xs">لا توجد حركات مطابقة في هذا الفرز.</span>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-right text-xs">
+                        <thead className="bg-slate-50/50 text-slate-500 uppercase font-bold border-b border-slate-100">
+                          <tr>
+                            {activeRec.status === 'draft' && canManage && (
+                              <th className="p-4 w-12 text-center">مطابقة؟</th>
+                            )}
+                            <th className="p-4">تاريخ الحركة</th>
+                            <th className="p-4">النوع</th>
+                            <th className="p-4">الوصف والبيانات المرتبطة</th>
+                            <th className="p-4 text-left">وارد / مدين</th>
+                            <th className="p-4 text-left">صادر / دائن</th>
+                            <th className="p-4 text-center">الحالة</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50 text-slate-700">
+                          {filteredLines.map((line) => {
+                            const isMatched = line.is_matched;
+                            return (
+                              <tr 
+                                key={line.id} 
+                                onClick={() => activeRec.status === 'draft' && canManage && handleToggleLine(line.id, isMatched)}
+                                className={`hover:bg-slate-50/50 transition cursor-pointer ${
+                                  isMatched ? 'bg-green-50/20' : ''
+                                }`}
+                              >
+                                {activeRec.status === 'draft' && canManage && (
+                                  <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isMatched}
+                                      onChange={() => handleToggleLine(line.id, isMatched)}
+                                      className="w-4.5 h-4.5 text-brand-blue border-slate-200 rounded focus:ring-brand-blue cursor-pointer"
+                                    />
+                                  </td>
+                                )}
+                                <td className="p-4 font-mono">{line.transaction_date}</td>
+                                <td className="p-4">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
+                                    line.source_type === 'receipt' ? 'bg-green-50 text-green-700' :
+                                    line.source_type === 'payment' ? 'bg-amber-50 text-amber-700' :
+                                    line.source_type === 'transfer' ? 'bg-blue-50 text-blue-700' :
+                                    'bg-slate-100 text-slate-700'
+                                  }`}>
+                                    {line.source_type === 'receipt' ? 'سند قبض' :
+                                     line.source_type === 'payment' ? 'سند صرف' :
+                                     line.source_type === 'transfer' ? 'تحويل بنكي' : 'قيد يدوي'}
+                                  </span>
+                                </td>
+                                <td className="p-4 max-w-sm truncate text-slate-600" title={line.description}>
+                                  {line.description}
+                                </td>
+                                <td className="p-4 text-left font-mono font-medium text-green-600">
+                                  {Number(line.debit_amount) > 0 ? formatNumber(line.debit_amount) : '—'}
+                                </td>
+                                <td className="p-4 text-left font-mono font-medium text-amber-600">
+                                  {Number(line.credit_amount) > 0 ? formatNumber(line.credit_amount) : '—'}
+                                </td>
+                                <td className="p-4 text-center">
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.75 rounded-full text-[10px] font-bold ${
+                                    isMatched ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-400'
+                                  }`}>
+                                    {isMatched ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                    {isMatched ? 'مطابق ومسوى' : 'غير مطابق'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Column 3: Adjustments Panel */}
+                <div className="space-y-6">
+                  
+                  {/* Card A: Financial Reconciliation Summary Math */}
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                      <h3 className="text-xs font-bold text-slate-800">تفاصيل المطابقة الحسابية</h3>
+                      <span className="text-[10px] text-slate-400">بناءً على الفروقات البنكية</span>
+                    </div>
+
+                    <div className="space-y-2.5 text-xs">
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span>الرصيد الدفتري المطابق (قبل التسوية):</span>
+                        <span className="font-mono font-bold text-slate-800">{formatNumber(bookSum)}</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-green-600">
+                        <span>(+) إجمالي العوائد البنكية:</span>
+                        <span className="font-mono font-bold">{formatNumber(totalCredits)}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-amber-600">
+                        <span>(-) إجمالي الرسوم والعمولات البنكية:</span>
+                        <span className="font-mono font-bold">{formatNumber(totalDebits)}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center border-t border-dashed border-slate-100 pt-2 text-slate-800">
+                        <span>الرصيد الدفتري المعدّل:</span>
+                        <span className="font-mono font-bold text-slate-900">{formatNumber(bookSum - totalDebits + totalCredits)}</span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span>الرصيد الفعلي لكشف الحساب:</span>
+                        <span className="font-mono font-bold">{formatNumber(activeRec.statement_balance)}</span>
+                      </div>
+
+                      <div className={`flex justify-between items-center border-t border-slate-100 pt-3 text-sm font-bold ${
+                        activeRec.difference === 0 ? 'text-green-600' : 'text-amber-600'
+                      }`}>
+                        <span>الفرق النهائي بعد التسويات:</span>
+                        <span className="font-mono font-black">{formatNumber(activeRec.difference)}</span>
+                      </div>
+                    </div>
+
+                    {activeRec.status === 'draft' && activeRec.difference === 0 && (
+                      <div className="bg-green-50 text-green-700 text-[10px] p-2.5 rounded-xl border border-green-100 leading-relaxed text-center font-bold">
+                        الفرق متطابق بالكامل ومسوى! جاهز للاعتماد النهائي الآن.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card B: Adjustments List */}
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-800">تسويات وفروقات البنك</h3>
+                        <p className="text-[10px] text-slate-400 mt-0.5">الرسوم البنكية، العوائد والتقريب</p>
+                      </div>
                       {activeRec.status === 'draft' && canManage && (
-                        <th className="p-4 w-12 text-center">مطابقة؟</th>
-                      )}
-                      <th className="p-4">تاريخ الحركة</th>
-                      <th className="p-4">النوع</th>
-                      <th className="p-4">الوصف والبيانات المرتبطة</th>
-                      <th className="p-4 text-left">وارد / مدين</th>
-                      <th className="p-4 text-left">صادر / دائن</th>
-                      <th className="p-4 text-center">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 text-slate-700">
-                    {filteredLines.map((line) => {
-                      const isMatched = line.is_matched;
-                      return (
-                        <tr 
-                          key={line.id} 
-                          onClick={() => activeRec.status === 'draft' && canManage && handleToggleLine(line.id, isMatched)}
-                          className={`hover:bg-slate-50/50 transition cursor-pointer ${
-                            isMatched ? 'bg-green-50/20' : ''
-                          }`}
+                        <button
+                          onClick={() => {
+                            setActionError(null);
+                            setAdjDescription('');
+                            setAdjAmount('');
+                            setAdjNotes('');
+                            setIsAdjustmentModalOpen(true);
+                          }}
+                          className="px-2.5 py-1.5 bg-brand-navy/10 text-brand-navy hover:bg-brand-navy/15 rounded-lg text-[10px] font-bold transition cursor-pointer"
                         >
-                          {activeRec.status === 'draft' && canManage && (
-                            <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="checkbox"
-                                checked={isMatched}
-                                onChange={() => handleToggleLine(line.id, isMatched)}
-                                className="w-4.5 h-4.5 text-brand-blue border-slate-200 rounded focus:ring-brand-blue cursor-pointer"
-                              />
-                            </td>
-                          )}
-                          <td className="p-4 font-mono">{line.transaction_date}</td>
-                          <td className="p-4">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
-                              line.source_type === 'receipt' ? 'bg-green-50 text-green-700' :
-                              line.source_type === 'payment' ? 'bg-amber-50 text-amber-700' :
-                              line.source_type === 'transfer' ? 'bg-blue-50 text-blue-700' :
-                              'bg-slate-100 text-slate-700'
-                            }`}>
-                              {line.source_type === 'receipt' ? 'سند قبض' :
-                               line.source_type === 'payment' ? 'سند صرف' :
-                               line.source_type === 'transfer' ? 'تحويل بنكي' : 'قيد يدوي'}
-                            </span>
-                          </td>
-                          <td className="p-4 max-w-sm truncate text-slate-600" title={line.description}>
-                            {line.description}
-                          </td>
-                          <td className="p-4 text-left font-mono font-medium text-green-600">
-                            {Number(line.debit_amount) > 0 ? formatNumber(line.debit_amount) : '—'}
-                          </td>
-                          <td className="p-4 text-left font-mono font-medium text-amber-600">
-                            {Number(line.credit_amount) > 0 ? formatNumber(line.credit_amount) : '—'}
-                          </td>
-                          <td className="p-4 text-center">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.75 rounded-full text-[10px] font-bold ${
-                              isMatched ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-400'
-                            }`}>
-                              {isMatched ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                              {isMatched ? 'مطابق ومسوى' : 'غير مطابق'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          إضافة تسوية
+                        </button>
+                      )}
+                    </div>
+
+                    {adjustments.length === 0 ? (
+                      <div className="p-6 text-center text-slate-400 text-xs">
+                        <p className="font-semibold text-slate-500">لا توجد تسويات مضافة</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">يمكن إضافة فروقات أو رسوم البنك هنا.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {adjustments.map((adj) => {
+                          const isDebit = Number(adj.debit_amount) > 0;
+                          return (
+                            <div key={adj.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5 relative group">
+                              
+                              <div className="flex items-start justify-between">
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                                  adj.adjustment_type === 'bank_fee' ? 'bg-red-50 text-red-600' :
+                                  adj.adjustment_type === 'bank_interest' ? 'bg-green-50 text-green-700' :
+                                  adj.adjustment_type === 'rounding_difference' ? 'bg-slate-100 text-slate-700' :
+                                  'bg-blue-50 text-blue-600'
+                                }`}>
+                                  {adj.adjustment_type === 'bank_fee' ? 'رسوم بنكية' :
+                                   adj.adjustment_type === 'bank_interest' ? 'عوائد بنكية' :
+                                   adj.adjustment_type === 'rounding_difference' ? 'فروقات تقريب' : 'تسويات أخرى'}
+                                </span>
+
+                                {activeRec.status === 'draft' && canManage && (
+                                  <button
+                                    onClick={() => handleRemoveAdjustment(adj.id)}
+                                    className="text-slate-400 hover:text-red-600 cursor-pointer p-0.5 transition"
+                                    title="حذف التسوية"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="text-xs font-bold text-slate-800">{adj.description}</div>
+
+                              <div className="flex justify-between items-center text-[10px] text-slate-400">
+                                <div>
+                                  الحساب: {adj.account_code} - {adj.account_name_ar}
+                                </div>
+                                <div className={`font-mono font-bold ${isDebit ? 'text-amber-600' : 'text-green-600'}`}>
+                                  {isDebit ? '-' : '+'}{formatNumber(adj.amount)}
+                                </div>
+                              </div>
+
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {activeRec.status === 'completed' && activeRec.adjustment_journal_entry_id && (
+                      <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl space-y-1 text-[11px] text-right text-slate-600">
+                        <div className="font-bold text-slate-800">قيد التسوية المحاسبي مرتبط:</div>
+                        <div className="font-mono text-xs text-brand-navy">قيد رقم: {activeRec.adjustment_journal_entry_id.substring(0, 8)}...</div>
+                        <div className="text-[10px] text-slate-400">تم ترحيل القيد تلقائياً إلى الأستاذ العام عند اعتماد المطابقة.</div>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
               </div>
-            )}
-          </div>
+            );
+          })()}
 
         </div>
       )}
@@ -877,6 +1146,152 @@ export const BankReconciliationsPage: React.FC = () => {
               </div>
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: ADD BANK RECONCILIATION ADJUSTMENT */}
+      {isAdjustmentModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl overflow-hidden p-6 space-y-4">
+            
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <h3 className="text-sm font-bold text-slate-800">إضافة تسوية فروقات بنكية</h3>
+              <button 
+                onClick={() => setIsAdjustmentModalOpen(false)} 
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {actionError && (
+              <div className="bg-red-50 border border-red-100 text-red-700 p-2.5 rounded-xl flex items-start gap-2 text-xs">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddAdjustment} className="space-y-3.5 text-xs text-right">
+              
+              {/* Adjustment Type */}
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">نوع التسوية البنكية</label>
+                <select
+                  value={adjType}
+                  onChange={(e) => setAdjType(e.target.value as BankReconciliationAdjustmentType)}
+                  required
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-slate-300 transition"
+                >
+                  <option value="bank_fee">رسوم ومصاريف بنكية (عمولات)</option>
+                  <option value="bank_interest">عوائد وإيرادات بنكية (فوائد)</option>
+                  <option value="transfer_charge">رسوم وعمولة تحويل بنكي</option>
+                  <option value="rounding_difference">فروقات تسوية وتقريب بسيطة</option>
+                  <option value="other">تسويات بنكية وعمليات أخرى</option>
+                </select>
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">الوصف والبيان</label>
+                <input
+                  type="text"
+                  placeholder="مثال: رسوم صيانة الحساب ربع السنوية"
+                  value={adjDescription}
+                  onChange={(e) => setAdjDescription(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-slate-300 transition"
+                />
+              </div>
+
+              {/* Offset Account Selection from COA */}
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">الحساب المقابل (دليل الحسابات)</label>
+                <select
+                  value={adjAccountId}
+                  onChange={(e) => setAdjAccountId(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-slate-300 transition"
+                >
+                  <option value="" disabled>اختر الحساب المقابل...</option>
+                  {ledgerAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.code} - {acc.name_ar} {acc.name_en ? `(${acc.name_en})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-400">سيتم ترحيل هذه القيمة إلى الجانب المقابل من حساب البنك في القيد الآلي.</span>
+              </div>
+
+              {/* Direction & Amount */}
+              <div className="grid grid-cols-2 gap-3">
+                
+                <div className="space-y-1">
+                  <label className="block font-bold text-slate-700">الأثر الحسابي</label>
+                  <select
+                    value={adjDirection}
+                    onChange={(e) => setAdjDirection(e.target.value as 'debit' | 'credit')}
+                    required
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-slate-300 transition"
+                  >
+                    <option value="debit">مصروف / خصم من البنك (-)</option>
+                    <option value="credit">إيراد / إضافة للبنك (+)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-bold text-slate-700">المبلغ</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="0.00"
+                      value={adjAmount}
+                      onChange={(e) => setAdjAmount(e.target.value)}
+                      required
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-slate-300 transition pl-12 text-left"
+                      style={{ direction: 'ltr' }}
+                    />
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">
+                      {currentOrg?.currency_code}
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">ملاحظات توثيقية إضافية (اختياري)</label>
+                <textarea
+                  rows={2}
+                  placeholder="ملاحظات تظهر داخل تفاصيل القيد المحاسبي المولد..."
+                  value={adjNotes}
+                  onChange={(e) => setAdjNotes(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-slate-300 transition resize-none"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2 border-t border-slate-50">
+                <button
+                  type="button"
+                  onClick={() => setIsAdjustmentModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition cursor-pointer"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-5 py-2 bg-brand-navy hover:bg-brand-navy/95 text-white rounded-xl font-bold transition flex items-center gap-1 cursor-pointer"
+                >
+                  {actionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>إضافة التسوية</span>
+                </button>
+              </div>
+
+            </form>
           </div>
         </div>
       )}

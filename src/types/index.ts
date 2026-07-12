@@ -903,6 +903,7 @@ export interface InventoryAdjustmentLine {
 // ==========================================
 export type BankReconciliationStatus = 'draft' | 'completed' | 'cancelled';
 export type BankReconciliationSourceType = 'receipt' | 'payment' | 'transfer' | 'journal_entry';
+export type BankReconciliationAdjustmentType = 'bank_fee' | 'bank_interest' | 'transfer_charge' | 'rounding_difference' | 'other';
 
 export interface BankReconciliation {
   id: string;
@@ -926,6 +927,7 @@ export interface BankReconciliation {
   cancelled_at?: string | null;
   cancelled_by_name?: string | null;
   cancel_reason?: string | null;
+  adjustment_journal_entry_id?: string | null;
 }
 
 export interface BankReconciliationLine {
@@ -941,6 +943,25 @@ export interface BankReconciliationLine {
   is_matched: boolean;
   matched_at: string | null;
   notes: string | null;
+}
+
+export interface BankReconciliationAdjustment {
+  id: string;
+  reconciliation_id: string;
+  organization_id: string;
+  adjustment_type: BankReconciliationAdjustmentType;
+  description: string;
+  account_id: string;
+  debit_amount: number;
+  credit_amount: number;
+  amount: number;
+  notes: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  account_code?: string;
+  account_name_ar?: string;
+  account_name_en?: string | null;
 }
 
 

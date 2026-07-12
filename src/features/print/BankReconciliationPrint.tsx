@@ -17,6 +17,7 @@ export const BankReconciliationPrint: React.FC = () => {
 
   const [reconciliation, setReconciliation] = useState<BankReconciliation | null>(null);
   const [lines, setLines] = useState<BankReconciliationLine[]>([]);
+  const [adjustments, setAdjustments] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,9 +31,10 @@ export const BankReconciliationPrint: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [recData, linesData] = await Promise.all([
+      const [recData, linesData, adjustmentsData] = await Promise.all([
         bankReconciliationService.getBankReconciliation(id!),
-        bankReconciliationService.listBankReconciliationLines(id!)
+        bankReconciliationService.listBankReconciliationLines(id!),
+        bankReconciliationService.listBankReconciliationAdjustments(id!)
       ]);
 
       if (recData.organization_id !== currentOrg!.id) {
@@ -41,6 +43,7 @@ export const BankReconciliationPrint: React.FC = () => {
 
       setReconciliation(recData);
       setLines(linesData);
+      setAdjustments(adjustmentsData);
     } catch (err: any) {
       setError(getErrorMessage(err));
     } finally {
@@ -51,6 +54,17 @@ export const BankReconciliationPrint: React.FC = () => {
   const formatNumber = (num: number | undefined | null) => {
     if (num === undefined || num === null) return '0.00';
     return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const getAdjustmentTypeLabel = (type: string) => {
+    switch (type) {
+      case 'bank_fee': return 'رسوم بنكية';
+      case 'bank_interest': return 'عوائد بنكية';
+      case 'transfer_charge': return 'عمولة تحويل';
+      case 'rounding_difference': return 'فروقات تقريب';
+      case 'other': return 'تسويات أخرى';
+      default: return type;
+    }
   };
 
   if (loading) {
@@ -258,6 +272,62 @@ export const BankReconciliationPrint: React.FC = () => {
             </table>
           </div>
         )}
+
+        {/* 3. Bank Reconciliation Adjustments (فروقات وتسويات بنكية) */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-3 border-r-4 border-indigo-600 pr-2.5">
+            <h4 className="text-xs font-black text-slate-900">
+              فروقات وتسويات بنكية ({adjustments.length})
+            </h4>
+            {reconciliation.adjustment_journal_entry_id && (
+              <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100 font-bold mr-auto font-mono">
+                قيد تسوية الفروقات: {reconciliation.adjustment_journal_entry_id.substring(0, 8).toUpperCase()}
+              </span>
+            )}
+          </div>
+
+          {adjustments.length === 0 ? (
+            <div className="text-center p-6 bg-slate-50 rounded-xl text-xs text-slate-400 border border-slate-100">
+              لا توجد فروقات أو تسويات بنكية مسجلة على هذه المطابقة.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-[11px] border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                    <th className="p-2.5">نوع التسوية</th>
+                    <th className="p-2.5">الوصف</th>
+                    <th className="p-2.5">الحساب المحاسبي</th>
+                    <th className="p-2.5 text-left">مدين</th>
+                    <th className="p-2.5 text-left">دائن</th>
+                    <th className="p-2.5 text-left">المبلغ ({reconciliation.currency_code || currentOrg?.currency_code || ''})</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {adjustments.map((adj) => (
+                    <tr key={adj.id}>
+                      <td className="p-2.5">{getAdjustmentTypeLabel(adj.adjustment_type)}</td>
+                      <td className="p-2.5">{adj.description}</td>
+                      <td className="p-2.5">
+                        {adj.account_code ? `[${adj.account_code}] ` : ''}
+                        {adj.account_name_ar || adj.account_name_en || ''}
+                      </td>
+                      <td className="p-2.5 text-left font-mono text-rose-600">
+                        {Number(adj.debit_amount) > 0 ? formatNumber(adj.debit_amount) : '—'}
+                      </td>
+                      <td className="p-2.5 text-left font-mono text-emerald-600">
+                        {Number(adj.credit_amount) > 0 ? formatNumber(adj.credit_amount) : '—'}
+                      </td>
+                      <td className="p-2.5 text-left font-mono font-bold text-slate-900">
+                        {formatNumber(adj.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         {/* Creator / Approver Signatures */}
         <div className="mt-12 grid grid-cols-2 gap-8 text-xs select-none">

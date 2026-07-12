@@ -126,5 +126,78 @@ export const bankReconciliationService = {
       console.error('Error cancelling bank reconciliation:', error);
       throw error;
     }
+  },
+
+  /**
+   * List all adjustments for a bank reconciliation
+   */
+  async listBankReconciliationAdjustments(reconciliationId: string): Promise<any[]> {
+    const { data, error } = await supabase
+      .from('bank_reconciliation_adjustments')
+      .select(`
+        *,
+        accounts (
+          code,
+          name_ar,
+          name_en
+        )
+      `)
+      .eq('reconciliation_id', reconciliationId);
+
+    if (error) {
+      console.error('Error fetching bank reconciliation adjustments:', error);
+      throw error;
+    }
+
+    return (data || []).map(item => ({
+      ...item,
+      account_code: item.accounts?.code,
+      account_name_ar: item.accounts?.name_ar,
+      account_name_en: item.accounts?.name_en
+    }));
+  },
+
+  /**
+   * Add a bank reconciliation adjustment
+   */
+  async addBankReconciliationAdjustment(input: {
+    reconciliation_id: string;
+    adjustment_type: string;
+    description: string;
+    account_id: string;
+    debit_amount?: number;
+    credit_amount?: number;
+    notes?: string | null;
+  }): Promise<string> {
+    const { data, error } = await supabase.rpc('add_bank_reconciliation_adjustment', {
+      p_reconciliation_id: input.reconciliation_id,
+      p_adjustment_type: input.adjustment_type,
+      p_description: input.description,
+      p_account_id: input.account_id,
+      p_debit_amount: input.debit_amount || 0,
+      p_credit_amount: input.credit_amount || 0,
+      p_notes: input.notes || null
+    });
+
+    if (error) {
+      console.error('Error adding bank reconciliation adjustment:', error);
+      throw error;
+    }
+
+    return data;
+  },
+
+  /**
+   * Remove a bank reconciliation adjustment
+   */
+  async removeBankReconciliationAdjustment(adjustmentId: string): Promise<void> {
+    const { error } = await supabase.rpc('remove_bank_reconciliation_adjustment', {
+      p_adjustment_id: adjustmentId
+    });
+
+    if (error) {
+      console.error('Error removing bank reconciliation adjustment:', error);
+      throw error;
+    }
   }
 };

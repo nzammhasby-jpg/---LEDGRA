@@ -260,5 +260,188 @@ export const platformService = {
     } catch (err: any) {
       return defaultTrialFallback(err?.message || String(err));
     }
+  },
+
+  /**
+   * Get role of active platform admin
+   */
+  async getPlatformAdminRole(): Promise<string | null> {
+    const { data, error } = await supabase.rpc('get_platform_admin_role');
+    if (error) {
+      console.error('Failed to get platform admin role:', error);
+      return null;
+    }
+    return data;
+  },
+
+  /**
+   * Get overall platform dashboard stats
+   */
+  async getDashboardStats(): Promise<PlatformDashboardStats> {
+    const { data, error } = await supabase.rpc('platform_get_dashboard_stats');
+    if (error) {
+      throw error;
+    }
+    return data;
+  },
+
+  /**
+   * List all system users with their linked organizations
+   */
+  async listUsers(): Promise<PlatformUserRow[]> {
+    const { data, error } = await supabase.rpc('platform_list_users');
+    if (error) {
+      throw error;
+    }
+    return data || [];
+  },
+
+  /**
+   * Get members of a specific organization
+   */
+  async getOrgMembers(orgId: string): Promise<PlatformOrgMemberRow[]> {
+    const { data, error } = await supabase.rpc('platform_get_org_members', { p_org_id: orgId });
+    if (error) {
+      throw error;
+    }
+    return data || [];
+  },
+
+  /**
+   * Get sales invoices for an organization (read-only)
+   */
+  async listOrgSalesInvoices(orgId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_org_sales_invoices', { p_org_id: orgId });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /**
+   * Get purchase bills for an organization (read-only)
+   */
+  async listOrgPurchaseBills(orgId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_org_purchase_bills', { p_org_id: orgId });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /**
+   * Get receipts for an organization (read-only)
+   */
+  async listOrgReceipts(orgId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_org_receipts', { p_org_id: orgId });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /**
+   * Get payments for an organization (read-only)
+   */
+  async listOrgPayments(orgId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_org_payments', { p_org_id: orgId });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /**
+   * Get credit notes for an organization (read-only)
+   */
+  async listOrgCreditNotes(orgId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_org_credit_notes', { p_org_id: orgId });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /**
+   * Get debit notes for an organization (read-only)
+   */
+  async listOrgDebitNotes(orgId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_org_debit_notes', { p_org_id: orgId });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /**
+   * Get journal entries for an organization (read-only)
+   */
+  async listOrgJournalEntries(orgId: string): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_org_journal_entries', { p_org_id: orgId });
+    if (error) throw error;
+    return data || [];
+  },
+
+  /**
+   * List all soft-deleted documents across organizations
+   */
+  async listDeletedDocuments(): Promise<PlatformDeletedDocumentRow[]> {
+    const { data, error } = await supabase.rpc('platform_list_deleted_documents');
+    if (error) {
+      throw error;
+    }
+    return data || [];
+  },
+
+  /**
+   * Restore a soft-deleted draft document (Super Admin or Platform Admin only, support excluded)
+   */
+  async restoreDocument(documentType: string, documentId: string): Promise<void> {
+    const { error } = await supabase.rpc('platform_restore_document', {
+      p_document_type: documentType,
+      p_document_id: documentId
+    });
+    if (error) {
+      throw error;
+    }
   }
 };
+
+export interface PlatformDashboardStats {
+  orgs_count: number;
+  users_count: number;
+  sales_invoices_count: number;
+  purchase_bills_count: number;
+  receipts_count: number;
+  payments_count: number;
+  deleted_documents_count: number;
+  recent_activities: any[];
+  unusual_organizations: any[];
+}
+
+export interface PlatformUserRow {
+  profile_id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  created_at: string;
+  organizations_json: Array<{
+    org_id: string;
+    org_name: string;
+    role: string;
+    is_active: boolean;
+  }>;
+}
+
+export interface PlatformOrgMemberRow {
+  profile_id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  is_active: boolean;
+  joined_at: string;
+}
+
+export interface PlatformDeletedDocumentRow {
+  document_id: string;
+  organization_id: string;
+  organization_name: string;
+  document_type: string;
+  document_number: string;
+  status: string;
+  amount: number;
+  currency: string;
+  deleted_by_name: string;
+  deleted_at: string;
+  delete_reason: string | null;
+  can_restore: boolean;
+}

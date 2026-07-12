@@ -439,6 +439,7 @@ export default function App() {
           <Route element={<PlatformAdminRoute />}>
             <Route element={<PlatformAdminLayout />}>
               <Route path="/platform/admin" element={<AdminDashboard />} />
+              <Route path="/platform-admin" element={<AdminDashboard />} />
             </Route>
           </Route>
 
