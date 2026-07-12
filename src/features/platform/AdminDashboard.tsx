@@ -229,8 +229,11 @@ export const AdminDashboard: React.FC = () => {
       const list = await platformService.listDeletedDocuments();
       setDeletedDocs(list);
     } catch (err: any) {
-      console.error('Failed loading deleted docs:', err);
-      setDeletedError('تعذر سحب مستندات سلة المحذوفات المشتركة لجميع منشآت العملاء.');
+      console.error('Failed loading deleted docs details:', {
+        rpcName: 'platform_list_deleted_documents',
+        error: err
+      });
+      setDeletedError('تعذر تحميل مركز المحذوفات. تحقق من تشغيل Migrations الخاصة بسلة المحذوفات ولوحة الإدارة.');
     } finally {
       setLoadingDeleted(false);
     }

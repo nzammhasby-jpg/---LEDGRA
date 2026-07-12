@@ -416,20 +416,35 @@ export const platformService = {
   async listDeletedDocuments(): Promise<PlatformDeletedDocumentRow[]> {
     const { data, error } = await supabase.rpc('platform_list_deleted_documents');
     if (error) {
+      console.error('Failed fetching deleted docs details:', {
+        rpcName: 'platform_list_deleted_documents',
+        error
+      });
       throw error;
     }
-    return data || [];
+    // Map backend standard attributes to frontend properties for maximum backward compatibility
+    return (data || []).map((doc: any) => ({
+      ...doc,
+      status: doc.document_status || doc.status,
+      currency: doc.currency_code || doc.currency
+    }));
   },
 
   /**
    * Restore a soft-deleted draft document (Super Admin or Platform Admin only, support excluded)
    */
   async restoreDocument(documentType: string, documentId: string): Promise<void> {
-    const { error } = await supabase.rpc('platform_restore_document', {
+    const { error } = await supabase.rpc('platform_restore_deleted_document', {
       p_document_type: documentType,
       p_document_id: documentId
     });
     if (error) {
+      console.error('Failed restoring document details:', {
+        rpcName: 'platform_restore_deleted_document',
+        error,
+        documentType,
+        documentId
+      });
       throw error;
     }
   }
