@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { IncomeStatementPage } from './IncomeStatementPage';
 import { BalanceSheetPage } from './BalanceSheetPage';
@@ -40,6 +41,7 @@ type ReportTab =
 
 export const ReportsLayout: React.FC = () => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<ReportTab>('income_statement');
 
   // Sales Role has limited access. Let's see if sales has NO access to financial reports.
@@ -51,8 +53,24 @@ export const ReportsLayout: React.FC = () => {
   useEffect(() => {
     if (isSales) {
       setActiveTab('inventory_report');
+    } else {
+      const tabParam = searchParams.get('tab') as ReportTab;
+      if (tabParam && [
+        'income_statement', 
+        'balance_sheet', 
+        'customer_statement', 
+        'customer_aging',
+        'vendor_statement', 
+        'vendor_aging',
+        'inventory_report', 
+        'vat_tax_report',
+        'trial_balance',
+        'ledger_report'
+      ].includes(tabParam)) {
+        setActiveTab(tabParam);
+      }
     }
-  }, [isSales]);
+  }, [isSales, searchParams]);
 
   return (
     <div className="space-y-6 text-right font-sans" dir="rtl">

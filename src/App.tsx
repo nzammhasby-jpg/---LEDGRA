@@ -37,6 +37,7 @@ import { ShieldAlert, Terminal, HelpCircle } from 'lucide-react';
 import { AdminDashboard } from './features/platform/AdminDashboard';
 import { platformService } from './lib/platformService';
 import { PlatformAdminLayout } from './layouts/PlatformAdminLayout';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 
 // Official Print Feature Component Pages
 import { SalesInvoicePrint } from './features/print/SalesInvoicePrint';
@@ -413,8 +414,9 @@ export default function App() {
   }
 
   return (
-    <AuthProvider>
-      <Router>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <Router>
         <HashRecoveryRedirect />
         <Routes>
           
@@ -503,5 +505,6 @@ export default function App() {
         </Routes>
       </Router>
     </AuthProvider>
-  );
+  </AppErrorBoundary>
+);
 }

@@ -146,11 +146,11 @@ export function safeParseFloat(value: any): number {
 export function safeParseInt(value: any): number {
   if (value === null || value === undefined || value === '') return 0;
   if (typeof value === 'number') {
-    return isFinite(value) ? Math.floor(value) : 0;
+    return isFinite(value) ? Math.trunc(value) : 0;
   }
-  const clean = toEnglishDigits(String(value)).replace(/[^0-9-]/g, '');
-  const parsed = parseInt(clean, 10);
-  return isNaN(parsed) || !isFinite(parsed) ? 0 : parsed;
+  const clean = removeThousandsSeparator(String(value));
+  const parsed = parseFloat(clean);
+  return isNaN(parsed) || !isFinite(parsed) ? 0 : Math.trunc(parsed);
 }
 
 /**

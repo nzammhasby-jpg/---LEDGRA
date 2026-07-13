@@ -3,6 +3,7 @@ import { User, Session, Subscription } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Profile, Organization, OrganizationRole, CreateOrgInput, MembershipJoinData } from '../types';
 import { getCountryProfile } from '../lib/countryProfiles';
+import { setMonitoringUser, clearMonitoringUser } from '../lib/errorMonitoring';
 
 interface AuthContextType {
   user: User | null;
@@ -308,6 +309,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
   }, []);
+
+  // Synchronize active user context with Sentry using anonymised identifiers
+  useEffect(() => {
+    if (user) {
+      setMonitoringUser({
+        id: user.id,
+        role: roleInCurrentOrg || undefined,
+        country: currentOrg?.country_code || undefined,
+        organizationId: currentOrg?.id || undefined,
+      });
+    } else {
+      clearMonitoringUser();
+    }
+  }, [user, roleInCurrentOrg, currentOrg]);
 
   const refreshUserData = async () => {
     if (user) {

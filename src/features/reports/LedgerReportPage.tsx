@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { reportsService, LedgerReportResult, LedgerEntryRow } from '../../lib/reportsService';
 import { accountingService } from '../../lib/accountingService';
@@ -23,6 +24,7 @@ import { generateCSV, downloadCSV, generateReportFilename } from '../../lib/expo
 
 export const LedgerReportPage: React.FC = () => {
   const { currentOrg } = useAuth();
+  const [searchParams] = useSearchParams();
   
   // Date and filter states
   const [dateFrom, setDateFrom] = useState<string>('');
@@ -78,7 +80,7 @@ export const LedgerReportPage: React.FC = () => {
     if (currentOrg) {
       initSetup();
     }
-  }, [currentOrg]);
+  }, [currentOrg, searchParams]);
 
   const initSetup = async () => {
     try {
@@ -89,7 +91,17 @@ export const LedgerReportPage: React.FC = () => {
       const allAccounts = await accountingService.getAccounts(currentOrg!.id);
       const postable = allAccounts.filter(a => a.allow_direct_posting);
       setAccounts(postable);
-      if (postable.length > 0) {
+      
+      const paramAccountId = searchParams.get('accountId') || searchParams.get('account_id');
+      const paramDateFrom = searchParams.get('dateFrom') || searchParams.get('date_from');
+      const paramDateTo = searchParams.get('dateTo') || searchParams.get('date_to');
+
+      let initialAccountId = '';
+      if (paramAccountId && postable.some(a => a.id === paramAccountId)) {
+        initialAccountId = paramAccountId;
+        setSelectedAccountId(paramAccountId);
+      } else if (postable.length > 0) {
+        initialAccountId = postable[0].id;
         setSelectedAccountId(postable[0].id);
       }
 
@@ -97,22 +109,32 @@ export const LedgerReportPage: React.FC = () => {
       const years = await accountingService.getFiscalYears(currentOrg!.id);
       setFiscalYears(years);
       
-      const activeYear = years.find(y => y.is_current) || years[0];
-      if (activeYear) {
-        setDateFrom(activeYear.start_date);
-        setDateTo(activeYear.end_date);
-        if (postable.length > 0) {
-          fetchReport(postable[0].id, activeYear.start_date, activeYear.end_date);
-        }
+      let initialDateFrom = '';
+      let initialDateTo = '';
+
+      if (paramDateFrom && paramDateTo) {
+        initialDateFrom = paramDateFrom;
+        initialDateTo = paramDateTo;
+        setDateFrom(paramDateFrom);
+        setDateTo(paramDateTo);
       } else {
-        const cy = new Date().getFullYear();
-        const start = `${cy}-01-01`;
-        const end = `${cy}-12-31`;
-        setDateFrom(start);
-        setDateTo(end);
-        if (postable.length > 0) {
-          fetchReport(postable[0].id, start, end);
+        const activeYear = years.find(y => y.is_current) || years[0];
+        if (activeYear) {
+          initialDateFrom = activeYear.start_date;
+          initialDateTo = activeYear.end_date;
+          setDateFrom(activeYear.start_date);
+          setDateTo(activeYear.end_date);
+        } else {
+          const cy = new Date().getFullYear();
+          initialDateFrom = `${cy}-01-01`;
+          initialDateTo = `${cy}-12-31`;
+          setDateFrom(initialDateFrom);
+          setDateTo(initialDateTo);
         }
+      }
+
+      if (initialAccountId && initialDateFrom && initialDateTo) {
+        fetchReport(initialAccountId, initialDateFrom, initialDateTo);
       }
     } catch (err) {
       setError(getErrorMessage(err));
