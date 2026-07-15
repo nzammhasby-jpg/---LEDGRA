@@ -222,6 +222,23 @@ export const accountingService = {
     return updatedAccount;
   },
 
+  async updateAccountBalanceSheetSection(
+    orgId: string,
+    accountId: string,
+    section: 'current_asset' | 'non_current_asset' | 'current_liability' | 'non_current_liability' | 'equity' | null
+  ): Promise<Account> {
+    const { data, error } = await supabase
+      .from('accounts')
+      .update({ balance_sheet_section: section })
+      .eq('id', accountId)
+      .eq('organization_id', orgId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   async deleteAccount(orgId: string, accountId: string): Promise<void> {
     const { error } = await supabase.rpc('delete_account', {
       p_org_id: orgId,

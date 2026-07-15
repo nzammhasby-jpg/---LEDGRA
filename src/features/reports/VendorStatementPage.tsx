@@ -97,7 +97,7 @@ export const VendorStatementPage: React.FC = () => {
     if (!reportData) return;
     const currency = currentOrg?.currency_code || '';
     const csvRows: any[][] = [
-      ['منشأة', currentOrg?.name_ar || currentOrg?.name || ''],
+      ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', `كشف حساب مورد: ${reportData.vendor_name}`],
       ['كود المورد', reportData.vendor_code || ''],
       ['الفترة من', dateFrom],

@@ -54,7 +54,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({
         {/* Main Info */}
         <div className="space-y-1.5">
           <p className="text-[10px] uppercase font-black tracking-wider text-slate-400 print:text-slate-500">
-            {currentOrg?.name_ar || currentOrg?.name || 'منصة لِدجرا للمحاسبة'}
+            {currentOrg?.name_ar || currentOrg?.name_en || 'منصة لِدجرا للمحاسبة'}
           </p>
           <h2 className="text-xl font-black text-slate-800 print:text-2xl print:text-slate-900">
             {reportName}

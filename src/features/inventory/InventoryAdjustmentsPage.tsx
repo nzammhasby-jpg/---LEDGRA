@@ -698,7 +698,7 @@ export const InventoryAdjustmentsPage: React.FC = () => {
 
                   <div className="flex justify-between">
                     <span className="text-gray-400 font-sans">منشئ الطلب:</span>
-                    <span className="font-semibold text-gray-800 font-sans">{(activeAdj as any).creator?.full_name || 'غير معروف'}</span>
+                    <span className="font-semibold text-gray-800 font-sans">{(activeAdj as any).creator?.full_name || 'مستخدم النظام'}</span>
                   </div>
 
                   <div className="flex justify-between">
@@ -715,7 +715,7 @@ export const InventoryAdjustmentsPage: React.FC = () => {
                     <>
                       <div className="border-t border-dashed border-gray-100 pt-3 flex justify-between">
                         <span className="text-gray-400 font-sans">معتمد بواسطة:</span>
-                        <span className="font-semibold text-emerald-700 font-sans">{(activeAdj as any).approver?.full_name || 'تلقائي'}</span>
+                        <span className="font-semibold text-emerald-700 font-sans">{(activeAdj as any).approver?.full_name || 'مستخدم النظام'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-400 font-sans">تاريخ الاعتماد:</span>
@@ -728,7 +728,7 @@ export const InventoryAdjustmentsPage: React.FC = () => {
                     <>
                       <div className="border-t border-dashed border-gray-100 pt-3 flex justify-between">
                         <span className="text-gray-400 font-sans">ملغى بواسطة:</span>
-                        <span className="font-semibold text-rose-700 font-sans">{(activeAdj as any).canceller?.full_name || 'تلقائي'}</span>
+                        <span className="font-semibold text-rose-700 font-sans">{(activeAdj as any).canceller?.full_name || 'مستخدم النظام'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-400 font-sans">تاريخ الإلغاء:</span>

@@ -48,13 +48,24 @@ export interface SubscriptionPlan {
   code: string;
   name_ar: string;
   name_en: string | null;
-  price_monthly: number;
-  price_yearly: number;
+  description_ar: string | null;
+  description_en: string | null;
+  plan_type: 'paid' | 'free' | 'trial';
+  billing_interval: 'monthly' | 'yearly' | 'custom' | 'none';
+  duration_days: number | null;
+  price: number;
+  currency_code: string;
+  trial_days: number | null;
   max_users: number | null;
-  max_invoices: number | null;
-  features: Record<string, boolean>;
+  max_branches: number | null;
+  max_invoices_per_month: number | null;
+  features: any;
   is_active: boolean;
+  is_public: boolean;
+  is_default_trial: boolean;
   sort_order: number;
+  archived_at: string | null;
+  active_subscriptions_count?: number;
 }
 
 export interface SubscriptionEvent {
@@ -72,18 +83,31 @@ export interface ClientSubscriptionInfo {
   id: string;
   organization_id: string;
   plan_id: string;
-  status: 'trial' | 'active' | 'past_due' | 'suspended' | 'cancelled';
-  billing_cycle: 'monthly' | 'yearly' | 'manual';
+  status: string;
   starts_at: string | null;
   ends_at: string | null;
+  trial_starts_at: string | null;
   trial_ends_at: string | null;
+  grace_ends_at: string | null;
+  auto_renew: boolean;
+  activation_method: string;
+  price_snapshot: number;
+  currency_snapshot: string;
+  plan_name_snapshot: string;
+  duration_days_snapshot: number | null;
   created_at: string;
+  billing_cycle?: string | null;
   plan: {
     code: string;
     name_ar: string;
     name_en: string | null;
-    features: Record<string, boolean>;
+    features: any;
+    max_users: number | null;
+    max_branches?: number | null;
+    max_invoices_per_month?: number | null;
   } | null;
+  effective_status: string;
+  days_remaining: number;
 }
 
 export const platformService = {
@@ -201,42 +225,62 @@ export const platformService = {
    * Get subscription for current organization (Organization members)
    */
   async getOrganizationSubscription(orgId: string): Promise<ClientSubscriptionInfo | null> {
-    const defaultTrialFallback = (reason: string): ClientSubscriptionInfo => {
-      console.warn(`[Subscription] Using default trial fallback (${reason}) for org: ${orgId}`);
-      return {
-        id: 'fallback-trial-id',
-        organization_id: orgId,
-        plan_id: 'free_trial',
-        status: 'trial',
-        billing_cycle: 'monthly',
-        starts_at: new Date().toISOString(),
-        ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        created_at: new Date().toISOString(),
-        plan: {
-          code: 'free_trial',
-          name_ar: 'فترة تجريبية مجانية',
-          name_en: 'Free Trial',
-          features: {
-            zatca: true,
-            inventory: true,
-            reports: true
-          }
-        }
-      };
-    };
-
     try {
-      const { data, error } = await supabase.rpc('get_my_organization_subscription', {
+      let { data, error } = await supabase.rpc('get_current_organization_subscription', {
         p_org_id: orgId
       });
 
       if (error) {
-        return defaultTrialFallback(error.message || String(error));
+        console.warn('Error fetching subscription:', error);
+        throw error;
+      }
+
+      // If no subscription row exists, try to ensure/create one
+      if (!data || data.length === 0) {
+        await supabase.rpc('ensure_organization_trial_subscription', { p_org_id: orgId });
+        
+        // Re-fetch
+        const refetch = await supabase.rpc('get_current_organization_subscription', {
+          p_org_id: orgId
+        });
+        if (!refetch.error && refetch.data && refetch.data.length > 0) {
+          data = refetch.data;
+        }
       }
 
       if (!data || data.length === 0) {
-        return defaultTrialFallback('No active subscription found in DB');
+        // Return a legacy pending fallback as required
+        return {
+          id: 'legacy-id-' + orgId,
+          organization_id: orgId,
+          plan_id: '',
+          status: 'legacy_pending',
+          starts_at: new Date().toISOString(),
+          ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          trial_starts_at: null,
+          trial_ends_at: null,
+          grace_ends_at: null,
+          auto_renew: false,
+          activation_method: 'migration',
+          price_snapshot: 0,
+          currency_snapshot: 'SAR',
+          plan_name_snapshot: 'رتبة معلقة (Legacy)',
+          duration_days_snapshot: null,
+          created_at: new Date().toISOString(),
+          plan: {
+            code: 'legacy_pending',
+            name_ar: 'منشأة قديمة (معلقة)',
+            name_en: 'Legacy Pending',
+            features: {
+              zatca: true,
+              inventory: true,
+              reports: true
+            },
+            max_users: null
+          },
+          effective_status: 'legacy_pending',
+          days_remaining: 30
+        };
       }
 
       const result = data[0];
@@ -245,20 +289,62 @@ export const platformService = {
         organization_id: result.organization_id,
         plan_id: result.plan_id,
         status: result.status,
-        billing_cycle: result.billing_cycle,
         starts_at: result.starts_at,
         ends_at: result.ends_at,
+        trial_starts_at: result.trial_starts_at,
         trial_ends_at: result.trial_ends_at,
-        created_at: result.created_at,
+        grace_ends_at: result.grace_ends_at,
+        auto_renew: result.auto_renew,
+        activation_method: result.activation_method,
+        price_snapshot: Number(result.price_snapshot || 0),
+        currency_snapshot: result.currency_snapshot || 'SAR',
+        plan_name_snapshot: result.plan_name_snapshot || '',
+        duration_days_snapshot: result.duration_days_snapshot,
+        created_at: result.created_at || new Date().toISOString(),
         plan: result.plan_code ? {
           code: result.plan_code,
           name_ar: result.plan_name_ar,
           name_en: result.plan_name_en,
-          features: result.plan_features || {}
-        } : null
+          features: result.plan_features || {},
+          max_users: result.max_users
+        } : null,
+        effective_status: result.effective_status,
+        days_remaining: result.days_remaining || 0
       };
     } catch (err: any) {
-      return defaultTrialFallback(err?.message || String(err));
+      console.warn('Error in getOrganizationSubscription:', err);
+      // Fail safely to legacy_pending state
+      return {
+        id: 'legacy-fail-id-' + orgId,
+        organization_id: orgId,
+        plan_id: '',
+        status: 'legacy_pending',
+        starts_at: new Date().toISOString(),
+        ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        trial_starts_at: null,
+        trial_ends_at: null,
+        grace_ends_at: null,
+        auto_renew: false,
+        activation_method: 'migration',
+        price_snapshot: 0,
+        currency_snapshot: 'SAR',
+        plan_name_snapshot: 'رتبة معلقة (Legacy)',
+        duration_days_snapshot: null,
+        created_at: new Date().toISOString(),
+        plan: {
+          code: 'legacy_pending',
+          name_ar: 'منشأة قديمة (معلقة)',
+          name_en: 'Legacy Pending',
+          features: {
+            zatca: true,
+            inventory: true,
+            reports: true
+          },
+          max_users: null
+        },
+        effective_status: 'legacy_pending',
+        days_remaining: 30
+      };
     }
   },
 
@@ -447,6 +533,283 @@ export const platformService = {
       });
       throw error;
     }
+  },
+
+  /**
+   * List all subscription plans, including archived ones (Super Admin only)
+   */
+  async listPlansAdmin(): Promise<SubscriptionPlan[]> {
+    const { data, error } = await supabase.rpc('platform_list_subscription_plans');
+    if (error) {
+      throw error;
+    }
+    return data || [];
+  },
+
+  /**
+   * Create a new subscription plan (Super Admin only)
+   */
+  async createPlan(params: {
+    code: string;
+    nameAr: string;
+    nameEn: string | null;
+    descriptionAr: string | null;
+    descriptionEn: string | null;
+    planType: 'paid' | 'free' | 'trial';
+    billingInterval: 'monthly' | 'yearly' | 'custom' | 'none';
+    durationDays: number | null;
+    price: number;
+    currencyCode: string;
+    trialDays: number | null;
+    maxUsers: number | null;
+    maxBranches: number | null;
+    maxInvoicesPerMonth: number | null;
+    features: any;
+    isActive: boolean;
+    isPublic: boolean;
+    isDefaultTrial: boolean;
+    sortOrder: number;
+  }): Promise<string> {
+    const { data, error } = await supabase.rpc('platform_create_subscription_plan', {
+      p_code: params.code,
+      p_name_ar: params.nameAr,
+      p_name_en: params.nameEn,
+      p_description_ar: params.descriptionAr,
+      p_description_en: params.descriptionEn,
+      p_plan_type: params.planType,
+      p_billing_interval: params.billingInterval,
+      p_duration_days: params.durationDays,
+      p_price: params.price,
+      p_currency_code: params.currencyCode,
+      p_trial_days: params.trialDays,
+      p_max_users: params.maxUsers,
+      p_max_branches: params.maxBranches,
+      p_max_invoices_per_month: params.maxInvoicesPerMonth,
+      p_features: params.features,
+      p_is_active: params.isActive,
+      p_is_public: params.isPublic,
+      p_is_default_trial: params.isDefaultTrial,
+      p_sort_order: params.sortOrder
+    });
+    if (error) {
+      throw error;
+    }
+    return data;
+  },
+
+  /**
+   * Update an existing subscription plan (Super Admin only)
+   */
+  async updatePlan(planId: string, params: {
+    code: string;
+    nameAr: string;
+    nameEn: string | null;
+    descriptionAr: string | null;
+    descriptionEn: string | null;
+    planType: 'paid' | 'free' | 'trial';
+    billingInterval: 'monthly' | 'yearly' | 'custom' | 'none';
+    durationDays: number | null;
+    price: number;
+    currencyCode: string;
+    trialDays: number | null;
+    maxUsers: number | null;
+    maxBranches: number | null;
+    maxInvoicesPerMonth: number | null;
+    features: any;
+    isActive: boolean;
+    isPublic: boolean;
+    isDefaultTrial: boolean;
+    sortOrder: number;
+  }): Promise<void> {
+    const { error } = await supabase.rpc('platform_update_subscription_plan', {
+      p_plan_id: planId,
+      p_code: params.code,
+      p_name_ar: params.nameAr,
+      p_name_en: params.nameEn,
+      p_description_ar: params.descriptionAr,
+      p_description_en: params.descriptionEn,
+      p_plan_type: params.planType,
+      p_billing_interval: params.billingInterval,
+      p_duration_days: params.durationDays,
+      p_price: params.price,
+      p_currency_code: params.currencyCode,
+      p_trial_days: params.trialDays,
+      p_max_users: params.maxUsers,
+      p_max_branches: params.maxBranches,
+      p_max_invoices_per_month: params.maxInvoicesPerMonth,
+      p_features: params.features,
+      p_is_active: params.isActive,
+      p_is_public: params.isPublic,
+      p_is_default_trial: params.isDefaultTrial,
+      p_sort_order: params.sortOrder
+    });
+    if (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Archive a subscription plan (Super Admin only)
+   */
+  async archivePlan(planId: string): Promise<void> {
+    const { error } = await supabase.rpc('platform_archive_subscription_plan', {
+      p_plan_id: planId
+    });
+    if (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Restore an archived subscription plan (Super Admin only)
+   */
+  async restorePlan(planId: string): Promise<void> {
+    const { error } = await supabase.rpc('platform_restore_subscription_plan', {
+      p_plan_id: planId
+    });
+    if (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * List all organization subscriptions with filtering options (Super Admin only)
+   */
+  async listOrgSubscriptionsAdmin(params?: {
+    search?: string;
+    statusFilter?: string;
+    planFilter?: string;
+  }): Promise<any[]> {
+    const { data, error } = await supabase.rpc('platform_list_organization_subscriptions', {
+      p_search: params?.search || null,
+      p_status_filter: params?.statusFilter || null,
+      p_plan_filter: params?.planFilter || null
+    });
+    if (error) {
+      throw error;
+    }
+    return data || [];
+  },
+
+  /**
+   * Activate or override an organization's subscription (Super Admin only)
+   */
+  async activateOrgSubscription(params: {
+    orgId: string;
+    planId: string;
+    startsAt: string;
+    endsAt: string;
+    graceDays?: number;
+    priceSnapshot?: number;
+    notes?: string;
+  }): Promise<string> {
+    const { data, error } = await supabase.rpc('platform_activate_organization_subscription', {
+      p_org_id: params.orgId,
+      p_plan_id: params.planId,
+      p_starts_at: params.startsAt,
+      p_ends_at: params.endsAt,
+      p_grace_days: params.graceDays ?? 0,
+      p_price_snapshot: params.priceSnapshot ?? null,
+      p_notes: params.notes || null
+    });
+    if (error) {
+      throw error;
+    }
+    return data;
+  },
+
+  /**
+   * Extend the current active organization's subscription (Super Admin only)
+   */
+  async extendOrgSubscription(params: {
+    orgId: string;
+    endsAt: string;
+    graceDays?: number;
+    notes?: string;
+  }): Promise<void> {
+    const { error } = await supabase.rpc('platform_extend_organization_subscription', {
+      p_org_id: params.orgId,
+      p_ends_at: params.endsAt,
+      p_grace_days: params.graceDays ?? 0,
+      p_notes: params.notes || null
+    });
+    if (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Change plan for an organization's subscription (Super Admin only)
+   */
+  async changeOrgPlan(params: {
+    orgId: string;
+    planId: string;
+    endsAt: string;
+    graceDays?: number;
+    priceSnapshot?: number;
+    notes?: string;
+  }): Promise<void> {
+    const { error } = await supabase.rpc('platform_change_organization_plan', {
+      p_org_id: params.orgId,
+      p_plan_id: params.planId,
+      p_ends_at: params.endsAt,
+      p_grace_days: params.graceDays ?? 0,
+      p_price_snapshot: params.priceSnapshot ?? null,
+      p_notes: params.notes || null
+    });
+    if (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Suspend an organization's subscription (Super Admin only)
+   */
+  async suspendOrgSubscription(orgId: string, notes?: string): Promise<void> {
+    const { error } = await supabase.rpc('platform_suspend_organization_subscription', {
+      p_org_id: orgId,
+      p_notes: notes || null
+    });
+    if (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Resume a suspended organization's subscription (Super Admin only)
+   */
+  async resumeOrgSubscription(orgId: string, notes?: string): Promise<void> {
+    const { error } = await supabase.rpc('platform_resume_organization_subscription', {
+      p_org_id: orgId,
+      p_notes: notes || null
+    });
+    if (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Cancel an organization's subscription (Super Admin only)
+   */
+  async cancelOrgSubscription(orgId: string, notes?: string): Promise<void> {
+    const { error } = await supabase.rpc('platform_cancel_organization_subscription', {
+      p_org_id: orgId,
+      p_notes: notes || null
+    });
+    if (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Get subscription dashboard metrics and stats (Super Admin only)
+   */
+  async getSubscriptionDashboardStats(): Promise<any> {
+    const { data, error } = await supabase.rpc('platform_get_subscription_dashboard');
+    if (error) {
+      throw error;
+    }
+    return data;
   }
 };
 

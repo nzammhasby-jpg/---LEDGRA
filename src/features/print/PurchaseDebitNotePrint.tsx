@@ -128,7 +128,7 @@ export const PurchaseDebitNotePrint: React.FC = () => {
           <div className="border-r border-slate-200 pr-6 space-y-1 text-[11px] text-slate-600">
             <div>
               <span className="font-bold text-slate-500">{profile.vatLabel} للمورد: </span>
-              <span className="font-mono text-slate-800 font-extrabold">{vendor?.vat_number || 'غير متوفر'}</span>
+              <span className="font-mono text-slate-800 font-extrabold">{vendor?.tax_number || 'غير متوفر'}</span>
             </div>
             {vendor?.commercial_registration && (
               <div>
@@ -214,8 +214,7 @@ export const PurchaseDebitNotePrint: React.FC = () => {
 
         {/* Footer info (Purchase debit notes don't require outbound B2C/B2B ZATCA QR codes) */}
         <PrintFooter
-          currentOrg={currentOrg}
-          qrBase64={null}
+          description="مستند مالي داخلي يثبت استرجاع السلع أو الخدمات المفوترة من المورد المدرج أعلاه."
         />
       </div>
     </div>

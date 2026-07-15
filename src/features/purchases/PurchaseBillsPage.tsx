@@ -269,7 +269,7 @@ export const PurchaseBillsPage: React.FC = () => {
     if (item) {
       updated[index].item_id = itemId;
       updated[index].description = item.description || item.name || '';
-      updated[index].unit_cost = String(item.cost_price || 0);
+      updated[index].unit_cost = String(item.purchase_price || 0);
       
       if (currentOrg?.is_vat_registered === false) {
         updated[index].tax_rate = 0;
@@ -281,7 +281,7 @@ export const PurchaseBillsPage: React.FC = () => {
         updated[index].inventory_account_id = item.inventory_account_id || settings?.default_inventory_account_id || '';
         updated[index].expense_account_id = '';
       } else {
-        updated[index].expense_account_id = item.expense_account_id || settings?.default_expense_account_id || '';
+        updated[index].expense_account_id = item.expense_account_id || '';
         updated[index].inventory_account_id = '';
       }
     } else {
@@ -917,7 +917,7 @@ export const PurchaseBillsPage: React.FC = () => {
                 </select>
                 {selectedVendorInfo && (
                   <span className="text-[10px] text-brand-blue mt-1.5 block font-medium">
-                    الرصيد الافتتاحي: {selectedVendorInfo.opening_balance} {currentOrg?.currency_code || ''} | حساب الذمم: {selectedVendorInfo.payable_account?.name || '—'}
+                    الرصيد الافتتاحي: {selectedVendorInfo.opening_balance} {currentOrg?.currency_code || ''} | حساب الذمم: {selectedVendorInfo.payable_account?.name_ar || selectedVendorInfo.payable_account?.name_en || '—'}
                   </span>
                 )}
               </div>
@@ -1110,7 +1110,7 @@ export const PurchaseBillsPage: React.FC = () => {
                             <option value="">— اختر حساب الدورة للبند —</option>
                             {filteredLineAccounts.map(a => (
                               <option key={a.id} value={a.id}>
-                                [{a.code}] {a.name} ({a.classification === 'assets' ? 'أصل' : 'مصروف'})
+                                [{a.code}] {a.name_ar} ({a.classification === 'assets' ? 'أصل' : 'مصروف'})
                               </option>
                             ))}
                           </select>
@@ -1295,7 +1295,7 @@ export const PurchaseBillsPage: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-slate-400 block mb-1">{getCountryProfile(currentOrg?.country_code).vatLabel} للمورد</span>
-                  <span className="font-mono font-bold text-slate-800">{selectedBill.vendor?.vat_number || 'غير مسجل ضريبياً'}</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedBill.vendor?.tax_number || 'غير مسجل ضريبياً'}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block mb-1">تاريخ الفاتورة</span>

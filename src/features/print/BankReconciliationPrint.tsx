@@ -125,8 +125,8 @@ export const BankReconciliationPrint: React.FC = () => {
       <div className="relative bg-white w-full max-w-[210mm] min-h-[297mm] mx-auto p-12 my-8 border border-slate-200 shadow-2xl rounded-xl print-page print:border-none print:shadow-none print:my-0 print:p-0 print:rounded-none overflow-hidden text-right">
         
         {/* Status Watermark */}
-        {getStatusWatermarkText(reconciliation.status) && (
-          <PrintWatermark text={getStatusWatermarkText(reconciliation.status)} />
+        {reconciliation.status && (
+          <PrintWatermark status={reconciliation.status} />
         )}
 
         {/* Corporate Standard Header */}
@@ -350,7 +350,7 @@ export const BankReconciliationPrint: React.FC = () => {
         </div>
 
         {/* Corporate Standard Footer */}
-        <PrintFooter currentOrg={currentOrg} />
+        <PrintFooter />
 
       </div>
     </div>

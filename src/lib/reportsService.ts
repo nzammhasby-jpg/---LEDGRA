@@ -40,6 +40,41 @@ export interface BalanceSheetResult {
   accounts_breakdown: BalanceSheetBreakdown[];
 }
 
+export interface AdvancedBalanceSheetPeriod {
+  assets_current: number;
+  assets_non_current: number;
+  assets_unclassified: number;
+  total_assets: number;
+  liabilities_current: number;
+  liabilities_non_current: number;
+  liabilities_unclassified: number;
+  total_liabilities: number;
+  equity: number;
+  current_year_net_income: number;
+  total_equity_and_income: number;
+  check_difference: number;
+}
+
+export interface AdvancedBalanceSheetBreakdown {
+  account_id: string;
+  account_code: string;
+  account_name_ar: string;
+  account_name_en: string | null;
+  classification: 'assets' | 'liabilities' | 'equity';
+  balance_sheet_section: 'current_asset' | 'non_current_asset' | 'current_liability' | 'non_current_liability' | 'equity' | null;
+  amount: number;
+  comparison_amount: number;
+}
+
+export interface AdvancedBalanceSheetResult {
+  as_of_date: string;
+  comparison_date: string | null;
+  unclassified_accounts_count: number;
+  main_period: AdvancedBalanceSheetPeriod;
+  comparison_period: AdvancedBalanceSheetPeriod | null;
+  accounts: AdvancedBalanceSheetBreakdown[];
+}
+
 export interface CustomerMovement {
   date: string;
   journal_number: string;
@@ -132,6 +167,21 @@ export const reportsService = {
 
     if (error) throw error;
     return data as BalanceSheetResult;
+  },
+
+  async getAdvancedBalanceSheet(
+    orgId: string,
+    asOfDate: string,
+    comparisonDate: string | null = null
+  ): Promise<AdvancedBalanceSheetResult> {
+    const { data, error } = await supabase.rpc('get_advanced_balance_sheet', {
+      p_org_id: orgId,
+      p_as_of_date: asOfDate,
+      p_comparison_date: comparisonDate || null
+    });
+
+    if (error) throw error;
+    return data as AdvancedBalanceSheetResult;
   },
 
   // ==========================================

@@ -109,7 +109,7 @@ export const IncomeStatementPage: React.FC = () => {
     const currency = currentOrg?.currency_code || '';
     const csvRows: any[][] = [];
     
-    csvRows.push(['منشأة', currentOrg?.name_ar || currentOrg?.name || '']);
+    csvRows.push(['منشأة', currentOrg?.name_ar || currentOrg?.name_en || '']);
     csvRows.push(['التقرير', 'قائمة الدخل المتقدمة']);
     csvRows.push(['الفترة من', dateFrom]);
     csvRows.push(['الفترة إلى', dateTo]);

@@ -514,6 +514,30 @@ export const Settings: React.FC = () => {
   const [newBranchError, setNewBranchError] = useState<string | null>(null);
   const [submittingBranch, setSubmittingBranch] = useState<boolean>(false);
 
+  // Invoices count for subscription limits
+  const [invoicesCountThisMonth, setInvoicesCountThisMonth] = useState<number>(0);
+
+  const loadInvoicesCountThisMonth = async () => {
+    if (!currentOrg?.id) return;
+    try {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { count, error } = await supabase
+        .from('sales_invoices')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', currentOrg.id)
+        .gte('created_at', startOfMonth.toISOString());
+
+      if (!error && count !== null) {
+        setInvoicesCountThisMonth(count);
+      }
+    } catch (err) {
+      console.error('Error counting invoices this month:', err);
+    }
+  };
+
   const isPrivileged = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin';
 
   // Fetch Branches from Supabase
@@ -817,6 +841,10 @@ export const Settings: React.FC = () => {
         loadInvitations();
       } else if (activeTab === 'accounting') {
         loadAccounting();
+      } else if (activeTab === 'subscription') {
+        loadBranches();
+        loadMembers();
+        loadInvoicesCountThisMonth();
       } else {
         // Initial tab or switcher load
         loadBranches();
@@ -2312,22 +2340,22 @@ export const Settings: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
-                  {/* Category 1: Cash & Banks */}
+
+                  {/* Category 1: Cash, Bank, and Receivables */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>1. حسابات السيولة السريعة والنقدية</span>
+                      <span>1. النقدية والبنوك والمدينين (الأصول المتداولة)</span>
                     </h4>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">الخزينة النقدية الافتراضية (الصندوق)</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">الحساب النقدي الرئيسي (Default Cash Account)</label>
                         <select 
                           name="default_cash" 
                           defaultValue={accountingSettings?.default_cash_account_id || ''}
                           className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
                         >
-                          <option value="">-- اختر حساب الصندوق النقدي --</option>
+                          <option value="">-- اختر حساب النقدية --</option>
                           {accounts.filter(a => a.classification === 'assets').map(a => (
                             <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
                           ))}
@@ -2335,13 +2363,27 @@ export const Settings: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">الحساب البنكي الافتراضي للمنشأة</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">الحساب البنكي الرئيسي (Default Bank Account)</label>
                         <select 
                           name="default_bank" 
                           defaultValue={accountingSettings?.default_bank_account_id || ''}
                           className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
                         >
-                          <option value="">-- اختر الحساب البنكي الافتراضي --</option>
+                          <option value="">-- اختر حساب البنك --</option>
+                          {accounts.filter(a => a.classification === 'assets').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب العملاء / ذمم مدينة (Accounts Receivable)</label>
+                        <select 
+                          name="default_receivables" 
+                          defaultValue={accountingSettings?.default_receivables_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب ذمم العملاء --</option>
                           {accounts.filter(a => a.classification === 'assets').map(a => (
                             <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
                           ))}
@@ -2350,35 +2392,21 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Category 2: Receivables & Payables */}
+                  {/* Category 2: Payables & Purchasing */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>2. حسابات الشركاء والذمم (العملاء والموردين)</span>
+                      <span>2. الموردين والمشتريات (الالتزامات المتداولة)</span>
                     </h4>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب العملاء والذمم المدينة (Customer Receivables)</label>
-                        <select 
-                          name="default_receivables" 
-                          defaultValue={accountingSettings?.default_receivables_account_id || ''}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
-                        >
-                          <option value="">-- اختر حساب الذمم المدينة الموحد --</option>
-                          {accounts.filter(a => a.classification === 'assets').map(a => (
-                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب الموردين والذمم الدائنة (Vendor Payables)</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب الموردين / ذمم دائنة (Accounts Payable)</label>
                         <select 
                           name="default_payables" 
                           defaultValue={accountingSettings?.default_payables_account_id || ''}
                           className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
                         >
-                          <option value="">-- اختر حساب الذمم الدائنة الموحد --</option>
+                          <option value="">-- اختر حساب الموردين --</option>
                           {accounts.filter(a => a.classification === 'liabilities').map(a => (
                             <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
                           ))}
@@ -2387,21 +2415,21 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Category 3: Product & Service Sales */}
+                  {/* Category 3: Revenues & Sales */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>3. حسابات المبيعات وإيرادات النشاط</span>
+                      <span>3. المبيعات والإيرادات</span>
                     </h4>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب مبيعات المنتجات والسلع</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب إيرادات المبيعات السلعية (Sales Revenue)</label>
                         <select 
                           name="default_sales" 
                           defaultValue={accountingSettings?.default_sales_account_id || ''}
                           className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
                         >
-                          <option value="">-- اختر حساب إيرادات المبيعات السلعية --</option>
+                          <option value="">-- اختر حساب المبيعات --</option>
                           {accounts.filter(a => a.classification === 'revenue').map(a => (
                             <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
                           ))}
@@ -2409,13 +2437,13 @@ export const Settings: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب مبيعات الخدمات والتشغيل</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب إيرادات مبيعات الخدمات (Service Revenue)</label>
                         <select 
                           name="default_service_sales" 
                           defaultValue={accountingSettings?.default_service_sales_account_id || ''}
                           className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
                         >
-                          <option value="">-- اختر حساب إيرادات مبيعات الخدمات --</option>
+                          <option value="">-- اختر حساب مبيعات الخدمات --</option>
                           {accounts.filter(a => a.classification === 'revenue').map(a => (
                             <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
                           ))}
@@ -2424,66 +2452,15 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Category 4: Inventory & Cost */}
+                  {/* Category 4: Taxes & Duties */}
                   <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
                     <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>4. حسابات المخازن وتكاليف البضاعة</span>
+                      <span>4. الضرائب والالتزامات المستحقة</span>
                     </h4>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب المخزون السلعي (Inventory Assets)</label>
-                        <select 
-                          name="default_inventory" 
-                          defaultValue={accountingSettings?.default_inventory_account_id || ''}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
-                        >
-                          <option value="">-- اختر حساب المخزون العام --</option>
-                          {accounts.filter(a => a.classification === 'assets').map(a => (
-                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب تكلفة البضاعة المباعة (COGS Expenses)</label>
-                        <select 
-                          name="default_cogs" 
-                          defaultValue={accountingSettings?.default_cogs_account_id || ''}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
-                        >
-                          <option value="">-- اختر حساب تكلفة المبيعات --</option>
-                          {accounts.filter(a => a.classification === 'expenses').map(a => (
-                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Category 5: Taxes and Retained Earnings */}
-                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50 md:col-span-2">
-                    <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
-                      <span>5. ضريبة القيمة المضافة والأرباح المدورة</span>
-                    </h4>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1 font-sans">حساب الضريبة المدخلة (المشتريات)</label>
-                        <select 
-                          name="default_tax_input" 
-                          defaultValue={accountingSettings?.default_tax_input_account_id || ''}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
-                        >
-                          <option value="">-- اختر حساب ضريبة المدخلات --</option>
-                          {accounts.filter(a => a.classification === 'assets').map(a => (
-                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1 font-sans">حساب الضريبة المخرجة (المبيعات)</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">ضريبة القيمة المضافة للمخرجات (VAT Output)</label>
                         <select 
                           name="default_tax_output" 
                           defaultValue={accountingSettings?.default_tax_output_account_id || ''}
@@ -2497,13 +2474,64 @@ export const Settings: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1 font-sans">حساب الأرباح المبقاة (Retained Earnings)</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">ضريبة القيمة المضافة للمدخلات (VAT Input)</label>
+                        <select 
+                          name="default_tax_input" 
+                          defaultValue={accountingSettings?.default_tax_input_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب ضريبة المدخلات --</option>
+                          {accounts.filter(a => a.classification === 'assets').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Category 5: Inventory & COGS */}
+                  <div className="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm/50">
+                    <h4 className="text-xs font-bold text-brand-blue border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                      <span>5. المخزون وتكلفة البضاعة المباعة والأرباح</span>
+                    </h4>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب مخزون البضائع (Inventory Account)</label>
+                        <select 
+                          name="default_inventory" 
+                          defaultValue={accountingSettings?.default_inventory_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب المخزون --</option>
+                          {accounts.filter(a => a.classification === 'assets').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب تكلفة البضاعة المباعة (COGS)</label>
+                        <select 
+                          name="default_cogs" 
+                          defaultValue={accountingSettings?.default_cogs_account_id || ''}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
+                        >
+                          <option value="">-- اختر حساب تكلفة المبيعات --</option>
+                          {accounts.filter(a => a.classification === 'expenses').map(a => (
+                            <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">حساب الأرباح المبقاة (Retained Earnings)</label>
                         <select 
                           name="default_retained_earnings" 
                           defaultValue={accountingSettings?.default_retained_earnings_account_id || ''}
                           className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-blue/10 font-mono"
                         >
-                          <option value="">-- اختر حساب الأرباح المدورة --</option>
+                          <option value="">-- اختر حساب الأرباح المبقاة --</option>
                           {accounts.filter(a => a.classification === 'equity').map(a => (
                             <option key={a.id} value={a.id}>({a.code}) {a.name_ar}</option>
                           ))}
@@ -2514,38 +2542,67 @@ export const Settings: React.FC = () => {
 
                 </div>
 
-                <div className="flex justify-end pt-4">
-                  <button 
-                    type="submit" 
-                    disabled={savingAccounting}
-                    className="flex items-center gap-1.5 px-6 py-2.5 bg-brand-blue hover:bg-blue-600 text-white font-bold rounded-xl text-xs cursor-pointer select-none transition disabled:opacity-50 shadow-md shadow-brand-blue/10"
-                  >
-                    {savingAccounting ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>جاري حفظ العلاقات والمطابقات ممارسياً...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        <span>حفظ وثاق الروابط المحاسبية الافتراضية</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
+                {isPrivileged && (
+                  <div className="flex justify-end pt-4 border-t border-slate-100">
+                    <button
+                      type="submit"
+                      disabled={savingAccounting}
+                      className="px-6 py-2.5 bg-brand-blue hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-md shadow-brand-blue/15"
+                    >
+                      {savingAccounting ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                          <span>جاري الحفظ الآمن...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" />
+                          <span>حفظ إعدادات الربط المحاسبي</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </form>
             )}
-
           </div>
         )}
 
         {/* Tab 5: ZATCA Compliance */}
         {activeTab === 'zatca' && (
           currentOrg?.country_code === 'SA' ? (
-            <ZatcaSettingsComp />
+            <div className="space-y-6">
+              <div className="border-b border-slate-150 pb-4">
+                <h3 className="text-base font-black text-slate-900">الربط والامتثال مع هيئة الزكاة والضريبة والجمارك (ZATCA)</h3>
+                <p className="text-[11px] text-slate-500 font-medium">إعدادات الفوترة الإلكترونية (المرحلة الثانية - الربط والتكامل) وإصدار فواتير ضريبية مبسطة معتمدة.</p>
+              </div>
+              
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-xs leading-relaxed text-amber-800">
+                <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h5 className="font-bold">المرحلة الثانية للفوترة الإلكترونية (الربط والدمج):</h5>
+                  <p className="text-[10px] mt-1 text-amber-700">
+                    هذا الحساب مهيأ للربط في بيئة الاختبار والتجربة القياسية للهيئة. للبدء بطلب شهادة التشفير (CSID) للفرع وتهيئة جهاز إصدار الفواتير الفعلي، يرجى مراجعة الدعم الفني المعتمد للمنصة.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-2xl p-5 space-y-4">
+                <h4 className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-2">تفاصيل حالة الربط مع الهيئة</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="p-4 bg-slate-50 rounded-xl space-y-1">
+                    <span className="text-slate-400 block text-[10px]">بيئة الربط (Environment):</span>
+                    <strong className="text-slate-800">بيئة المحاكاة والاختبار (Sandbox)</strong>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-xl space-y-1">
+                    <span className="text-slate-400 block text-[10px]">حالة التسجيل الضريبي:</span>
+                    <strong className="text-slate-800">مسجل - الرقم الضريبي {currentOrg?.vat_number || 'غير متوفر'}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : (
-            <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-4 text-xs font-bold text-center">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-bold text-center">
               الفوترة الإلكترونية السعودية متاحة فقط للمنشآت داخل السعودية.
             </div>
           )
@@ -2554,122 +2611,272 @@ export const Settings: React.FC = () => {
         {/* Tab 6: Subscription */}
         {activeTab === 'subscription' && (
           <div className="space-y-6">
-            <div className="border-b border-slate-150 pb-4">
-              <h3 className="text-base font-black text-slate-900">اشتراك المؤسسة</h3>
-              <p className="text-[11px] text-slate-500 font-medium">بيانات الباقة الحالية ومتابعة وتجديد اشتراكك السحابي مع لِدجرا.</p>
+            <div className="border-b border-slate-150 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h3 className="text-base font-black text-slate-900">اشتراك المؤسسة والموارد السحابية</h3>
+                <p className="text-[11px] text-slate-500 font-medium">متابعة تفاصيل الباقة الحالية، الأيام المتبقية، وسقف استهلاك الموارد المحددة لمنشأتك.</p>
+              </div>
+              <span className="text-[10px] bg-slate-100 text-slate-500 font-mono px-2.5 py-1 rounded-lg border border-slate-200">
+                Org ID: {currentOrg?.id}
+              </span>
             </div>
 
             {subLoading ? (
-              <div className="py-12 text-center text-xs font-bold text-slate-400">جاري سحب بيانات الاشتراك الحية...</div>
+              <div className="py-20 text-center flex flex-col items-center justify-center space-y-3">
+                <span className="w-8 h-8 rounded-full border-4 border-slate-950 border-t-transparent animate-spin" />
+                <span className="text-xs font-bold text-slate-400">جاري سحب تفاصيل الاشتراك الحية...</span>
+              </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                {/* Subscription Details Card */}
-                <div className="md:col-span-2 space-y-4">
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 bg-slate-900 rounded-xl text-white">
-                          <Award className="w-5 h-5" />
+                {/* Subscription Details & Usage Card */}
+                <div className="lg:col-span-2 space-y-6">
+                  <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-6 shadow-xs relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-32 h-32 bg-slate-200/50 rounded-full blur-3xl opacity-40 pointer-events-none" />
+                    
+                    {/* Header: Plan Name and Status */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/60 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-slate-900 text-brand-turquoise rounded-2xl shadow-sm">
+                          <Award className="w-6 h-6" />
                         </div>
                         <div>
                           <h4 className="text-sm font-black text-slate-900">
-                            {subPlan?.name_ar || 'فترة تجريبية مجانية'}
+                            {subscription?.plan_name_snapshot || subPlan?.name_ar || 'الفترة التجريبية الافتراضية'}
                           </h4>
-                          <span className="text-[10px] text-slate-400 font-mono">CODE: {subPlan?.code || 'free_trial'}</span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] text-slate-400 font-mono">CODE: {subPlan?.code || 'free_trial'}</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-[10px] font-bold text-slate-600">
+                              {subscription?.price_snapshot ? `${subscription.price_snapshot} ريال / ` : 'مشمول / '}
+                              {subscription?.billing_cycle === 'monthly' && 'شهرياً'}
+                              {subscription?.billing_cycle === 'yearly' && 'سنوياً'}
+                              {subscription?.billing_cycle === 'manual' && 'يدوي بالاتفاق'}
+                              {!subscription?.billing_cycle && 'شهرياً'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                       
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-tight ${
-                        subStatus === 'active'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                          : subStatus === 'trial'
-                          ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                          : subStatus === 'suspended'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                          : 'bg-rose-50 text-rose-700 border border-rose-100'
+                      <span className={`px-3.5 py-1.5 rounded-full text-xs font-black tracking-tight border inline-flex items-center gap-1.5 self-start sm:self-auto ${
+                        subscription?.effective_status === 'active'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : subscription?.effective_status === 'trial'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse'
+                          : subscription?.effective_status === 'suspended'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : subscription?.effective_status === 'legacy_pending'
+                          ? 'bg-slate-50 text-slate-600 border-slate-200'
+                          : 'bg-rose-50 text-rose-700 border-rose-200'
                       }`}>
-                        {subStatus === 'active' && 'نشط / فعال'}
-                        {subStatus === 'trial' && 'تحت التجربة المجانية'}
-                        {subStatus === 'suspended' && 'موقوف مؤقتاً'}
-                        {subStatus === 'past_due' && 'متأخر الدفع'}
-                        {subStatus === 'cancelled' && 'ملغي'}
+                        <span className={`w-2 h-2 rounded-full ${
+                          subscription?.effective_status === 'active' ? 'bg-emerald-500' :
+                          subscription?.effective_status === 'trial' ? 'bg-blue-500' :
+                          subscription?.effective_status === 'suspended' ? 'bg-amber-500' : 'bg-red-500'
+                        }`} />
+                        {subscription?.effective_status === 'active' && 'نشط / مفعل'}
+                        {subscription?.effective_status === 'trial' && 'فترة تجريبية مجانية'}
+                        {subscription?.effective_status === 'suspended' && 'موقوف مؤقتاً'}
+                        {subscription?.effective_status === 'past_due' && 'متأخر سداد الدفعة'}
+                        {subscription?.effective_status === 'cancelled' && 'ملغي'}
+                        {subscription?.effective_status === 'legacy_pending' && 'معلق للمراجعة'}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium text-slate-700">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 block">دورة الفوترة:</span>
-                        <p className="font-bold text-slate-900">
-                          {subscription?.billing_cycle === 'monthly' && 'شهري'}
-                          {subscription?.billing_cycle === 'yearly' && 'سنوي'}
-                          {subscription?.billing_cycle === 'manual' && 'يدوي بالاتفاق'}
-                          {!subscription?.billing_cycle && 'شهري'}
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 block">تاريخ انتهاء الصلاحية:</span>
-                        <p className="font-mono text-slate-900">
-                          {subStatus === 'trial' 
-                            ? subscription?.trial_ends_at ? new Date(subscription.trial_ends_at).toLocaleDateString('ar-SA') : 'منتهي'
-                            : subscription?.ends_at ? new Date(subscription.ends_at).toLocaleDateString('ar-SA') : 'مفتوح'
-                          }
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 block">تاريخ بدء الاشتراك:</span>
-                        <p className="font-mono text-slate-900">
+                    {/* Timeline dates info */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold text-slate-400 block">تاريخ البدء المعتمد:</span>
+                        <p className="font-mono text-slate-900 font-bold">
                           {subscription?.starts_at ? new Date(subscription.starts_at).toLocaleDateString('ar-SA') : 'غير محدد'}
                         </p>
                       </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-slate-400 block">المنشأة المستفيدة:</span>
-                        <p className="font-bold text-slate-900">
-                          {currentOrg?.name_ar || currentOrg?.name_en}
+                      <div className="space-y-0.5 col-span-2 sm:col-span-1">
+                        <span className="text-[10px] font-bold text-slate-400 block">تاريخ الانتهاء المجدول:</span>
+                        <p className="font-mono text-slate-900 font-bold">
+                          {subscription?.ends_at ? new Date(subscription.ends_at).toLocaleDateString('ar-SA') : 'تفعيل دائم / مخصص'}
                         </p>
                       </div>
+                      {subscription?.trial_ends_at && (
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-bold text-slate-400 block">تاريخ انتهاء التجربة:</span>
+                          <p className="font-mono text-slate-900 font-bold">
+                            {new Date(subscription.trial_ends_at).toLocaleDateString('ar-SA')}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Pricing Info Notice Banner */}
-                  <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 space-y-3 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-24 h-24 bg-slate-800 rounded-full blur-xl opacity-30 pointer-events-none" />
-                    <h5 className="text-xs font-black text-slate-300">طريقة التجديد والترقية اليدوية</h5>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      الاشتراك في منصة لِدجرا يتم بالكامل يدوياً وبدون سحب تلقائي للبطاقات. لتمديد صلاحية الفترة التجريبية أو تفعيل الباقة (الأساسية، الاحترافية، أو باقة الشركات)، يرجى النقر على زر التواصل لفتح محادثة فورية مع مهندس المبيعات والدعم الفني بالواتساب.
-                    </p>
-                    <div className="pt-2 text-[10px] text-slate-400">
-                      * يرجى إرفاق اسم المنشأة والبريد الضريبي المسجل لتسريع تفعيل باقتك.
+                  {/* Resource usage progress trackers */}
+                  <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-6 shadow-xs">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2.5">
+                        <Activity className="w-4 h-4 text-brand-blue" />
+                        <span>سقف استهلاك الموارد المشمولة بالباقة</span>
+                      </h4>
+                      <p className="text-[10px] text-slate-400 mt-1">تتبع استهلاك منشأتك الفعلي مقارنة بالحدود المقررة في باقة اشتراكك الحالية.</p>
+                    </div>
+
+                    <div className="space-y-5">
+                      {/* Metric 1: Users */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-bold text-slate-700">عدد المستخدمين النشطين (كادر العمل)</span>
+                          <span className="font-mono text-slate-500 font-bold">
+                            {membersList.length} مستخدم / {subPlan?.max_users || 'غير محدود'}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              !subPlan?.max_users ? 'bg-brand-blue' :
+                              (membersList.length / subPlan.max_users) >= 0.9 ? 'bg-rose-500' :
+                              (membersList.length / subPlan.max_users) >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                            style={{ 
+                              width: !subPlan?.max_users ? '20%' : `${Math.min(100, (membersList.length / subPlan.max_users) * 100)}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Metric 2: Branches */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-bold text-slate-700">عدد الفروع والمستودعات المسجلة</span>
+                          <span className="font-mono text-slate-500 font-bold">
+                            {branches.length} فرع / {subPlan?.max_branches || 'غير محدود'}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              !subPlan?.max_branches ? 'bg-brand-blue' :
+                              (branches.length / subPlan.max_branches) >= 0.9 ? 'bg-rose-500' :
+                              (branches.length / subPlan.max_branches) >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                            style={{ 
+                              width: !subPlan?.max_branches ? '20%' : `${Math.min(100, (branches.length / subPlan.max_branches) * 100)}%` 
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Metric 3: Invoices */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-bold text-slate-700">الفواتير المصدرة هذا الشهر (دورة الفوترة الحالية)</span>
+                          <span className="font-mono text-slate-500 font-bold">
+                            {invoicesCountThisMonth} فاتورة / {subPlan?.max_invoices_per_month || 'غير محدود'}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              !subPlan?.max_invoices_per_month ? 'bg-brand-blue' :
+                              (invoicesCountThisMonth / subPlan.max_invoices_per_month) >= 0.9 ? 'bg-rose-500' :
+                              (invoicesCountThisMonth / subPlan.max_invoices_per_month) >= 0.7 ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                            style={{ 
+                              width: !subPlan?.max_invoices_per_month ? '10%' : `${Math.min(100, (invoicesCountThisMonth / subPlan.max_invoices_per_month) * 100)}%` 
+                            }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-slate-400 italic">يتم إعادة تعيين عداد الفواتير تلقائياً مع بداية كل شهر ميلادي جديد.</p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Action column */}
-                <div className="space-y-4">
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-center space-y-4">
-                    <div className="w-10 h-10 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mx-auto">
-                      <MessageCircle className="w-5 h-5" />
+                {/* Right Action & Days Remaining Column */}
+                <div className="space-y-6">
+                  {/* Days remaining circle */}
+                  <div className="bg-slate-900 text-white rounded-3xl p-6 text-center space-y-6 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-24 h-24 bg-brand-navy rounded-full blur-2xl opacity-40 pointer-events-none" />
+                    
+                    <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider">الأيام المتبقية للاشتراك</h5>
+                    
+                    <div className="relative inline-flex items-center justify-center">
+                      {/* Big Circle Gauge */}
+                      <div className="w-36 h-36 rounded-full border-4 border-slate-800 flex flex-col items-center justify-center bg-slate-950/40 relative">
+                        {subscription && subscription.days_remaining !== null ? (
+                          <>
+                            <span className={`text-4xl font-black font-mono tracking-tight ${
+                              subscription.days_remaining <= 5 ? 'text-rose-500' :
+                              subscription.days_remaining <= 14 ? 'text-amber-500' : 'text-brand-turquoise'
+                            }`}>
+                              {subscription.days_remaining}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold mt-1">يوم متبقي</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-2xl font-black text-brand-turquoise">مفتوح</span>
+                            <span className="text-[10px] text-slate-400 mt-1">تجديد يدوي</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs text-slate-300">
+                      <p className="leading-relaxed">
+                        {subscription && subscription.days_remaining !== null && subscription.days_remaining <= 0 ? (
+                          <strong className="text-rose-400 block font-black">لقد انتهت فترة الاشتراك المعتمدة لمنشأتك. يرجى التجديد لتجنب حظر العمليات وكتابة الفواتير.</strong>
+                        ) : subscription && subscription.days_remaining !== null && subscription.days_remaining <= 14 ? (
+                          <strong className="text-amber-400 block font-bold">باقي أقل من أسبوعين على انتهاء الاشتراك. يرجى الترتيب لتمديد الصلاحية قريباً.</strong>
+                        ) : (
+                          <span>اشتراك منشأتك فعال وبحالة محاسبية ممتازة.</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Features listing card */}
+                  <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-4">
+                    <h5 className="text-xs font-black text-slate-900 border-b border-slate-100 pb-2">الميزات والخيارات المشمولة</h5>
+                    <div className="space-y-2.5 text-xs font-medium text-slate-650">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span>الفوترة الأساسية والضرائب</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className={`w-4 h-4 shrink-0 ${subPlan?.features?.inventory ? 'text-emerald-500' : 'text-slate-300'}`} />
+                        <span className={subPlan?.features?.inventory ? 'text-slate-800' : 'text-slate-400 line-through'}>إدارة المخازن والمستودعات</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className={`w-4 h-4 shrink-0 ${subPlan?.features?.zatca ? 'text-emerald-500' : 'text-slate-300'}`} />
+                        <span className={subPlan?.features?.zatca ? 'text-slate-800 font-bold' : 'text-slate-400 line-through'}>الربط المباشر مع هيئة الزكاة (ZATCA Phase 2)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className={`w-4 h-4 shrink-0 ${subPlan?.features?.reports ? 'text-emerald-500' : 'text-slate-300'}`} />
+                        <span className={subPlan?.features?.reports ? 'text-slate-800' : 'text-slate-400 line-through'}>التقارير المحاسبية المتقدمة والميزانيات</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Renewal WhatsApp Support Action Card */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 text-center space-y-4 shadow-2xs">
+                    <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
+                      <MessageCircle className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
-                      <h5 className="text-xs font-black text-slate-900">تفعيل أو ترقية الباقة</h5>
+                      <h5 className="text-xs font-black text-slate-900">تجديد، ترقية أو مواءمة الاشتراك</h5>
                       <p className="text-[11px] text-slate-500 leading-relaxed">
-                        لتفعيل أو ترقية الاشتراك، تواصل معنا عبر واتساب مباشرة.
+                        يتم تفعيل وترقية حزم لِدجرا يدوياً عبر مهندس الحسابات والدعم بالمنصة بالاتفاق المالي المسبق.
                       </p>
                     </div>
 
                     <a
                       href={`https://wa.me/966500000000?text=${encodeURIComponent(
-                        `مرحبًا، أرغب في تفعيل أو ترقية باقة اشتراكي في منصة لِدجرا للمحاسبة السحابية. منشأتي: ${currentOrg?.name_ar || currentOrg?.name_en || 'غير مسماة'}.`
+                        `مرحباً، أرغب في تفعيل / تجديد باقة اشتراكي في منصة لِدجرا السحابية.\nمنشأتي: ${currentOrg?.name_ar || currentOrg?.name_en || 'غير مسماة'}\nرقم الهوية التعريفية للمنشأة: ${currentOrg?.id}`
                       )}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-md hover:shadow-emerald-600/10 cursor-pointer"
                     >
                       <MessageCircle className="w-4 h-4" />
-                      <span>تواصل معنا بالواتساب</span>
+                      <span>تقديم طلب تجديد بالواتساب</span>
                     </a>
                   </div>
                 </div>

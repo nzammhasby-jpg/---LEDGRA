@@ -10,6 +10,9 @@ export interface UseOrganizationSubscriptionResult {
     name_ar: string;
     name_en: string | null;
     features: Record<string, boolean>;
+    max_users: number | null;
+    max_branches?: number | null;
+    max_invoices_per_month?: number | null;
   } | null;
   isActive: boolean;
   isTrial: boolean;
@@ -49,7 +52,7 @@ export function useOrganizationSubscription(): UseOrganizationSubscriptionResult
     fetchSubscription();
   }, [currentOrg?.id]);
 
-  const status = subscription?.status || null;
+  const status = (subscription?.status as 'trial' | 'active' | 'past_due' | 'suspended' | 'cancelled' | null) || null;
   const plan = subscription?.plan || null;
 
   // Active means status is active OR trial

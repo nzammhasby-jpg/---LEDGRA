@@ -46,7 +46,7 @@ export const LedgerReportPage: React.FC = () => {
     
     const currency = currentOrg?.currency_code || '';
     const csvRows: any[][] = [
-      ['منشأة', currentOrg?.name_ar || currentOrg?.name || ''],
+      ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', 'دفتر الأستاذ التفصيلي'],
       ['الحساب المالي', `${reportData.account.code} - ${reportData.account.name_ar}`],
       ['الفترة من', dateFrom],
@@ -60,8 +60,8 @@ export const LedgerReportPage: React.FC = () => {
       [],
       ['التاريخ', 'رقم القيد', 'المرجع', 'الوصف', 'مدين', 'دائن', 'الرصيد الجاري'],
       ...reportData.entries.map(e => [
-        e.date,
-        e.entry_number || '',
+        e.entry_date,
+        e.reference || '',
         e.reference || '',
         e.description || '',
         e.debit,

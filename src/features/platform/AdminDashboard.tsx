@@ -55,7 +55,41 @@ export const AdminDashboard: React.FC = () => {
   const [checkingAdmin, setCheckingAdmin] = useState<boolean>(true);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'stats' | 'organizations' | 'users' | 'support' | 'audit'>('stats');
+  const [activeTab, setActiveTab] = useState<'stats' | 'organizations' | 'users' | 'support' | 'audit' | 'plans'>('stats');
+
+  // Plans Management States
+  const [plansAdmin, setPlansAdmin] = useState<SubscriptionPlan[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState<boolean>(false);
+  const [plansError, setPlansError] = useState<string | null>(null);
+  const [showPlanModal, setShowPlanModal] = useState<boolean>(false);
+  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
+  const [submittingPlan, setSubmittingPlan] = useState<boolean>(false);
+  
+  const [planForm, setPlanForm] = useState({
+    code: '',
+    name_ar: '',
+    name_en: '',
+    description_ar: '',
+    description_en: '',
+    plan_type: 'paid' as 'paid' | 'free' | 'trial',
+    billing_interval: 'monthly' as 'monthly' | 'yearly' | 'custom' | 'none',
+    duration_days: 30,
+    price: 0,
+    currency_code: 'SAR',
+    trial_days: 0,
+    max_users: 10,
+    max_branches: 3,
+    max_invoices_per_month: 100,
+    sort_order: 0,
+    is_active: true,
+    is_public: true,
+    is_default_trial: false,
+    features: {
+      inventory: true,
+      zatca: true,
+      reports: true
+    }
+  });
 
   // Stats Tab States
   const [stats, setStats] = useState<PlatformDashboardStats | null>(null);
@@ -152,7 +186,7 @@ export const AdminDashboard: React.FC = () => {
   }, [user?.id]);
 
   // Handle Tab Switch
-  const handleTabChange = async (tab: 'stats' | 'organizations' | 'users' | 'support' | 'audit') => {
+  const handleTabChange = async (tab: 'stats' | 'organizations' | 'users' | 'support' | 'audit' | 'plans') => {
     setActiveTab(tab);
     if (tab === 'stats') {
       await loadStats();
@@ -164,6 +198,8 @@ export const AdminDashboard: React.FC = () => {
       await loadDeletedDocs();
     } else if (tab === 'audit') {
       await loadStats(); // Audit is fed from stats
+    } else if (tab === 'plans') {
+      await loadPlansAdmin();
     }
   };
 
@@ -236,6 +272,159 @@ export const AdminDashboard: React.FC = () => {
       setDeletedError('تعذر تحميل مركز المحذوفات. تحقق من تشغيل Migrations الخاصة بسلة المحذوفات ولوحة الإدارة.');
     } finally {
       setLoadingDeleted(false);
+    }
+  };
+
+  // Load Plans Admin-exclusive List
+  const loadPlansAdmin = async () => {
+    try {
+      setLoadingPlans(true);
+      setPlansError(null);
+      const list = await platformService.listPlansAdmin();
+      setPlansAdmin(list);
+    } catch (err: any) {
+      console.error('Failed loading plans:', err);
+      setPlansError(err.message || 'فشل في تحميل خطط وباقات الاشتراكات.');
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  const handleOpenPlanModal = (plan: SubscriptionPlan | null = null) => {
+    if (plan) {
+      setEditingPlan(plan);
+      setPlanForm({
+        code: plan.code,
+        name_ar: plan.name_ar,
+        name_en: plan.name_en || '',
+        description_ar: plan.description_ar || '',
+        description_en: plan.description_en || '',
+        plan_type: plan.plan_type as any,
+        billing_interval: plan.billing_interval as any,
+        duration_days: plan.duration_days || 30,
+        price: plan.price || 0,
+        currency_code: plan.currency_code || 'SAR',
+        trial_days: plan.trial_days || 0,
+        max_users: plan.max_users || 10,
+        max_branches: plan.max_branches || 3,
+        max_invoices_per_month: plan.max_invoices_per_month || 100,
+        sort_order: plan.sort_order || 0,
+        is_active: plan.is_active ?? true,
+        is_public: plan.is_public ?? true,
+        is_default_trial: plan.is_default_trial ?? false,
+        features: {
+          inventory: plan.features?.inventory ?? true,
+          zatca: plan.features?.zatca ?? true,
+          reports: plan.features?.reports ?? true,
+        }
+      });
+    } else {
+      setEditingPlan(null);
+      setPlanForm({
+        code: '',
+        name_ar: '',
+        name_en: '',
+        description_ar: '',
+        description_en: '',
+        plan_type: 'paid',
+        billing_interval: 'monthly',
+        duration_days: 30,
+        price: 0,
+        currency_code: 'SAR',
+        trial_days: 0,
+        max_users: 10,
+        max_branches: 3,
+        max_invoices_per_month: 100,
+        sort_order: 0,
+        is_active: true,
+        is_public: true,
+        is_default_trial: false,
+        features: {
+          inventory: true,
+          zatca: true,
+          reports: true
+        }
+      });
+    }
+    setShowPlanModal(true);
+  };
+
+  const handleSavePlanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminRole === 'support') {
+      showToast('غير مصرح لك: حسابات الدعم الفني لا تملك صلاحية تعديل باقات الاشتراكات.', 'error');
+      return;
+    }
+
+    try {
+      setSubmittingPlan(true);
+      const params = {
+        code: planForm.code,
+        nameAr: planForm.name_ar,
+        nameEn: planForm.name_en || null,
+        descriptionAr: planForm.description_ar || null,
+        descriptionEn: planForm.description_en || null,
+        planType: planForm.plan_type,
+        billingInterval: planForm.billing_interval,
+        durationDays: Number(planForm.duration_days) || null,
+        price: Number(planForm.price) || 0,
+        currencyCode: planForm.currency_code,
+        trialDays: Number(planForm.trial_days) || 0,
+        maxUsers: Number(planForm.max_users) || null,
+        maxBranches: Number(planForm.max_branches) || null,
+        maxInvoicesPerMonth: Number(planForm.max_invoices_per_month) || null,
+        features: planForm.features,
+        isActive: planForm.is_active,
+        isPublic: planForm.is_public,
+        isDefaultTrial: planForm.is_default_trial,
+        sortOrder: Number(planForm.sort_order) || 0
+      };
+
+      if (editingPlan) {
+        await platformService.updatePlan(editingPlan.id, params);
+        showToast('تم تحديث تفاصيل باقة الاشتراك بنجاح!', 'success');
+      } else {
+        await platformService.createPlan(params);
+        showToast('تم إنشاء باقة الاشتراك الجديدة بنجاح!', 'success');
+      }
+      setShowPlanModal(false);
+      await loadPlansAdmin();
+    } catch (err: any) {
+      console.error('Failed to save plan:', err);
+      showToast(err.message || 'فشل في حفظ باقة الاشتراك.', 'error');
+    } finally {
+      setSubmittingPlan(false);
+    }
+  };
+
+  const handleArchivePlan = async (planId: string) => {
+    if (adminRole === 'support') {
+      showToast('غير مصرح لك: حسابات الدعم الفني لا تملك صلاحية تعديل باقات الاشتراكات.', 'error');
+      return;
+    }
+    if (!confirm('هل ترغب في أرشفة هذه الباقة؟ لن تتمكن المنشآت من الاشتراك بها كعرض عام.')) return;
+    try {
+      await platformService.archivePlan(planId);
+      showToast('تمت أرشفة الباقة بنجاح!', 'success');
+      await loadPlansAdmin();
+    } catch (err: any) {
+      console.error('Failed to archive plan:', err);
+      showToast(err.message || 'فشل في أرشفة الباقة.', 'error');
+    }
+  };
+
+  const handleRestorePlan = async (planId: string) => {
+    if (adminRole === 'support') {
+      showToast('غير مصرح لك: حسابات الدعم الفني لا تملك صلاحية تعديل باقات الاشتراكات.', 'error');
+      return;
+    }
+    try {
+      await platformService.restorePlan(planId);
+      showToast('تم فك أرشفة واستعادة الباقة بنجاح!', 'success');
+      await loadPlansAdmin();
+    } catch (err: any) {
+      console.error('Failed to restore plan:', err);
+      showToast(err.message || 'فشل في استعادة الباقة.', 'error');
     }
   };
 
@@ -587,6 +776,7 @@ export const AdminDashboard: React.FC = () => {
             { id: 'stats', label: 'الرئيسية والإحصائيات', icon: Activity },
             { id: 'organizations', label: 'المنشآت والشركات', icon: Building },
             { id: 'users', label: 'مستخدمو النظام', icon: Users },
+            { id: 'plans', label: 'باقات الاشتراك', icon: Package },
             { id: 'support', label: 'مركز سلة المحذوفات', icon: Trash2 },
             { id: 'audit', label: 'سجل عمليات النظام', icon: Notebook }
           ].map(tab => {
@@ -960,6 +1150,183 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* ======================= TAB: PLANS (SUBSCRIPTION PLANS MANAGEMENT) ======================= */}
+      {activeTab === 'plans' && (
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-black text-slate-900">هندسة وباقات اشتراكات منصة لِدجرا</h3>
+              <p className="text-xs text-slate-500">متابعة باقات الاشتراك النشطة والمؤرشفة، تعديل تسعير وحزم الموارد لكل شريحة من منشآت العملاء.</p>
+            </div>
+            
+            {adminRole !== 'support' && (
+              <button
+                onClick={() => handleOpenPlanModal(null)}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm self-start md:self-auto"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>إضافة باقة اشتراك جديدة</span>
+              </button>
+            )}
+          </div>
+
+          {loadingPlans ? (
+            <div className="text-center py-20 flex flex-col items-center justify-center space-y-3">
+              <span className="w-8 h-8 rounded-full border-4 border-slate-900 border-t-transparent animate-spin" />
+              <p className="text-xs font-bold text-slate-400">جاري تحميل الباقات والخيارات الفنية للمنصة...</p>
+            </div>
+          ) : plansError ? (
+            <div className="p-4 bg-rose-50 border border-rose-100 text-rose-800 text-xs font-bold rounded-2xl flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              <span>{plansError}</span>
+            </div>
+          ) : plansAdmin.length === 0 ? (
+            <div className="text-center py-16 text-slate-400 text-xs border border-dashed border-slate-150 rounded-2xl">
+              لا توجد باقات اشتراكات معرفة في المنصة حالياً.
+            </div>
+          ) : (
+            <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+              <table className="w-full text-right border-collapse min-w-[1000px]">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-100">
+                    <th className="py-3.5 px-4">كود الباقة واسمها</th>
+                    <th className="py-3.5 px-4">نوع الباقة ودورة الفوترة</th>
+                    <th className="py-3.5 px-4">السعر الشهري</th>
+                    <th className="py-3.5 px-4">مدة الصلاحية والتجربة</th>
+                    <th className="py-3.5 px-4">سقف الموارد والمستخدمين</th>
+                    <th className="py-3.5 px-4">الميزات المشمولة</th>
+                    <th className="py-3.5 px-4">الحالة والظهور العامة</th>
+                    <th className="py-3.5 px-4 text-left">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-150 text-xs text-slate-700 font-medium">
+                  {plansAdmin.map(p => (
+                    <tr key={p.id} className={`hover:bg-slate-50/20 transition ${!p.is_active ? 'bg-slate-50/40 opacity-75' : ''}`}>
+                      <td className="py-4 px-4 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">{p.name_ar}</span>
+                          <span className="text-[9px] bg-slate-100 text-slate-650 px-1.5 py-0.5 rounded font-mono uppercase font-bold border border-slate-200">
+                            {p.code}
+                          </span>
+                        </div>
+                        {p.name_en && <p className="text-[10px] text-slate-400 font-mono">{p.name_en}</p>}
+                        {p.description_ar && <p className="text-[10px] text-slate-500 line-clamp-1 max-w-xs font-sans leading-relaxed">{p.description_ar}</p>}
+                      </td>
+                      
+                      <td className="py-4 px-4 space-y-1">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[9px] font-black border ${
+                          p.plan_type === 'trial' ? 'bg-blue-50 text-blue-700 border-blue-150' :
+                          p.plan_type === 'free' ? 'bg-emerald-50 text-emerald-700 border-emerald-150' :
+                          'bg-slate-900 text-white border-slate-950'
+                        }`}>
+                          {p.plan_type === 'trial' && 'تجريبية'}
+                          {p.plan_type === 'free' && 'مجانية'}
+                          {p.plan_type === 'paid' && 'مدفوعة'}
+                        </span>
+                        <div className="text-[10px] text-slate-400 mt-1">
+                          دورة: {p.billing_interval === 'monthly' ? 'شهري' : p.billing_interval === 'yearly' ? 'سنوي' : p.billing_interval === 'custom' ? 'مخصص / يدوي' : 'بدون'}
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-sm font-black font-mono text-slate-900">{p.price}</span>
+                          <span className="text-[9px] text-slate-400 font-bold">{p.currency_code || 'SAR'}</span>
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-4 space-y-1 font-mono text-[11px]">
+                        <span className="text-slate-800 font-bold block">{p.duration_days ? `${p.duration_days} يوم` : 'غير محدد / مفتوح'}</span>
+                        {p.trial_days > 0 && (
+                          <span className="text-blue-600 font-bold block text-[10px] font-sans">تتضمن تجربة: {p.trial_days} يوم</span>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-4 space-y-1 font-mono text-[10px] text-slate-500">
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-slate-700 font-sans">المستخدمون:</span>
+                          <span>{p.max_users || 'غير محدود'}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-slate-700 font-sans">الفروع:</span>
+                          <span>{p.max_branches || 'غير محدود'}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="font-bold text-slate-700 font-sans">الفواتير / شهر:</span>
+                          <span>{p.max_invoices_per_month || 'غير محدود'}</span>
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <div className="flex flex-col gap-1 text-[10px]">
+                          <span className={`inline-flex items-center gap-1 font-bold ${p.features?.inventory ? 'text-emerald-700' : 'text-slate-350 line-through'}`}>
+                            • إدارة المخازن
+                          </span>
+                          <span className={`inline-flex items-center gap-1 font-bold ${p.features?.zatca ? 'text-emerald-700' : 'text-slate-350 line-through'}`}>
+                            • ربط هيئة الزكاة
+                          </span>
+                          <span className={`inline-flex items-center gap-1 font-bold ${p.features?.reports ? 'text-emerald-700' : 'text-slate-350 line-through'}`}>
+                            • تقارير متقدمة
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-4 space-y-1">
+                        <div className="flex flex-col gap-1.5">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-black inline-flex items-center gap-1 w-fit ${p.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${p.is_active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                            {p.is_active ? 'مفعلة بالمنصة' : 'مؤرشفة / معطلة'}
+                          </span>
+                          {p.is_public ? (
+                            <span className="text-[9px] text-slate-500 font-bold">✓ معروضة للعامة</span>
+                          ) : (
+                            <span className="text-[9px] text-slate-400">✗ باقة مخفية / خاصة</span>
+                          )}
+                          {p.is_default_trial && (
+                            <span className="px-1.5 py-0.25 bg-amber-50 text-amber-700 border border-amber-150 rounded text-[9px] font-black w-fit animate-pulse">التجريبية الافتراضية</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {adminRole !== 'support' && (
+                            <>
+                              <button
+                                onClick={() => handleOpenPlanModal(p)}
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10px] rounded-lg transition cursor-pointer"
+                              >
+                                تعديل الباقة
+                              </button>
+                              
+                              {p.is_active ? (
+                                <button
+                                  onClick={() => handleArchivePlan(p.id)}
+                                  className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] rounded-lg transition cursor-pointer"
+                                >
+                                  أرشفة
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleRestorePlan(p.id)}
+                                  className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] rounded-lg transition cursor-pointer"
+                                >
+                                  استعادة
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ======================= TAB: SUPPORT (DELETED DOCUMENTS) ======================= */}
       {activeTab === 'support' && (
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6">
@@ -1317,7 +1684,7 @@ export const AdminDashboard: React.FC = () => {
                                     >
                                       <option value="">-- اختر باقة --</option>
                                       {plans.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name_ar} ({p.price_monthly} ريال/شهرياً)</option>
+                                        <option key={p.id} value={p.id}>{p.name_ar} ({p.price} ريال/شهرياً)</option>
                                       ))}
                                     </select>
                                   </div>
@@ -1668,6 +2035,313 @@ export const AdminDashboard: React.FC = () => {
                   {submittingNote ? 'جاري حفظ السجل...' : 'حفظ الملاحظة الفورية'}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= MODAL: CREATE / EDIT SUBSCRIPTION PLAN ======================= */}
+      {showPlanModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto select-none" dir="rtl">
+          <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-150 p-6 space-y-6 shadow-2xl text-right font-sans my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-slate-900 p-2.5 rounded-xl text-white">
+                  <Package className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900">{editingPlan ? 'تعديل باقة الاشتراك الحالية' : 'إنشاء باقة اشتراك جديدة'}</h4>
+                  <p className="text-[10px] text-slate-400 font-mono">LEDGRA SUBSCRIPTION BLUEPRINTS</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPlanModal(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePlanSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+              
+              {/* Row 1: Code & Arabic Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">كود الباقة الفريد (Unique Code):</label>
+                  <input
+                    type="text"
+                    required
+                    disabled={!!editingPlan}
+                    placeholder="مثال: basic_monthly, pro_yearly"
+                    value={planForm.code}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, code: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 font-bold"
+                  />
+                  {!editingPlan && <p className="text-[9px] text-slate-405">لا يمكن تغيير الكود بعد الحفظ لربطه بقاعدة البيانات.</p>}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">اسم الباقة (بالعربية):</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="مثال: الباقة الأساسية"
+                    value={planForm.name_ar}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, name_ar: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: English Name & Sort Order */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">اسم الباقة (بالإنجليزية) - اختياري:</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: Basic Plan"
+                    value={planForm.name_en}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, name_en: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">ترتيب الفرز (Sort Order):</label>
+                  <input
+                    type="number"
+                    value={planForm.sort_order}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, sort_order: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  />
+                </div>
+              </div>
+
+              {/* Description inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">الوصف بالعربية:</label>
+                  <textarea
+                    rows={2}
+                    placeholder="أدخل ميزات ووصف الباقة بالكامل..."
+                    value={planForm.description_ar}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, description_ar: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">الوصف بالإنجليزية:</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Plan features and brief summary in English..."
+                    value={planForm.description_en}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, description_en: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 text-left font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Pricing, Billing and Duration */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">نوع الباقة:</label>
+                  <select
+                    value={planForm.plan_type}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, plan_type: e.target.value as any }))}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-bold"
+                  >
+                    <option value="paid">مدفوعة (paid)</option>
+                    <option value="free">مجانية (free)</option>
+                    <option value="trial">تجريبية (trial)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">دورة الفوترة:</label>
+                  <select
+                    value={planForm.billing_interval}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, billing_interval: e.target.value as any }))}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-bold"
+                  >
+                    <option value="monthly">شهري</option>
+                    <option value="yearly">سنوي</option>
+                    <option value="custom">مخصص / يدوي</option>
+                    <option value="none">بدون</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">السعر الشهري (ريال):</label>
+                  <input
+                    type="number"
+                    required
+                    value={planForm.price}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, price: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 font-bold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">أيام الصلاحية:</label>
+                  <input
+                    type="number"
+                    placeholder="مثال: 30, 365"
+                    value={planForm.duration_days}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, duration_days: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Resource caps and limits */}
+              <div className="bg-slate-50 p-4 rounded-2xl space-y-4">
+                <h5 className="text-xs font-black text-slate-800 border-b border-slate-200 pb-1.5">أسقف استهلاك الموارد المشمولة بالباقة</h5>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs font-medium text-slate-700">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 block">أقصى عدد مستخدمين:</label>
+                    <input
+                      type="number"
+                      placeholder="اتركه فارغاً لغير محدود"
+                      value={planForm.max_users || ''}
+                      onChange={(e) => setPlanForm(prev => ({ ...prev, max_users: Number(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 block">أقصى عدد فروع:</label>
+                    <input
+                      type="number"
+                      placeholder="اتركه فارغاً لغير محدود"
+                      value={planForm.max_branches || ''}
+                      onChange={(e) => setPlanForm(prev => ({ ...prev, max_branches: Number(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1 col-span-2">
+                    <label className="text-[10px] font-bold text-slate-500 block">الفواتير الشهرية المسموحة:</label>
+                    <input
+                      type="number"
+                      placeholder="اتركه فارغاً لغير محدود"
+                      value={planForm.max_invoices_per_month || ''}
+                      onChange={(e) => setPlanForm(prev => ({ ...prev, max_invoices_per_month: Number(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Features flags */}
+              <div className="bg-slate-50 p-4 rounded-2xl space-y-4">
+                <h5 className="text-xs font-black text-slate-800 border-b border-slate-200 pb-1.5">الميزات والخيارات الحصرية للباقة</h5>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-bold text-slate-700">
+                  <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded-lg transition">
+                    <input
+                      type="checkbox"
+                      checked={planForm.features.inventory}
+                      onChange={(e) => setPlanForm(prev => ({
+                        ...prev,
+                        features: { ...prev.features, inventory: e.target.checked }
+                      }))}
+                      className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                    />
+                    <span>إدارة المخازن والمستودعات</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded-lg transition">
+                    <input
+                      type="checkbox"
+                      checked={planForm.features.zatca}
+                      onChange={(e) => setPlanForm(prev => ({
+                        ...prev,
+                        features: { ...prev.features, zatca: e.target.checked }
+                      }))}
+                      className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                    />
+                    <span>الربط والفوترة المباشرة مع هيئة الزكاة</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded-lg transition">
+                    <input
+                      type="checkbox"
+                      checked={planForm.features.reports}
+                      onChange={(e) => setPlanForm(prev => ({
+                        ...prev,
+                        features: { ...prev.features, reports: e.target.checked }
+                      }))}
+                      className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                    />
+                    <span>الميزانيات والتقارير المتقدمة</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Scope and Display flags */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-bold text-slate-700 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-150 rounded-xl hover:bg-slate-50 transition">
+                  <input
+                    type="checkbox"
+                    checked={planForm.is_active}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, is_active: e.target.checked }))}
+                    className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                  />
+                  <div>
+                    <span className="block">باقة نشطة بالمنصة</span>
+                    <span className="text-[9px] text-slate-400 font-normal">تفعيل إتاحة الباقة للاستخدام والتعيين.</span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-150 rounded-xl hover:bg-slate-50 transition">
+                  <input
+                    type="checkbox"
+                    checked={planForm.is_public}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, is_public: e.target.checked }))}
+                    className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                  />
+                  <div>
+                    <span className="block">باقة عامة ومعروضة</span>
+                    <span className="text-[9px] text-slate-400 font-normal">عرض الباقة كخيار ترقية عام للمشتركين.</span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer p-2 border border-slate-150 rounded-xl hover:bg-slate-50 transition">
+                  <input
+                    type="checkbox"
+                    checked={planForm.is_default_trial}
+                    onChange={(e) => setPlanForm(prev => ({ ...prev, is_default_trial: e.target.checked }))}
+                    className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                  />
+                  <div>
+                    <span className="block">الباقة التجريبية التلقائية</span>
+                    <span className="text-[9px] text-slate-400 font-normal">تعيينها كباقة تجريبية للمنشآت الجديدة.</span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPlanModal(false)}
+                  disabled={submittingPlan}
+                  className="px-4 py-2 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  إلغاء وتراجع
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingPlan}
+                  className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  {submittingPlan && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  <span>{editingPlan ? 'حفظ وتثبيت التعديلات' : 'اعتماد وحفظ الباقة الجديدة'}</span>
+                </button>
+              </div>
+
             </form>
           </div>
         </div>

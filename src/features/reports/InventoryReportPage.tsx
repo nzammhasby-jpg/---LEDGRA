@@ -80,7 +80,7 @@ export const InventoryReportPage: React.FC = () => {
 
     const today = new Date().toISOString().split('T')[0];
     const csvRows: any[][] = [
-      ['منشأة', currentOrg?.name_ar || currentOrg?.name || ''],
+      ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', 'تقرير المخزون والتقييم التفصيلي للأصناف'],
       ['تاريخ التقرير', today],
       ['العملة', currentOrg?.currency_code || ''],

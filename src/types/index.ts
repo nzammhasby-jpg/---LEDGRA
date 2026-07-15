@@ -118,6 +118,7 @@ export interface CreateOrgInput {
   country_code?: string;
   currency_code?: string;
   default_tax_rate?: number;
+  primary_language?: string;
 }
 
 export interface MembershipJoinData {
@@ -183,6 +184,7 @@ export interface Account {
   is_active: boolean;
   is_system: boolean;
   description: string | null;
+  balance_sheet_section: 'current_asset' | 'non_current_asset' | 'current_liability' | 'non_current_liability' | 'equity' | null;
   created_at: string;
   updated_at: string;
   children?: Account[];
@@ -228,6 +230,8 @@ export interface JournalEntry {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  fiscal_year_name?: string | null;
+  fiscal_period_name?: string | null;
   lines?: JournalEntryLine[];
 }
 

@@ -490,7 +490,8 @@ export const ChartOfAccounts: React.FC<ChartOfAccountsProps> = ({ onViewLedger, 
         allow_direct_posting: formAllowDirect,
         is_active: formIsActive,
         is_system: false,
-        description: formDescription || null
+        description: formDescription || null,
+        balance_sheet_section: null
       });
 
       setSuccess(`تم استحداث الحساب الجديد "${formNameAr}" بنجاح في المنشأة.`);

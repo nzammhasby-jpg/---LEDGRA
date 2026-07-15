@@ -1365,7 +1365,7 @@ export const InvoicesPage: React.FC = () => {
                             <span className="text-[9px] text-slate-400 block font-normal leading-none mb-0.5">الصافي شامل</span>
                             <span className="text-xs font-extrabold text-slate-700 font-mono tracking-tight" style={{ direction: 'ltr' }}>
                               {formatNumberWithLatinDigits(
-                                Math.max(0, (line.quantity * line.unit_price) - line.discount_amount) * (1 + line.tax_rate / 100)
+                                Math.max(0, (Number(line.quantity) * Number(line.unit_price)) - Number(line.discount_amount)) * (1 + Number(line.tax_rate) / 100)
                               )}
                             </span>
                           </div>
@@ -2164,7 +2164,7 @@ export const InvoicesPage: React.FC = () => {
                   <span className="font-mono" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(selectedInvoice.subtotal - selectedInvoice.discount_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>الضريبة المضافة المطبقة ({selectedInvoice.lines && selectedInvoice.lines.length > 0 ? selectedInvoice.lines[0].tax_rate : (selectedInvoice.tax_rate || getOrgDefaultTaxRate(currentOrg))}%):</span>
+                  <span>الضريبة المضافة المطبقة ({selectedInvoice.lines && selectedInvoice.lines.length > 0 ? selectedInvoice.lines[0].tax_rate : getOrgDefaultTaxRate(currentOrg)}%):</span>
                   <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(selectedInvoice.tax_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 

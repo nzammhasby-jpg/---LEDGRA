@@ -43,7 +43,7 @@ export const TrialBalancePage: React.FC = () => {
     
     const currency = currentOrg?.currency_code || '';
     const csvRows: any[][] = [
-      ['منشأة', currentOrg?.name_ar || currentOrg?.name || ''],
+      ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', 'تقرير ميزان المراجعة المطور'],
       ['الفترة من', dateFrom],
       ['الفترة إلى', dateTo],
@@ -61,7 +61,7 @@ export const TrialBalancePage: React.FC = () => {
         acc.period_credit,
         acc.closing_debit,
         acc.closing_credit,
-        acc.is_parent ? 'حساب رئيسي' : 'حساب فرعي'
+        !acc.allow_direct_posting ? 'حساب رئيسي' : 'حساب فرعي'
       ]),
       [],
       [

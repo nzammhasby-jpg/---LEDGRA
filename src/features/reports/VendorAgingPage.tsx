@@ -94,7 +94,7 @@ export const VendorAgingPage: React.FC = () => {
     if (filteredData.length === 0) return;
     
     const csvRows: any[][] = [
-      ['منشأة', currentOrg?.name_ar || currentOrg?.name || ''],
+      ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', `تقرير أعمار ذمم الموردين (ديون الموردين)`],
       ['تاريخ التقرير', asOfDate],
       ['العملة', currentOrg?.currency_code || ''],

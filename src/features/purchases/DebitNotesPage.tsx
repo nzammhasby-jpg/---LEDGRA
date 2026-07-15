@@ -298,7 +298,7 @@ export const DebitNotesPage: React.FC = () => {
   const filteredNotes = debitNotes.filter(note => {
     const matchesSearch = 
       note.debit_note_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (note.vendor?.name_ar || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (note.vendor?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (note.reason || '').toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || note.status === statusFilter;
@@ -344,7 +344,7 @@ export const DebitNotesPage: React.FC = () => {
               <option value="" disabled>+ إنشاء إشعار مدين جديد</option>
               {approvedBills.map(bill => (
                 <option key={bill.id} value={bill.id}>
-                  {bill.bill_number} - {bill.vendor?.name_ar} ({bill.total} {bill.currency})
+                  {bill.bill_number} - {bill.vendor?.name} ({bill.total} {bill.currency})
                 </option>
               ))}
             </select>
@@ -460,7 +460,7 @@ export const DebitNotesPage: React.FC = () => {
                     <tr key={note.id} className="hover:bg-slate-50/50 transition">
                       <td className="p-4 font-bold font-mono text-slate-900">{note.debit_note_number}</td>
                       <td className="p-4 text-slate-500">{note.debit_note_date}</td>
-                      <td className="p-4 font-bold text-slate-800">{note.vendor?.name_ar || note.vendor?.name_en}</td>
+                      <td className="p-4 font-bold text-slate-800">{note.vendor?.name}</td>
                       <td className="p-4 font-mono text-[11px] text-slate-500">
                         {note.original_bill?.bill_number}
                       </td>
@@ -541,7 +541,7 @@ export const DebitNotesPage: React.FC = () => {
         <div className="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 space-y-6 shadow-sm">
           <div className="border-b border-slate-100 pb-4">
             <h3 className="text-sm font-bold text-slate-800">تجهيز مرتجع مشتريات للفاتورة الأصلية: {selectedBill.bill_number}</h3>
-            <p className="text-xs text-slate-400 mt-1 font-mono">تاريخ الفاتورة: {selectedBill.bill_date} l المورد: {selectedBill.vendor?.name_ar} l العملة: {selectedBill.currency}</p>
+            <p className="text-xs text-slate-400 mt-1 font-mono">تاريخ الفاتورة: {selectedBill.bill_date} l المورد: {selectedBill.vendor?.name} l العملة: {selectedBill.currency}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -759,7 +759,7 @@ export const DebitNotesPage: React.FC = () => {
             </div>
             <div>
               <span className="text-[11px] text-slate-400">المورد الشريك</span>
-              <p className="text-xs font-black text-slate-800 mt-0.5">{selectedNote.vendor?.name_ar || selectedNote.vendor?.name_en}</p>
+              <p className="text-xs font-black text-slate-800 mt-0.5">{selectedNote.vendor?.name}</p>
             </div>
             <div>
               <span className="text-[11px] text-slate-400">سبب الإرجاع</span>

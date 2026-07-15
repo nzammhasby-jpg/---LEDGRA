@@ -37,7 +37,7 @@ export const inventoryService = {
   async getAdjustments(orgId: string): Promise<InventoryAdjustment[]> {
     const { data, error } = await supabase
       .from('inventory_adjustments')
-      .select('*, creator:profiles!inventory_adjustments_created_by_fkey(full_name)')
+      .select('*, creator:profiles!inventory_adjustments_created_by_profiles_fkey(full_name)')
       .eq('organization_id', orgId)
       .order('adjustment_date', { ascending: false })
       .order('created_at', { ascending: false });
@@ -52,7 +52,7 @@ export const inventoryService = {
   async getAdjustmentById(id: string): Promise<InventoryAdjustment> {
     const { data: adj, error: adjError } = await supabase
       .from('inventory_adjustments')
-      .select('*, creator:profiles!inventory_adjustments_created_by_fkey(full_name), approver:profiles!inventory_adjustments_approved_by_fkey(full_name), canceller:profiles!inventory_adjustments_cancelled_by_fkey(full_name)')
+      .select('*, creator:profiles!inventory_adjustments_created_by_profiles_fkey(full_name), approver:profiles!inventory_adjustments_approved_by_profiles_fkey(full_name), canceller:profiles!inventory_adjustments_cancelled_by_profiles_fkey(full_name)')
       .eq('id', id)
       .single();
 

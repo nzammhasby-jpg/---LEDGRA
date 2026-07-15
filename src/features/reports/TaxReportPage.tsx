@@ -39,7 +39,7 @@ export const TaxReportPage: React.FC = () => {
     
     const currency = currentOrg?.currency_code || '';
     const csvRows: any[][] = [
-      ['منشأة', currentOrg?.name_ar || currentOrg?.name || ''],
+      ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', 'التقرير الضريبي لضريبة القيمة المضافة'],
       ['الفترة من', dateFrom],
       ['الفترة إلى', dateTo],

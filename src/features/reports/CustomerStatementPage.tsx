@@ -101,7 +101,7 @@ export const CustomerStatementPage: React.FC = () => {
     if (!reportData) return;
     const currency = currentOrg?.currency_code || '';
     const csvRows: any[][] = [
-      ['منشأة', currentOrg?.name_ar || currentOrg?.name || ''],
+      ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', `كشف حساب عميل: ${reportData.customer_name}`],
       ['كود العميل', reportData.customer_code || ''],
       ['الفترة من', dateFrom],

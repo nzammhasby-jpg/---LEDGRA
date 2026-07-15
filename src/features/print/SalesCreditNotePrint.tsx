@@ -12,6 +12,7 @@ import { PrintHeader } from './PrintHeader';
 import { PrintFooter } from './PrintFooter';
 import { PrintWatermark } from './PrintWatermark';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 export const SalesCreditNotePrint: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -218,6 +219,20 @@ export const SalesCreditNotePrint: React.FC = () => {
         {/* Calculation summary block */}
         <div className="grid grid-cols-12 gap-6 select-none" dir="rtl">
           <div className="col-span-7 space-y-3 pr-2 text-right">
+            {currentOrg && getCountryProfile(currentOrg.country_code).zatcaEnabled && (
+              <div className="flex flex-col items-start gap-2 print:gap-1 bg-slate-50 border border-slate-200/60 rounded-2xl p-4 print:p-3 w-fit mb-3">
+                <span className="text-[9px] font-black text-slate-400 block uppercase tracking-wider">رمز QR للفوترة الإلكترونية</span>
+                {qrBase64 ? (
+                  <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm print:shadow-none shrink-0 border-solid">
+                    <QRCodeSVG value={qrBase64} size={105} />
+                  </div>
+                ) : (
+                  <div className="w-[105px] h-[105px] bg-slate-100 rounded-xl border border-slate-200 border-dashed flex items-center justify-center text-center text-[10px] text-slate-400 p-2 shrink-0">
+                    جاري احتساب الرمز...
+                  </div>
+                )}
+              </div>
+            )}
             {creditNote.notes && (
               <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50">
                 <span className="text-[9px] font-black text-slate-400 block mb-1">ملاحظات إضافية:</span>
@@ -248,8 +263,7 @@ export const SalesCreditNotePrint: React.FC = () => {
 
         {/* QR code and footer */}
         <PrintFooter
-          currentOrg={currentOrg}
-          qrBase64={qrBase64}
+          description="إشعار دائن ضريبي معتمد صادر بناءً على مرتجعات المبيعات المسجلة."
         />
       </div>
     </div>

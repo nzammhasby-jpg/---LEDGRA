@@ -181,11 +181,11 @@ export const InventoryAdjustmentPrint: React.FC = () => {
         <div className="mt-16 grid grid-cols-3 gap-6 text-center text-[11px] text-slate-500 font-sans">
           <div className="space-y-12">
             <p className="font-bold text-slate-400 border-b border-slate-100 pb-2">الموظف المسؤول (أمين المستودع)</p>
-            <div className="text-slate-700 font-semibold">{(adjustment as any).creator?.full_name || '............................'}</div>
+            <div className="text-slate-700 font-semibold">{(adjustment as any).creator?.full_name || 'مستخدم النظام'}</div>
           </div>
           <div className="space-y-12">
             <p className="font-bold text-slate-400 border-b border-slate-100 pb-2">المدير المحاسبي والتدقيق</p>
-            <div className="text-slate-700 font-semibold">{(adjustment as any).approver?.full_name || '............................'}</div>
+            <div className="text-slate-700 font-semibold">{(adjustment as any).approver?.full_name || 'مستخدم النظام'}</div>
           </div>
           <div className="space-y-12">
             <p className="font-bold text-slate-400 border-b border-slate-100 pb-2">الاعتماد الإداري والمصادقة</p>
@@ -194,7 +194,7 @@ export const InventoryAdjustmentPrint: React.FC = () => {
         </div>
 
         {/* Corporate Footer branding */}
-        <PrintFooter currentOrg={currentOrg} />
+        <PrintFooter />
 
       </div>
     </div>
