@@ -3,14 +3,24 @@
  * Includes UTF-8 BOM to ensure Arabic characters open correctly in Excel.
  */
 
+export type CSVCell = string | number | boolean | null | undefined;
+
 /**
  * Escapes a single string value for safe inclusion in a CSV file.
  * Doubles any inner quotes and wraps the field in double quotes if it contains commas, quotes, or newlines.
+ * Also protects against CSV Formula Injection while preserving true negative and positive numbers.
  */
-export function escapeCSVValue(val: any): string {
+export function escapeCSVValue(val: CSVCell): string {
   if (val === null || val === undefined) return '';
   let str = String(val).trim();
   
+  // Protect against CSV Formula Injection if it starts with =, +, -, @, \t, \r
+  // but do NOT corrupt true negative/positive numbers (e.g. -125.50 or +45.00)
+  const isNumber = !isNaN(Number(str)) && str !== '';
+  if (!isNumber && (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@') || str.startsWith('\t') || str.startsWith('\r'))) {
+    str = `'${str}`;
+  }
+
   // If the value has double quotes, escape them by doubling them
   if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
     str = str.replace(/"/g, '""');
@@ -22,7 +32,7 @@ export function escapeCSVValue(val: any): string {
 /**
  * Generates a raw CSV string from an array of headers and rows of data.
  */
-export function generateCSV(headers: string[], rows: any[][]): string {
+export function generateCSV(headers: string[], rows: CSVCell[][]): string {
   const headerLine = headers.map(escapeCSVValue).join(',');
   const rowLines = rows.map(row => row.map(escapeCSVValue).join(','));
   return [headerLine, ...rowLines].join('\r\n');

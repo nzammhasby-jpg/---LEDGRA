@@ -39,6 +39,7 @@ export const CustomerStatementPage: React.FC = () => {
   const [loadingReport, setLoadingReport] = useState<boolean>(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [reportData, setReportData] = useState<CustomerStatementResult | null>(null);
+  const [loadedParams, setLoadedParams] = useState<{ customerId: string; dateFrom: string; dateTo: string } | null>(null);
 
   useEffect(() => {
     if (currentOrg) {
@@ -70,8 +71,20 @@ export const CustomerStatementPage: React.FC = () => {
 
   const fetchReport = async (custId = selectedCustomerId, from = dateFrom, to = dateTo) => {
     if (!currentOrg) return;
-    if (!custId || !from || !to) {
-      setErrorCode('الرجاء اختيار العميل وفترة التقرير كاملة.');
+    if (!custId) {
+      setErrorCode('الرجاء اختيار العميل أولاً.');
+      return;
+    }
+    if (!from || !to) {
+      setErrorCode('الرجاء اختيار فترة التقرير كاملة (تاريخ البداية والنهاية).');
+      return;
+    }
+    if (isNaN(Date.parse(from)) || isNaN(Date.parse(to))) {
+      setErrorCode('تاريخ البداية أو تاريخ النهاية المدخل غير صالح.');
+      return;
+    }
+    if (from > to) {
+      setErrorCode('تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.');
       return;
     }
     setLoadingReport(true);
@@ -79,9 +92,11 @@ export const CustomerStatementPage: React.FC = () => {
     try {
       const data = await reportsService.getCustomerStatement(currentOrg.id, custId, from, to);
       setReportData(data);
+      setLoadedParams({ customerId: custId, dateFrom: from, dateTo: to });
     } catch (err) {
       setErrorCode(getErrorMessage(err));
       setReportData(null);
+      setLoadedParams(null);
     } finally {
       setLoadingReport(false);
     }
@@ -91,21 +106,32 @@ export const CustomerStatementPage: React.FC = () => {
     const cy = new Date().getFullYear();
     setDateFrom(`${cy}-01-01`);
     setDateTo(new Date().toISOString().split('T')[0]);
+    setErrorCode(null);
     if (customers.length > 0) {
       setSelectedCustomerId(customers[0].id);
       fetchReport(customers[0].id, `${cy}-01-01`, new Date().toISOString().split('T')[0]);
     }
   };
 
+  const filtersChanged = reportData !== null && loadedParams !== null && (
+    selectedCustomerId !== loadedParams.customerId ||
+    dateFrom !== loadedParams.dateFrom ||
+    dateTo !== loadedParams.dateTo
+  );
+
   const handleExportCSV = () => {
-    if (!reportData) return;
+    if (!reportData || !loadedParams) return;
+    if (filtersChanged) {
+      setErrorCode('لقد قمت بتغيير الفلاتر. يرجى الضغط على "عرض التقرير" أولاً لتحديث البيانات قبل التصدير.');
+      return;
+    }
     const currency = currentOrg?.currency_code || '';
-    const csvRows: any[][] = [
+    const csvRows: import('../../lib/exportUtils').CSVCell[][] = [
       ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', `كشف حساب عميل: ${reportData.customer_name}`],
       ['كود العميل', reportData.customer_code || ''],
-      ['الفترة من', dateFrom],
-      ['الفترة إلى', dateTo],
+      ['الفترة من', loadedParams.dateFrom],
+      ['الفترة إلى', loadedParams.dateTo],
       ['العملة', currency],
       [],
       ['الرصيد الافتتاحي', reportData.opening_balance],
@@ -127,13 +153,17 @@ export const CustomerStatementPage: React.FC = () => {
 
     const headers = ['كشف حساب عميل تفصيلي', 'التفاصيل'];
     const csvContent = generateCSV(headers, csvRows);
-    const filename = generateReportFilename(`كشف_حساب_${reportData.customer_name}`, dateFrom, dateTo);
+    const filename = generateReportFilename(`كشف_حساب_${reportData.customer_name}`, loadedParams.dateFrom, loadedParams.dateTo);
     downloadCSV(csvContent, filename);
   };
 
   const handlePrint = () => {
-    if (!selectedCustomerId || !dateFrom || !dateTo) return;
-    window.open(`#/print/customer-statement?id=${selectedCustomerId}&dateFrom=${dateFrom}&dateTo=${dateTo}`, '_blank');
+    if (!loadedParams) return;
+    if (filtersChanged) {
+      setErrorCode('لقد قمت بتغيير الفلاتر. يرجى الضغط على "عرض التقرير" أولاً لتحديث البيانات قبل الطباعة.');
+      return;
+    }
+    window.open(`#/print/customer-statement?customerId=${loadedParams.customerId}&dateFrom=${loadedParams.dateFrom}&dateTo=${loadedParams.dateTo}`, '_blank');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -235,6 +265,13 @@ export const CustomerStatementPage: React.FC = () => {
         </div>
       )}
 
+      {filtersChanged && (
+        <div className="bg-amber-50 border border-amber-100 text-amber-800 p-4 rounded-xl flex items-center gap-2.5 text-xs font-bold">
+          <AlertCircle className="w-4 h-4 text-amber-500" />
+          <span>لقد قمت بتغيير فلاتر البحث. يرجى الضغط على "عرض التقرير" لتحديث البيانات قبل الطباعة أو التصدير.</span>
+        </div>
+      )}
+
       {/* Action buttons row */}
       {reportData && !loadingReport && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 print:hidden">
@@ -302,6 +339,9 @@ export const CustomerStatementPage: React.FC = () => {
                   {reportData.closing_balance >= 0 ? 'على العميل' : 'له رصيد زائد'}
                 </span>
               </div>
+              <p className="text-[10px] text-slate-500 mt-1 font-semibold">
+                {reportData.closing_balance >= 0 ? 'مستحق على العميل للمنشأة (مدين)' : 'رصيد دائن لصالح العميل لدى المنشأة (دائن)'}
+              </p>
             </div>
 
           </div>

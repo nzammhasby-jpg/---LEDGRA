@@ -36,6 +36,7 @@ export const VendorStatementPage: React.FC = () => {
   const [loadingReport, setLoadingReport] = useState<boolean>(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [reportData, setReportData] = useState<VendorStatementResult | null>(null);
+  const [loadedParams, setLoadedParams] = useState<{ vendorId: string; dateFrom: string; dateTo: string } | null>(null);
 
   useEffect(() => {
     if (currentOrg) {
@@ -66,8 +67,20 @@ export const VendorStatementPage: React.FC = () => {
 
   const fetchReport = async (vendId = selectedVendorId, from = dateFrom, to = dateTo) => {
     if (!currentOrg) return;
-    if (!vendId || !from || !to) {
-      setErrorCode('الرجاء اختيار المورد وفترة التقرير كاملة.');
+    if (!vendId) {
+      setErrorCode('الرجاء اختيار المورد أولاً.');
+      return;
+    }
+    if (!from || !to) {
+      setErrorCode('الرجاء اختيار فترة التقرير كاملة (تاريخ البداية والنهاية).');
+      return;
+    }
+    if (isNaN(Date.parse(from)) || isNaN(Date.parse(to))) {
+      setErrorCode('تاريخ البداية أو تاريخ النهاية المدخل غير صالح.');
+      return;
+    }
+    if (from > to) {
+      setErrorCode('تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.');
       return;
     }
     setLoadingReport(true);
@@ -75,9 +88,11 @@ export const VendorStatementPage: React.FC = () => {
     try {
       const data = await reportsService.getVendorStatement(currentOrg.id, vendId, from, to);
       setReportData(data);
+      setLoadedParams({ vendorId: vendId, dateFrom: from, dateTo: to });
     } catch (err) {
       setErrorCode(getErrorMessage(err));
       setReportData(null);
+      setLoadedParams(null);
     } finally {
       setLoadingReport(false);
     }
@@ -87,21 +102,32 @@ export const VendorStatementPage: React.FC = () => {
     const cy = new Date().getFullYear();
     setDateFrom(`${cy}-01-01`);
     setDateTo(new Date().toISOString().split('T')[0]);
+    setErrorCode(null);
     if (vendors.length > 0) {
       setSelectedVendorId(vendors[0].id);
       fetchReport(vendors[0].id, `${cy}-01-01`, new Date().toISOString().split('T')[0]);
     }
   };
 
+  const filtersChanged = reportData !== null && loadedParams !== null && (
+    selectedVendorId !== loadedParams.vendorId ||
+    dateFrom !== loadedParams.dateFrom ||
+    dateTo !== loadedParams.dateTo
+  );
+
   const handleExportCSV = () => {
-    if (!reportData) return;
+    if (!reportData || !loadedParams) return;
+    if (filtersChanged) {
+      setErrorCode('لقد قمت بتغيير الفلاتر. يرجى الضغط على "عرض التقرير" أولاً لتحديث البيانات قبل التصدير.');
+      return;
+    }
     const currency = currentOrg?.currency_code || '';
-    const csvRows: any[][] = [
+    const csvRows: import('../../lib/exportUtils').CSVCell[][] = [
       ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', `كشف حساب مورد: ${reportData.vendor_name}`],
       ['كود المورد', reportData.vendor_code || ''],
-      ['الفترة من', dateFrom],
-      ['الفترة إلى', dateTo],
+      ['الفترة من', loadedParams.dateFrom],
+      ['الفترة إلى', loadedParams.dateTo],
       ['العملة', currency],
       [],
       ['الرصيد الافتتاحي', reportData.opening_balance],
@@ -123,13 +149,17 @@ export const VendorStatementPage: React.FC = () => {
 
     const headers = ['كشف حساب مورد تفصيلي', 'التفاصيل'];
     const csvContent = generateCSV(headers, csvRows);
-    const filename = generateReportFilename(`كشف_حساب_مورد_${reportData.vendor_name}`, dateFrom, dateTo);
+    const filename = generateReportFilename(`كشف_حساب_مورد_${reportData.vendor_name}`, loadedParams.dateFrom, loadedParams.dateTo);
     downloadCSV(csvContent, filename);
   };
 
   const handlePrint = () => {
-    if (!selectedVendorId || !dateFrom || !dateTo) return;
-    window.open(`#/print/vendor-statement?id=${selectedVendorId}&dateFrom=${dateFrom}&dateTo=${dateTo}`, '_blank');
+    if (!loadedParams) return;
+    if (filtersChanged) {
+      setErrorCode('لقد قمت بتغيير الفلاتر. يرجى الضغط على "عرض التقرير" أولاً لتحديث البيانات قبل الطباعة.');
+      return;
+    }
+    window.open(`#/print/vendor-statement?vendorId=${loadedParams.vendorId}&dateFrom=${loadedParams.dateFrom}&dateTo=${loadedParams.dateTo}`, '_blank');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -231,6 +261,13 @@ export const VendorStatementPage: React.FC = () => {
         </div>
       )}
 
+      {filtersChanged && (
+        <div className="bg-amber-50 border border-amber-100 text-amber-800 p-4 rounded-xl flex items-center gap-2.5 text-xs font-bold">
+          <AlertCircle className="w-4 h-4 text-amber-500" />
+          <span>لقد قمت بتغيير فلاتر البحث. يرجى الضغط على "عرض التقرير" لتحديث البيانات قبل الطباعة أو التصدير.</span>
+        </div>
+      )}
+
       {/* Action buttons row */}
       {reportData && !loadingReport && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 print:hidden">
@@ -299,6 +336,9 @@ export const VendorStatementPage: React.FC = () => {
                   {reportData.closing_balance >= 0 ? 'مستحق للمورد' : 'له رصيد مدفوع مقدماً'}
                 </span>
               </div>
+              <p className="text-[10px] text-slate-500 mt-1 font-semibold">
+                {reportData.closing_balance >= 0 ? 'مستحق للمورد على المنشأة (التزام/دائن)' : 'رصيد مدين لصالح المنشأة لدى المورد (مدفوع مقدماً/مدين)'}
+              </p>
             </div>
 
           </div>

@@ -13,7 +13,7 @@ export const VendorStatementPrint: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { currentOrg } = useAuth();
 
-  const vendorId = searchParams.get('vendorId') || '';
+  const vendorId = searchParams.get('vendorId') || searchParams.get('id') || '';
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
 
@@ -130,6 +130,9 @@ export const VendorStatementPrint: React.FC = () => {
             <div className={`border rounded-xl p-2.5 ${statement.closing_balance >= 0 ? 'bg-blue-50/10 border-blue-200 text-brand-blue' : 'bg-red-50/10 border-red-200 text-red-650'}`}>
               <span className="text-[9px] text-slate-400 block mb-1">الرصيد المستحق (الختامي):</span>
               <span className="font-mono font-black">{formatNumberWithLatinDigits(statement.closing_balance)}</span>
+              <span className="text-[8px] block font-semibold mt-0.5">
+                ({statement.closing_balance >= 0 ? 'مستحق للمورد من المنشأة' : 'له رصيد مدفوع مقدماً'})
+              </span>
             </div>
           </div>
         </div>
