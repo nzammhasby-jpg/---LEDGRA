@@ -266,7 +266,7 @@ export const CustomerStatementPage: React.FC = () => {
       )}
 
       {filtersChanged && (
-        <div className="bg-amber-50 border border-amber-100 text-amber-800 p-4 rounded-xl flex items-center gap-2.5 text-xs font-bold">
+        <div id="customer-statement-filters-changed-alert" className="bg-amber-50 border border-amber-100 text-amber-800 p-4 rounded-xl flex items-center gap-2.5 text-xs font-bold">
           <AlertCircle className="w-4 h-4 text-amber-500" />
           <span>لقد قمت بتغيير فلاتر البحث. يرجى الضغط على "عرض التقرير" لتحديث البيانات قبل الطباعة أو التصدير.</span>
         </div>

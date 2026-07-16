@@ -88,7 +88,7 @@ export const VendorStatementPrint: React.FC = () => {
       <PrintActions customBackPath="/reports" />
 
       {/* Main A4 Printable Sheet Content Chassis */}
-      <div className="relative bg-white w-full max-w-[210mm] min-h-[297mm] mx-auto p-12 my-8 border border-slate-200 shadow-2xl rounded-xl print-page print:border-none print:shadow-none print:my-0 print:p-0 print:rounded-none overflow-hidden">
+      <div className="relative bg-white w-full max-w-[210mm] min-h-[297mm] mx-auto p-12 my-8 border border-slate-200 shadow-2xl rounded-xl print-page print:border-none print:shadow-none print:my-0 print:p-0 print:rounded-none overflow-visible print:overflow-visible">
         
         {/* Corporate Header */}
         <PrintHeader
@@ -138,7 +138,7 @@ export const VendorStatementPrint: React.FC = () => {
         </div>
 
         {/* Vendor movements logs table */}
-        <div className="mb-8 overflow-x-auto text-right font-sans" dir="rtl">
+        <div className="mb-8 overflow-x-auto print:overflow-visible text-right font-sans" dir="rtl">
           <table className="w-full border-collapse text-xs select-none">
             <thead>
               <tr className="bg-slate-900 text-white rounded-lg">
@@ -152,7 +152,7 @@ export const VendorStatementPrint: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {/* Opening balance line first */}
-              <tr className="bg-slate-50 italic text-slate-500">
+              <tr className="bg-slate-50 italic text-slate-500 print:break-inside-avoid">
                 <td className="py-2 px-2.5 font-mono">{dateFrom}</td>
                 <td className="py-2 px-2.5 text-center font-mono font-bold">-</td>
                 <td className="py-2 px-2.5 font-sans">** رصيد مدور من حركات سابقة **</td>
@@ -164,14 +164,14 @@ export const VendorStatementPrint: React.FC = () => {
               </tr>
 
               {movements.length === 0 ? (
-                <tr>
+                <tr className="print:break-inside-avoid">
                   <td colSpan={6} className="py-8 px-3 border border-slate-200 text-center text-slate-400">
                     لا توجد حركات تجارية مسجلة مع هذا المورد في كشوف المبيعات والمدفوعات خلال هذه الدورة.
                   </td>
                 </tr>
               ) : (
                 movements.map((move, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 border-b border-slate-200">
+                  <tr key={idx} className="hover:bg-slate-50 border-b border-slate-200 print:break-inside-avoid">
                     <td className="py-2.5 px-2.5 font-mono text-slate-500 text-right">{move.date}</td>
                     <td className="py-2.5 px-2.5 text-center font-mono">
                       <div className="font-bold text-slate-700">{move.journal_number}</div>
@@ -203,7 +203,7 @@ export const VendorStatementPrint: React.FC = () => {
         </div>
 
         {/* Dynamic footer signature board */}
-        <PrintFooter showSignatures={true} description="كشف حساب تفصيلي صادر آلياً من الدفاتر المحوسبة المعتمدة ومطابق لمعاملات السداد وفواتير المخازن المعتمدة." />
+        <PrintFooter showSignatures={true} description="كشف حساب تفصيلي يوضح كافة الحركات التجارية والمالية المتبادلة والرصيد التراكمي المستحق خلال الفترة المحددة للتسوية والمطابقة." />
 
       </div>
     </div>
