@@ -33,6 +33,15 @@ export const Login: React.FC = () => {
     }
     return false;
   });
+  const [passwordResetSuccess, setPasswordResetSuccess] = useState<boolean>(() => {
+    const hashPart = window.location.hash || '';
+    const queryIndex = hashPart.indexOf('?');
+    if (queryIndex !== -1) {
+      const params = new URLSearchParams(hashPart.substring(queryIndex + 1));
+      return params.get('passwordReset') === 'success';
+    }
+    return false;
+  });
   const [resetEmail, setResetEmail] = useState<string>('');
   const [isResetSubmitting, setIsResetSubmitting] = useState<boolean>(false);
   const navigate = useNavigate();
@@ -257,6 +266,20 @@ export const Login: React.FC = () => {
                       {isAr ? "مرحباً بك مجدداً" : "Welcome Back"}
                     </h5>
                     <p className="text-xs text-emerald-700 mt-0.5">{successMessage}</p>
+                  </div>
+                </div>
+              )}
+
+              {passwordResetSuccess && (
+                <div className={`bg-emerald-50 ${isAr ? 'border-r-4 border-emerald-500' : 'border-l-4 border-emerald-500'} p-4 rounded-xl flex items-start gap-2.5 shadow-sm`}>
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h5 className="text-sm font-semibold text-emerald-900">
+                      {isAr ? "تم تغيير كلمة المرور بنجاح" : "Password Changed Successfully"}
+                    </h5>
+                    <p className="text-xs text-emerald-700 mt-0.5">
+                      {isAr ? "تم تغيير كلمة المرور بنجاح، يمكنك الآن تسجيل الدخول." : "Your password has been changed successfully. You can now log in."}
+                    </p>
                   </div>
                 </div>
               )}

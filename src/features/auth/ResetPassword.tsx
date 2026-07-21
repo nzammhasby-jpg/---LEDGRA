@@ -64,19 +64,19 @@ export const ResetPassword: React.FC = () => {
     setApiError(null);
     setApiSuccess(false);
     try {
-      const response = await updateUserPassword(data.password);
-      if (response.error) {
-        setApiError(response.error);
+      const { error: updateError } = await supabase.auth.updateUser({ password: data.password });
+      if (updateError) {
+        setApiError(updateError.message);
       } else {
         setApiSuccess(true);
         try {
-          await signOut();
+          await supabase.auth.signOut();
         } catch (signOutErr) {
           console.error("Error signing out after password reset success:", signOutErr);
         }
         setTimeout(() => {
-          navigate('/login');
-        }, 3000);
+          navigate('/login?passwordReset=success');
+        }, 2000);
       }
     } catch (e: any) {
       setApiError(e.message || 'حدث خطأ غير متوقع أثناء تحديث كلمة المرور.');
@@ -155,8 +155,8 @@ export const ResetPassword: React.FC = () => {
           <div className="bg-emerald-50 border-r-4 border-emerald-500 p-4 rounded-xl flex items-start gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <h5 className="text-sm font-semibold text-emerald-900">تم التحديث بنجاح</h5>
-              <p className="text-xs text-emerald-700 mt-0.5">جاهز لتسجيل الدخول! جاري التوجيه...</p>
+              <h5 className="text-sm font-semibold text-emerald-900">تم تغيير كلمة المرور بنجاح</h5>
+              <p className="text-xs text-emerald-700 mt-0.5">جاري توجيهك إلى صفحة تسجيل الدخول...</p>
             </div>
           </div>
         )}

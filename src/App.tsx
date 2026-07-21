@@ -5,8 +5,7 @@ import { AppShell } from './layouts/AppShell';
 import { Login } from './features/auth/Login';
 import { Register } from './features/auth/Register';
 import { ResetPassword } from './features/auth/ResetPassword';
-import { EmailVerifiedPage } from './features/auth/EmailVerifiedPage';
-import { AuthVerified } from './features/auth/AuthVerified';
+import { AuthCallback } from './features/auth/AuthCallback';
 import { AcceptInvitePage } from './features/auth/AcceptInvitePage';
 import { Onboarding } from './features/onboarding/Onboarding';
 import { Dashboard } from './features/dashboard/Dashboard';
@@ -373,51 +372,26 @@ const PlatformAdminRoute: React.FC = () => {
   return <Outlet />;
 };
 
-// Safe and elegant redirect for Supabase hash recovery tokens
-const HashRecoveryRedirect: React.FC = () => {
-  React.useEffect(() => {
-    const handleHash = async () => {
-      const hash = window.location.hash || '';
-      if (hash && (hash.includes('type=recovery') || hash.includes('access_token='))) {
-        try {
-          // Let Supabase client parse and set the session first
-          await supabase.auth.getSession();
-        } catch (e) {
-          console.error("Failed to fetch session during hash recovery redirect:", e);
-        }
-        // Force routing to the hash router reset-password route
-        window.location.hash = '#/reset-password';
-      }
-    };
-    handleHash();
-  }, []);
-
-  return null;
-};
-
 export default function App() {
   if (!isSupabaseConfigured) {
     return <SupabaseConfigAlert />;
   }
 
-  // Early redirect for Supabase auth confirmations
-  if (window.location.pathname === '/auth/confirm') {
-    const search = window.location.search || '';
-    window.location.replace(`${window.location.origin}/#/email-verified${search}`);
-    return null;
-  }
-
-  if (window.location.pathname === '/auth/verified') {
-    const search = window.location.search || '';
-    window.location.replace(`${window.location.origin}/#/auth/verified${search}`);
-    return null;
+  // Intercept the unified /auth/callback outside HashRouter
+  if (window.location.pathname === '/auth/callback') {
+    return (
+      <AppErrorBoundary>
+        <AuthProvider>
+          <AuthCallback />
+        </AuthProvider>
+      </AppErrorBoundary>
+    );
   }
 
   return (
     <AppErrorBoundary>
       <AuthProvider>
         <Router>
-        <HashRecoveryRedirect />
         <Routes>
           
           {/* Public auth screens */}
@@ -428,8 +402,6 @@ export default function App() {
 
           {/* Independent routes */}
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/email-verified" element={<EmailVerifiedPage />} />
-          <Route path="/auth/verified" element={<AuthVerified />} />
           <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
           {/* Force Onboarding screens */}
