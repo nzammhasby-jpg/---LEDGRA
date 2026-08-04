@@ -50,6 +50,7 @@ import { BalanceSheetPrint } from './features/print/BalanceSheetPrint';
 import { InventoryReportPrint } from './features/print/InventoryReportPrint';
 import { JournalEntryPrint } from './features/print/JournalEntryPrint';
 import { GeneralLedgerPrint } from './features/print/GeneralLedgerPrint';
+import { TrialBalancePrint } from './features/print/TrialBalancePrint';
 import { SalesCreditNotePrint } from './features/print/SalesCreditNotePrint';
 import { PurchaseDebitNotePrint } from './features/print/PurchaseDebitNotePrint';
 import { InventoryAdjustmentPrint } from './features/print/InventoryAdjustmentPrint';
@@ -465,6 +466,7 @@ export default function App() {
             <Route path="/print/inventory-report" element={<InventoryReportPrint />} />
             <Route path="/print/journal-entry/:id" element={<JournalEntryPrint />} />
             <Route path="/print/general-ledger" element={<GeneralLedgerPrint />} />
+            <Route path="/print/trial-balance" element={<TrialBalancePrint />} />
             <Route path="/print/inventory-adjustment/:id" element={<InventoryAdjustmentPrint />} />
             <Route path="/print/customer-aging" element={<CustomerAgingPrint />} />
             <Route path="/print/vendor-aging" element={<VendorAgingPrint />} />

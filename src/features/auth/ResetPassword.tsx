@@ -47,8 +47,21 @@ export const ResetPassword: React.FC = () => {
       }
     };
     verifySession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) {
+        if (session && session.user) {
+          setIsSessionValid(true);
+        }
+        setCheckingSession(false);
+      }
+    });
+
     return () => {
       active = false;
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe();
+      }
     };
   }, []);
 

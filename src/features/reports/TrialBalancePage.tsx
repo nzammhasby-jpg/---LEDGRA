@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { reportsService, TrialBalanceResult, TrialBalanceAccount } from '../../lib/reportsService';
 import { accountingService } from '../../lib/accountingService';
@@ -15,17 +16,20 @@ import {
   FolderTree,
   Eye,
   EyeOff,
-  RotateCcw
+  RotateCcw,
+  Bookmark
 } from 'lucide-react';
 import { ReportHeader } from './components/ReportHeader';
 import { ReportActions } from './components/ReportActions';
 import { ReportSignatures } from './components/ReportSignatures';
-import { generateCSV, downloadCSV, generateReportFilename } from '../../lib/exportUtils';
+import { CSVCell, generateCSV, downloadCSV, generateReportFilename } from '../../lib/exportUtils';
 
 export const TrialBalancePage: React.FC = () => {
   const { currentOrg } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // Date and filter states
+  const [selectedFiscalYearId, setSelectedFiscalYearId] = useState<string>('');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [includeZeroAccounts, setIncludeZeroAccounts] = useState<boolean>(false);
@@ -38,13 +42,25 @@ export const TrialBalancePage: React.FC = () => {
   const [reportData, setReportData] = useState<TrialBalanceResult | null>(null);
   const [fiscalYears, setFiscalYears] = useState<FiscalYear[]>([]);
 
+  const handleDrillDown = (accountId: string) => {
+    setSearchParams({
+      tab: 'ledger_report',
+      accountId: accountId,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+      fiscalYearId: selectedFiscalYearId
+    });
+  };
+
   const handleExportCSV = () => {
     if (!reportData) return;
     
     const currency = currentOrg?.currency_code || '';
-    const csvRows: any[][] = [
+    const selectedFyName = fiscalYears.find(y => y.id === selectedFiscalYearId)?.name_ar || fiscalYears.find(y => y.id === selectedFiscalYearId)?.name || '';
+    const csvRows: CSVCell[][] = [
       ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', 'تقرير ميزان المراجعة المطور'],
+      ['السنة المالية', selectedFyName],
       ['الفترة من', dateFrom],
       ['الفترة إلى', dateTo],
       ['العملة', currency],
@@ -87,7 +103,7 @@ export const TrialBalancePage: React.FC = () => {
     if (currentOrg) {
       initDateRange();
     }
-  }, [currentOrg]);
+  }, [currentOrg, searchParams]);
 
   const initDateRange = async () => {
     try {
@@ -95,19 +111,26 @@ export const TrialBalancePage: React.FC = () => {
       setError(null);
       const years = await accountingService.getFiscalYears(currentOrg!.id);
       setFiscalYears(years);
-      
-      const activeYear = years.find(y => y.is_current) || years[0];
+
+      const paramFyId = searchParams.get('fiscalYearId') || searchParams.get('fiscal_year_id');
+      const paramFrom = searchParams.get('dateFrom') || searchParams.get('date_from');
+      const paramTo = searchParams.get('dateTo') || searchParams.get('date_to');
+
+      const activeYear = (paramFyId ? years.find(y => y.id === paramFyId) : null) || years.find(y => y.is_current) || years[0];
       if (activeYear) {
-        setDateFrom(activeYear.start_date);
-        setDateTo(activeYear.end_date);
-        fetchReport(activeYear.start_date, activeYear.end_date);
-      } else {
-        const cy = new Date().getFullYear();
-        const start = `${cy}-01-01`;
-        const end = `${cy}-12-31`;
+        setSelectedFiscalYearId(activeYear.id);
+        const start = paramFrom || activeYear.start_date;
+        const end = paramTo || activeYear.end_date;
         setDateFrom(start);
         setDateTo(end);
-        fetchReport(start, end);
+        fetchReport(start, end, activeYear.id);
+      } else {
+        const cy = new Date().getFullYear();
+        const start = paramFrom || `${cy}-01-01`;
+        const end = paramTo || `${cy}-12-31`;
+        setDateFrom(start);
+        setDateTo(end);
+        fetchReport(start, end, '');
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -115,8 +138,22 @@ export const TrialBalancePage: React.FC = () => {
     }
   };
 
-  const fetchReport = async (from = dateFrom, to = dateTo) => {
+  const handleFiscalYearChange = (fyId: string) => {
+    setSelectedFiscalYearId(fyId);
+    const fy = fiscalYears.find(y => y.id === fyId);
+    if (fy) {
+      setDateFrom(fy.start_date);
+      setDateTo(fy.end_date);
+      fetchReport(fy.start_date, fy.end_date, fy.id);
+    }
+  };
+
+  const fetchReport = async (from = dateFrom, to = dateTo, fyId = selectedFiscalYearId) => {
     if (!currentOrg || !from || !to) return;
+    if (from && to && new Date(from) > new Date(to)) {
+      setError("تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية (الفترة معكوسة غير صالحة).");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -126,7 +163,8 @@ export const TrialBalancePage: React.FC = () => {
         to,
         includeZeroAccounts,
         includeParentAccounts,
-        excludeClosingEntries
+        excludeClosingEntries,
+        fyId
       );
       setReportData(data);
     } catch (err) {
@@ -134,7 +172,7 @@ export const TrialBalancePage: React.FC = () => {
       if (errMsg.includes('permission') || errMsg.includes('غير مصرح')) {
         setError('ليس لديك صلاحية لعرض هذا التقرير المالي الحساس.');
       } else {
-        setError('تعذر تحميل ميزان المراجعة المطور. الرجاء التحقق من الصلاحيات.');
+        setError(errMsg);
       }
     } finally {
       setLoading(false);
@@ -181,6 +219,25 @@ export const TrialBalancePage: React.FC = () => {
       {/* Filters form */}
       <form onSubmit={handleSubmit} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4 print:hidden">
         <div className="flex flex-wrap gap-4 items-end">
+          <div className="space-y-1.5 shrink-0">
+            <label className="text-xs font-bold text-slate-500 block">السنة المالية</label>
+            <div className="relative">
+              <select
+                value={selectedFiscalYearId}
+                onChange={(e) => handleFiscalYearChange(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2 pr-9 outline-none focus:border-brand-blue font-bold min-w-[160px]"
+                required
+              >
+                {fiscalYears.map((fy) => (
+                  <option key={fy.id} value={fy.id}>
+                    {fy.name_ar || fy.name || fy.name_en} {fy.is_current ? '(الحالية)' : ''}
+                  </option>
+                ))}
+              </select>
+              <Bookmark className="w-4 h-4 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+            </div>
+          </div>
+
           <div className="space-y-1.5 shrink-0">
             <label className="text-xs font-bold text-slate-500 block">تاريخ البدء</label>
             <div className="relative">
@@ -272,7 +329,9 @@ export const TrialBalancePage: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100 print:hidden">
           <span className="text-xs font-bold text-slate-500">خيارات تصدير وطباعة ميزان المراجعة:</span>
           <ReportActions
-            onPrint={() => window.print()}
+            onPrint={() => {
+              window.open(`/#/print/trial-balance?startDate=${dateFrom}&endDate=${dateTo}&includeZeroAccounts=${includeZeroAccounts}&includeParentAccounts=${includeParentAccounts}&excludeClosingEntries=${excludeClosingEntries}`, '_blank');
+            }}
             onExportCSV={handleExportCSV}
             onRefresh={() => fetchReport()}
             loading={loading}
@@ -417,12 +476,13 @@ export const TrialBalancePage: React.FC = () => {
                     <th className="py-3 px-4 w-28 text-left">حركة دائن</th>
                     <th className="py-3 px-4 w-28 text-left">ختامي مدين</th>
                     <th className="py-3 px-4 w-28 text-left">ختامي دائن</th>
+                    <th className="py-3 px-4 text-center w-28">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
                   {reportData.accounts.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-12 text-center text-xs text-slate-400 italic">
+                      <td colSpan={10} className="p-12 text-center text-xs text-slate-400 italic">
                         لا توجد حسابات تنطبق عليها معايير التصفية المختارة.
                       </td>
                     </tr>
@@ -488,6 +548,21 @@ export const TrialBalancePage: React.FC = () => {
                           {/* Closing Credit */}
                           <td className="py-3 px-4 text-left font-mono text-slate-900 font-extrabold" style={{ direction: 'ltr' }}>
                             {account.closing_credit > 0 ? formatNumberWithLatinDigits(account.closing_credit) : '-'}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3 px-4 text-center">
+                            {!isParent && (
+                              <button
+                                type="button"
+                                onClick={() => handleDrillDown(account.account_id)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.25 bg-brand-blue/5 hover:bg-brand-blue/15 text-brand-blue rounded-lg text-[10px] font-black transition cursor-pointer"
+                                title="عرض كشف دفتر الأستاذ التفصيلي لهذا الحساب"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>دفتر الأستاذ</span>
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

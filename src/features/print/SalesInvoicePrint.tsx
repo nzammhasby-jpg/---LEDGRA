@@ -206,6 +206,16 @@ export const SalesInvoicePrint: React.FC = () => {
           </div>
         </div>
 
+        {/* Tax calculation note banner */}
+        {isVat && (
+          <div className="mb-3 text-[11px] font-bold text-slate-600 flex items-center justify-between bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+            <span>احتساب الضريبة:</span>
+            <span className={invoice.prices_include_tax ? "text-emerald-700 font-extrabold" : "text-slate-700"}>
+              {invoice.prices_include_tax ? 'الأسعار المدخلة شاملة ضريبة القيمة المضافة' : 'الأسعار المدخلة غير شاملة ضريبة القيمة المضافة'}
+            </span>
+          </div>
+        )}
+
         {/* Sales lines list table */}
         <div className="mb-8 print:mb-4 overflow-x-auto text-right font-sans" dir="rtl">
           <table className="w-full border-collapse text-xs select-none">
@@ -214,7 +224,7 @@ export const SalesInvoicePrint: React.FC = () => {
                 <th className="py-2.5 px-3 text-center border border-slate-900 font-extrabold w-8">#</th>
                 <th className="py-2.5 px-3 border border-slate-900 font-extrabold text-right">الصنف / الوصف</th>
                 <th className="py-2.5 px-3 text-center border border-slate-900 font-extrabold w-16">الكمية</th>
-                <th className="py-2.5 px-3 text-center border border-slate-900 font-extrabold w-28">سعر الوحدة</th>
+                <th className="py-2.5 px-3 text-center border border-slate-900 font-extrabold w-28">سعر الوحدة الصافي</th>
                 <th className="py-2.5 px-3 text-center border border-slate-900 font-extrabold w-20">الخصم</th>
                 <th className="py-2.5 px-3 text-center border border-slate-900 font-extrabold w-16">الضريبة</th>
                 <th className="py-2.5 px-3 text-left border border-slate-900 font-extrabold w-32">الإجمالي</th>
@@ -231,7 +241,14 @@ export const SalesInvoicePrint: React.FC = () => {
                     )}
                   </td>
                   <td className="py-2.5 px-3 text-center font-mono font-black text-slate-900">{formatNumberWithLatinDigits(line.quantity, 0)}</td>
-                  <td className="py-2.5 px-3 text-center font-mono font-black text-slate-900">{formatNumberWithLatinDigits(line.unit_price)}</td>
+                  <td className="py-2.5 px-3 text-center font-mono font-black text-slate-900">
+                    <div>{formatNumberWithLatinDigits(line.unit_price)}</div>
+                    {invoice.prices_include_tax && line.entered_unit_price && (
+                      <div className="text-[9px] text-slate-400 font-normal">
+                        (شامل: {formatNumberWithLatinDigits(line.entered_unit_price)})
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2.5 px-3 text-center font-mono text-red-600 font-bold">
                     {line.discount_amount > 0 ? `-${formatNumberWithLatinDigits(line.discount_amount)}` : '0.00'}
                   </td>

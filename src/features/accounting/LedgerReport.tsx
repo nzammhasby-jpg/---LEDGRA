@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { journalService } from '../../lib/journalService';
 import { accountingService } from '../../lib/accountingService';
+import { reportsService } from '../../lib/reportsService';
 import { Account, FiscalYear } from '../../types';
 import { formatArabicDateWithLatinDigits, formatNumberWithLatinDigits } from '../../lib/formatters';
 import { getErrorMessage } from '../../lib/errors';
@@ -132,14 +133,40 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
         setLoading(true);
         setError(null);
         try {
-          const report = await journalService.getLedgerReport(currentOrg!.id, preselectedAccountId, {
-            fiscalYearId: selectedYearId || undefined,
-            startDate: startDate || undefined,
-            endDate: endDate || undefined
-          });
+          const selectedYear = fiscalYears.find(y => y.id === selectedYearId);
+          const fromDate = startDate || (selectedYear ? selectedYear.start_date : '');
+          const toDate = endDate || (selectedYear ? selectedYear.end_date : '');
+
+          if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+            throw new Error("تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.");
+          }
+
+          const report = await reportsService.getLedgerReportAdvanced(
+            currentOrg!.id,
+            preselectedAccountId,
+            fromDate,
+            toDate,
+            false,
+            selectedYearId
+          );
           setReportAccount(report.account);
-          setRecords(report.records);
-          await resolveSources(report.records);
+          
+          const mapped: LedgerRecord[] = report.entries.map((entry) => ({
+            id: entry.entry_id,
+            entry_id: entry.entry_id,
+            entry_date: entry.entry_date,
+            entry_number: entry.reference || '',
+            entry_description: entry.description || '',
+            line_description: null,
+            debit: entry.debit,
+            credit: entry.credit,
+            running_balance: entry.running_balance,
+            source_type: (entry.source_type === 'system' ? 'system' : 'manual') as 'manual' | 'system',
+            source_id: entry.source_id,
+            reference: entry.reference
+          }));
+          setRecords(mapped);
+          await resolveSources(mapped);
         } catch (err: any) {
           setError(getErrorMessage(err));
           setReportAccount(null);
@@ -155,6 +182,16 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
     }
   }, [preselectedAccountId, baselineLoading, accounts]);
 
+  useEffect(() => {
+    if (selectedYearId && fiscalYears.length > 0) {
+      const fy = fiscalYears.find(y => y.id === selectedYearId);
+      if (fy) {
+        setStartDate(fy.start_date);
+        setEndDate(fy.end_date);
+      }
+    }
+  }, [selectedYearId, fiscalYears]);
+
   const handleGenerateReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentOrg) return;
@@ -163,18 +200,44 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
       return;
     }
 
+    const selectedYear = fiscalYears.find(y => y.id === selectedYearId);
+    const fromDate = startDate || (selectedYear ? selectedYear.start_date : '');
+    const toDate = endDate || (selectedYear ? selectedYear.end_date : '');
+
+    if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+      setError("تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const report = await journalService.getLedgerReport(currentOrg.id, selectedAccountId, {
-        fiscalYearId: selectedYearId || undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined
-      });
+      const report = await reportsService.getLedgerReportAdvanced(
+        currentOrg.id,
+        selectedAccountId,
+        fromDate,
+        toDate,
+        false,
+        selectedYearId
+      );
 
       setReportAccount(report.account);
-      setRecords(report.records);
-      await resolveSources(report.records);
+      const mapped: LedgerRecord[] = report.entries.map((entry) => ({
+        id: entry.entry_id,
+        entry_id: entry.entry_id,
+        entry_date: entry.entry_date,
+        entry_number: entry.reference || '',
+        entry_description: entry.description || '',
+        line_description: null,
+        debit: entry.debit,
+        credit: entry.credit,
+        running_balance: entry.running_balance,
+        source_type: (entry.source_type === 'system' ? 'system' : 'manual') as 'manual' | 'system',
+        source_id: entry.source_id,
+        reference: entry.reference
+      }));
+      setRecords(mapped);
+      await resolveSources(mapped);
     } catch (err: any) {
       setError(getErrorMessage(err));
       setReportAccount(null);
@@ -188,8 +251,8 @@ export const LedgerReport: React.FC<LedgerReportProps> = ({ preselectedAccountId
     setSelectedAccountId('');
     const activeY = fiscalYears.find(y => y.is_current) || fiscalYears[0];
     setSelectedYearId(activeY ? activeY.id : '');
-    setStartDate('');
-    setEndDate('');
+    setStartDate(activeY ? activeY.start_date : '');
+    setEndDate(activeY ? activeY.end_date : '');
     setRecords([]);
     setReportAccount(null);
     setError(null);

@@ -281,17 +281,22 @@ export const reportsService = {
     orgId: string,
     dateFrom: string,
     dateTo: string,
-    includeZeroAccounts: boolean = false,
-    includeParentAccounts: boolean = true,
-    excludeClosingEntries: boolean = true
+    includeZeroAccounts: boolean,
+    includeParentAccounts: boolean,
+    excludeClosingEntries: boolean,
+    fiscalYearId: string
   ): Promise<TrialBalanceResult> {
+    if (!fiscalYearId) {
+      throw new Error('السنة المالية حقل إجباري لا يمكن أن يكون فارغاً.');
+    }
     const { data, error } = await supabase.rpc('get_trial_balance_advanced', {
       p_org_id: orgId,
       p_date_from: dateFrom,
       p_date_to: dateTo,
       p_include_zero_accounts: includeZeroAccounts,
       p_include_parent_accounts: includeParentAccounts,
-      p_exclude_closing_entries: excludeClosingEntries
+      p_exclude_closing_entries: excludeClosingEntries,
+      p_fiscal_year_id: fiscalYearId
     });
 
     if (error) throw error;
@@ -306,14 +311,19 @@ export const reportsService = {
     accountId: string,
     dateFrom: string,
     dateTo: string,
-    excludeClosingEntries: boolean = false
+    excludeClosingEntries: boolean,
+    fiscalYearId: string
   ): Promise<LedgerReportResult> {
+    if (!fiscalYearId) {
+      throw new Error('السنة المالية حقل إجباري لا يمكن أن يكون فارغاً.');
+    }
     const { data, error } = await supabase.rpc('get_ledger_report_advanced', {
       p_org_id: orgId,
       p_account_id: accountId,
       p_date_from: dateFrom,
       p_date_to: dateTo,
-      p_exclude_closing_entries: excludeClosingEntries
+      p_exclude_closing_entries: excludeClosingEntries,
+      p_fiscal_year_id: fiscalYearId
     });
 
     if (error) throw error;
@@ -381,6 +391,10 @@ export interface TrialBalanceTotals {
   period_credit: number;
   closing_debit: number;
   closing_credit: number;
+  period_difference: number;
+  closing_difference: number;
+  is_period_balanced: boolean;
+  is_closing_balanced: boolean;
   is_balanced: boolean;
   difference: number;
 }
@@ -388,6 +402,7 @@ export interface TrialBalanceTotals {
 export interface TrialBalanceResult {
   date_from: string;
   date_to: string;
+  fiscal_year_id: string;
   include_zero_accounts: boolean;
   include_parent_accounts: boolean;
   exclude_closing_entries: boolean;
@@ -406,7 +421,11 @@ export interface LedgerAccountInfo {
 
 export interface LedgerEntryRow {
   entry_id: string;
+  journal_entry_id: string;
+  line_id: string;
+  journal_entry_line_id: string;
   entry_date: string;
+  entry_number?: string;
   reference: string;
   description: string;
   debit: number;
@@ -419,14 +438,60 @@ export interface LedgerEntryRow {
 
 export interface LedgerReportResult {
   account: LedgerAccountInfo;
+  account_id: string;
+  account_code: string;
+  account_name: string;
   date_from: string;
   date_to: string;
+  fiscal_year_id: string;
   exclude_closing_entries: boolean;
   opening_balance: number;
+  opening_debit: number;
+  opening_credit: number;
+  period_debit: number;
+  period_credit: number;
   total_debit: number;
   total_credit: number;
   closing_balance: number;
+  closing_debit: number;
+  closing_credit: number;
+  movement_count: number;
   entries: LedgerEntryRow[];
+}
+
+export function calculateBalanceSide(balance: number): {
+  debitBalance: number;
+  creditBalance: number;
+  balanceSide: 'debit' | 'credit' | 'zero';
+} {
+  if (Math.abs(balance) <= 0.01) {
+    return { debitBalance: 0, creditBalance: 0, balanceSide: 'zero' };
+  }
+  if (balance > 0) {
+    return { debitBalance: balance, creditBalance: 0, balanceSide: 'debit' };
+  }
+  return { debitBalance: 0, creditBalance: Math.abs(balance), balanceSide: 'credit' };
+}
+
+export function validateDateRange(from: string, to: string): void {
+  if (from && to && new Date(from) > new Date(to)) {
+    throw new Error('تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية (الفترة معكوسة غير صالحة).');
+  }
+}
+
+export function buildLedgerDrilldownParams(params: {
+  accountId: string;
+  dateFrom: string;
+  dateTo: string;
+  fiscalYearId: string;
+}): Record<string, string> {
+  return {
+    tab: 'ledger_report',
+    accountId: params.accountId,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    fiscalYearId: params.fiscalYearId
+  };
 }
 
 export interface AdvancedIncomeStatementAccount {

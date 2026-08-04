@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { journalService } from '../../lib/journalService';
+import { reportsService, LedgerReportResult } from '../../lib/reportsService';
+import { accountingService } from '../../lib/accountingService';
 import { getErrorMessage } from '../../lib/errors';
 import { formatArabicDateWithLatinDigits, formatNumberWithLatinDigits } from '../../lib/formatters';
 import { PrintActions } from './PrintActions';
@@ -14,12 +15,11 @@ export const GeneralLedgerPrint: React.FC = () => {
   const { currentOrg } = useAuth();
 
   const accountId = searchParams.get('accountId') || '';
-  const fiscalYearId = searchParams.get('fiscalYearId') || '';
-  const startDate = searchParams.get('startDate') || '';
-  const endDate = searchParams.get('endDate') || '';
+  const fiscalYearId = searchParams.get('fiscalYearId') || searchParams.get('fiscal_year_id') || '';
+  const startDate = searchParams.get('startDate') || searchParams.get('dateFrom') || searchParams.get('date_from') || '';
+  const endDate = searchParams.get('endDate') || searchParams.get('dateTo') || searchParams.get('date_to') || '';
 
-  const [reportAccount, setReportAccount] = useState<any | null>(null);
-  const [records, setRecords] = useState<any[]>([]);
+  const [reportResult, setReportResult] = useState<LedgerReportResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,14 +38,35 @@ export const GeneralLedgerPrint: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const report = await journalService.getLedgerReport(currentOrg!.id, accountId, {
-        fiscalYearId: fiscalYearId || undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined
-      });
-      setReportAccount(report.account);
-      setRecords(report.records);
-    } catch (err: any) {
+      let activeFyId = fiscalYearId;
+      let fromDate = startDate;
+      let toDate = endDate;
+
+      if (!activeFyId || !fromDate || !toDate) {
+        const years = await accountingService.getFiscalYears(currentOrg!.id);
+        const selectedYear = (activeFyId ? years.find(y => y.id === activeFyId) : null) || years.find(y => y.is_current) || years[0];
+        if (!selectedYear) {
+          throw new Error('لم يتم العثور على سنة مالية معتمدة لهذه المنشأة.');
+        }
+        activeFyId = selectedYear.id;
+        fromDate = fromDate || selectedYear.start_date;
+        toDate = toDate || selectedYear.end_date;
+      }
+
+      if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+        throw new Error("تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية.");
+      }
+
+      const report = await reportsService.getLedgerReportAdvanced(
+        currentOrg!.id,
+        accountId,
+        fromDate,
+        toDate,
+        false,
+        activeFyId
+      );
+      setReportResult(report);
+    } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
@@ -63,7 +84,7 @@ export const GeneralLedgerPrint: React.FC = () => {
     );
   }
 
-  if (error || !reportAccount) {
+  if (error || !reportResult) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6" dir="rtl">
         <div className="max-w-md w-full bg-white border border-red-200 rounded-3xl p-6 text-center space-y-4 shadow-xl">
@@ -83,9 +104,11 @@ export const GeneralLedgerPrint: React.FC = () => {
     );
   }
 
+  const reportAccount = reportResult.account;
+  const records = reportResult.entries;
+  const finalBalance = reportResult.closing_balance;
   const totalDebit = records.reduce((sum, r) => sum + Number(r.debit || 0), 0);
   const totalCredit = records.reduce((sum, r) => sum + Number(r.credit || 0), 0);
-  const finalBalance = records.length > 0 ? records[records.length - 1].running_balance : 0;
 
   return (
     <div className="bg-slate-100 min-h-screen animate-fadeIn">
@@ -103,8 +126,8 @@ export const GeneralLedgerPrint: React.FC = () => {
           extraMeta={[
             { label: 'رقم الحساب', value: reportAccount.code },
             { label: 'طبيعة الحساب', value: reportAccount.nature === 'debit' ? 'مدين' : 'دائن' },
-            { label: 'تاريخ بداية الفترة', value: startDate || 'غير محدد' },
-            { label: 'تاريخ نهاية الفترة', value: endDate || 'غير محدد' }
+            { label: 'تاريخ بداية الفترة', value: reportResult.date_from },
+            { label: 'تاريخ نهاية الفترة', value: reportResult.date_to }
           ]}
         />
 
@@ -151,8 +174,7 @@ export const GeneralLedgerPrint: React.FC = () => {
                     <td className="py-2 px-2.5 border border-slate-200 text-slate-500 font-mono text-right">{formatArabicDateWithLatinDigits(rec.entry_date)}</td>
                     <td className="py-2 px-2.5 border border-slate-200 text-slate-900 font-bold font-mono text-right">{rec.entry_number}</td>
                     <td className="py-2 px-2.5 border border-slate-200 text-slate-800 text-right">
-                      <span className="block font-bold">{rec.entry_description}</span>
-                      {rec.line_description && <span className="block text-[9px] text-slate-450 mt-0.5">{rec.line_description}</span>}
+                      <span className="block font-bold">{rec.description}</span>
                     </td>
                     <td className="py-2 px-2.5 border border-slate-200 font-mono text-center">
                       {rec.debit > 0 ? formatNumberWithLatinDigits(rec.debit) : '-'}

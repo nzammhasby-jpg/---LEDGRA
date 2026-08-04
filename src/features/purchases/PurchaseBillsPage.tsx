@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { purchaseService, CreatePurchaseBillInput } from '../../lib/purchaseService';
@@ -14,6 +14,7 @@ import {
 } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { getOrgDefaultTaxRate, getCountryProfile } from '../../lib/countryProfiles';
+import { calculateTaxLine, calculateInvoiceTotals } from '../../lib/taxCalculation';
 import { 
   formatNumberWithLatinDigits, 
   formatArabicDateWithLatinDigits, 
@@ -46,6 +47,20 @@ import {
 export const PurchaseBillsPage: React.FC = () => {
   const { currentOrg, roleInCurrentOrg, profile } = useAuth();
   const navigate = useNavigate();
+
+  const orgDefaultTaxRate = useMemo(() => {
+    const configuredRate = Number(getOrgDefaultTaxRate(currentOrg));
+
+    if (Number.isFinite(configuredRate) && configuredRate > 0) {
+      return configuredRate;
+    }
+
+    if (!currentOrg || currentOrg.country_code === 'SA') {
+      return 15;
+    }
+
+    return 0;
+  }, [currentOrg]);
   
   // Checking permissions: Owner, admin, accountant can approve/cancel; viewers cannot edit.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
@@ -84,6 +99,7 @@ export const PurchaseBillsPage: React.FC = () => {
   const [billDate, setBillDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
+  const [pricesIncludeTax, setPricesIncludeTax] = useState<boolean>(false);
 
   // Bill Lines Form State
   const [lines, setLines] = useState<Array<{
@@ -131,32 +147,15 @@ export const PurchaseBillsPage: React.FC = () => {
 
   // Pre-calculate line totals in real time
   const getCalculatedTotals = () => {
-    let subtotal = 0;
-    let discountTotal = 0;
-    let taxTotal = 0;
-
-    lines.forEach(line => {
-      const gQty = Number(line.quantity) || 0;
-      const gCost = Number(line.unit_cost) || 0;
-      const gDisc = Number(line.discount_amount) || 0;
-      
-      const lineSubtotal = gQty * gCost;
-      const lineNet = Math.max(0, lineSubtotal - gDisc);
-      const lineTax = lineNet * (line.tax_rate / 100);
-
-      subtotal += lineSubtotal;
-      discountTotal += gDisc;
-      taxTotal += lineTax;
-    });
-
-    const total = subtotal - discountTotal + taxTotal;
-
-    return {
-      subtotal,
-      discountTotal,
-      taxTotal,
-      total
-    };
+    return calculateInvoiceTotals(
+      lines.map(l => ({
+        quantity: l.quantity,
+        enteredUnitPrice: l.unit_cost,
+        discountAmount: l.discount_amount,
+        taxRate: l.tax_rate
+      })),
+      pricesIncludeTax
+    );
   };
 
   const { subtotal, discountTotal, taxTotal, total } = getCalculatedTotals();
@@ -175,6 +174,7 @@ export const PurchaseBillsPage: React.FC = () => {
     defaultDue.setDate(defaultDue.getDate() + 30);
     setDueDate(defaultDue.toISOString().split('T')[0]);
     setNotes('');
+    setPricesIncludeTax(false);
     setLines([
       {
         uuid: Math.random().toString(),
@@ -183,7 +183,7 @@ export const PurchaseBillsPage: React.FC = () => {
         quantity: '1',
         unit_cost: '0',
         discount_amount: '0',
-        tax_rate: getOrgDefaultTaxRate(currentOrg),
+        tax_rate: orgDefaultTaxRate,
         expense_account_id: '',
         inventory_account_id: ''
       }
@@ -199,12 +199,13 @@ export const PurchaseBillsPage: React.FC = () => {
     setBillDate(bill.bill_date);
     setDueDate(bill.due_date);
     setNotes(bill.notes || '');
+    setPricesIncludeTax(bill.prices_include_tax ?? false);
     setLines((bill.lines || []).map(l => ({
       uuid: Math.random().toString(),
       item_id: l.item_id,
       description: l.description || '',
       quantity: String(l.quantity),
-      unit_cost: String(l.unit_cost),
+      unit_cost: String(l.entered_unit_cost ?? l.unit_cost),
       discount_amount: String(l.discount_amount),
       tax_rate: l.tax_rate,
       expense_account_id: l.expense_account_id || '',
@@ -225,11 +226,12 @@ export const PurchaseBillsPage: React.FC = () => {
         bill_date: new Date().toISOString().split('T')[0],
         due_date: new Date().toISOString().split('T')[0],
         notes: `نسخة تصحيحية من الفاتورة: ${oldBill.bill_number}` + (oldBill.notes ? `\n\n${oldBill.notes}` : ''),
+        prices_include_tax: oldBill.prices_include_tax ?? false,
         lines: (oldBill.lines || []).map(l => ({
           item_id: l.item_id,
           description: l.description || undefined,
           quantity: l.quantity,
-          unit_cost: l.unit_cost,
+          unit_cost: l.entered_unit_cost ?? l.unit_cost,
           discount_amount: l.discount_amount,
           tax_rate: l.tax_rate,
           expense_account_id: l.expense_account_id || undefined,
@@ -271,11 +273,8 @@ export const PurchaseBillsPage: React.FC = () => {
       updated[index].description = item.description || item.name || '';
       updated[index].unit_cost = String(item.purchase_price || 0);
       
-      if (currentOrg?.is_vat_registered === false) {
-        updated[index].tax_rate = 0;
-      } else {
-        updated[index].tax_rate = item.tax_rate ?? getOrgDefaultTaxRate(currentOrg);
-      }
+      const itemTaxRate = Number(item.tax_rate);
+      updated[index].tax_rate = Number.isFinite(itemTaxRate) && itemTaxRate > 0 ? itemTaxRate : orgDefaultTaxRate;
 
       if (item.is_stockable) {
         updated[index].inventory_account_id = item.inventory_account_id || settings?.default_inventory_account_id || '';
@@ -288,7 +287,7 @@ export const PurchaseBillsPage: React.FC = () => {
       updated[index].item_id = '';
       updated[index].description = '';
       updated[index].unit_cost = '0';
-      updated[index].tax_rate = currentOrg?.is_vat_registered === false ? 0 : getOrgDefaultTaxRate(currentOrg);
+      updated[index].tax_rate = orgDefaultTaxRate;
       updated[index].expense_account_id = '';
       updated[index].inventory_account_id = '';
     }
@@ -321,7 +320,7 @@ export const PurchaseBillsPage: React.FC = () => {
         quantity: '1',
         unit_cost: '0',
         discount_amount: '0',
-        tax_rate: getOrgDefaultTaxRate(currentOrg),
+        tax_rate: orgDefaultTaxRate,
         expense_account_id: '',
         inventory_account_id: ''
       }
@@ -376,6 +375,12 @@ export const PurchaseBillsPage: React.FC = () => {
         return;
       }
 
+      const taxRate = Number(line.tax_rate);
+      if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) {
+        setFormError(`نسبة الضريبة في البند رقم ${i + 1} يجب أن تكون بين 0 و100.`);
+        return;
+      }
+
       processedLines.push({
         item_id: line.item_id || null,
         description: line.description || null,
@@ -396,6 +401,7 @@ export const PurchaseBillsPage: React.FC = () => {
         bill_date: billDate,
         due_date: dueDate,
         notes: notes || undefined,
+        prices_include_tax: pricesIncludeTax,
         lines: processedLines
       };
 
@@ -423,6 +429,15 @@ export const PurchaseBillsPage: React.FC = () => {
 
   // Secure Action: Approve Purchase Bill
   const handleApproveBill = async (billId: string) => {
+    if (currentOrg?.is_vat_registered === false) {
+      const targetBill = bills.find(b => b.id === billId) || selectedBill;
+      const hasTax = targetBill?.lines?.some(l => Number(l.tax_rate) > 0);
+      if (hasTax) {
+        const confirmed = window.confirm('المنشأة محددة كغير مسجلة في ضريبة القيمة المضافة، لكن الفاتورة تحتوي على ضريبة. راجع إعدادات المنشأة قبل الاعتماد. هل تريد المتابعة؟');
+        if (!confirmed) return;
+      }
+    }
+
     if (!window.confirm('هل أنت متأكد من رغبتك في اعتماد فاتورة الشراء وتوليد القيد المحاسبي المزدوج تلقائياً؟')) return;
     setActionLoading(billId);
     setError(null);
@@ -972,8 +987,53 @@ export const PurchaseBillsPage: React.FC = () => {
           </div>
 
           {/* Line items editor card */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden space-y-4 p-5">
+            
+            {/* Tax Input Method Segmented Control */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                <span className="text-xs font-bold text-slate-800">طريقة إدخال السعر</span>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {pricesIncludeTax 
+                    ? 'السعر المدخل هو المبلغ النهائي، وسيستخرج النظام منه السعر قبل الضريبة ومبلغ الضريبة.'
+                    : 'السعر المدخل قبل الضريبة، وسيضيف النظام ضريبة القيمة المضافة فوقه.'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 bg-slate-200/60 p-1 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setPricesIncludeTax(false)}
+                  className={`py-2 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
+                    !pricesIncludeTax
+                      ? 'bg-white text-slate-800 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  إضافة الضريبة إلى التكلفة
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPricesIncludeTax(true)}
+                  className={`py-2 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
+                    pricesIncludeTax
+                      ? 'bg-brand-blue text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  التكلفة شاملة الضريبة
+                </button>
+              </div>
+            </div>
+
+            {/* Warning notice if organization is NOT VAT registered */}
+            {currentOrg?.is_vat_registered === false && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. يمكنك تحديد نسبة الضريبة أثناء تجهيز المسودة، لكن يجب مراجعة إعدادات المنشأة قبل اعتماد فاتورة ضريبية.</span>
+              </div>
+            )}
+
+            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700">بنود التكاليف والمشتريات</span>
               <button
                 type="button"
@@ -991,7 +1051,7 @@ export const PurchaseBillsPage: React.FC = () => {
                     <th className="p-3 w-1/4">المنتج / الخدمة</th>
                     <th className="p-3">الوصف</th>
                     <th className="p-3 w-20 text-center">الكمية</th>
-                    <th className="p-3 w-28 text-center">التكلفة (دون ضريبة)</th>
+                    <th className="p-3 w-28 text-center">{pricesIncludeTax ? 'التكلفة (شامل الضريبة)' : 'التكلفة (دون ضريبة)'}</th>
                     <th className="p-3 w-24 text-center">الخصم ({currentOrg?.currency_code || ''})</th>
                     <th className="p-3 w-16 text-center">الضريبة</th>
                     <th className="p-3 w-1/4">الحساب المحاسبي للبند</th>
@@ -1000,13 +1060,15 @@ export const PurchaseBillsPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {lines.map((line, idx) => {
-                    const gQty = Number(line.quantity) || 0;
-                    const gCost = Number(line.unit_cost) || 0;
-                    const gDisc = Number(line.discount_amount) || 0;
-                    const lineSubtotal = gQty * gCost;
-                    const lineNet = Math.max(0, lineSubtotal - gDisc);
-                    const lineTax = lineNet * (line.tax_rate / 100);
-                    const lineFinal = lineNet + lineTax;
+                    const lineRes = calculateTaxLine(
+                      {
+                        quantity: line.quantity,
+                        enteredUnitPrice: line.unit_cost,
+                        discountAmount: line.discount_amount,
+                        taxRate: line.tax_rate
+                      },
+                      pricesIncludeTax
+                    );
 
                     // Filter accounts based on expense vs assets nature if product stockable
                     const matchedItem = items.find(i => i.id === line.item_id);
@@ -1080,9 +1142,45 @@ export const PurchaseBillsPage: React.FC = () => {
                           />
                         </td>
 
-                        {/* Tax rate badge */}
+                        {/* Tax rate select */}
                         <td className="p-3 text-center font-mono font-bold text-slate-500">
-                          {line.tax_rate}%
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={line.tax_rate}
+                            onChange={(event) => {
+                              const rawValue = event.target.value;
+
+                              if (rawValue === '') {
+                                updateLineField(idx, 'tax_rate', '');
+                                return;
+                              }
+
+                              const parsedValue = Number(rawValue);
+
+                              if (!Number.isFinite(parsedValue)) {
+                                return;
+                              }
+
+                              updateLineField(
+                                idx,
+                                'tax_rate',
+                                String(Math.min(100, Math.max(0, parsedValue)))
+                              );
+                            }}
+                            onBlur={() => {
+                              const parsedValue = Number(line.tax_rate);
+
+                              if (!Number.isFinite(parsedValue)) {
+                                updateLineField(idx, 'tax_rate', String(orgDefaultTaxRate));
+                              }
+                            }}
+                            className="w-20 p-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center font-sans"
+                            dir="ltr"
+                          />
                         </td>
 
                         {/* Account Selector */}
@@ -1118,7 +1216,7 @@ export const PurchaseBillsPage: React.FC = () => {
 
                         {/* Subtotal & Delete */}
                         <td className="p-3 text-left pl-6 font-mono font-bold text-slate-900 flex items-center justify-between gap-1" style={{ direction: 'ltr' }}>
-                          <span>{lineFinal.toFixed(2)}</span>
+                          <span>{lineRes.lineTotal.toFixed(2)}</span>
                           {lines.length > 1 && (
                             <button
                               type="button"
@@ -1167,7 +1265,7 @@ export const PurchaseBillsPage: React.FC = () => {
               </div>
 
               <div className="flex justify-between text-xs text-brand-turquoise">
-                <span className="font-sans text-slate-400">ضريبة المدخلات ({getOrgDefaultTaxRate(currentOrg)}%):</span>
+                <span className="font-sans text-slate-400">ضريبة المدخلات ({orgDefaultTaxRate}%):</span>
                 <span className="font-bold">+{taxTotal.toFixed(2)} {currentOrg?.currency_code || ''}</span>
               </div>
 
@@ -1385,7 +1483,7 @@ export const PurchaseBillsPage: React.FC = () => {
                           <div className="text-right pr-2 font-semibold">
                             <span className="text-brand-blue font-bold">[1204]</span> ضريبة القيمة المضافة لمدخلات المنشأة
                           </div>
-                          <div className="hidden md:block text-slate-500 font-sans">ضريبة المدخلات مفرزة بنسبة {selectedBill.lines && selectedBill.lines.length > 0 ? selectedBill.lines[0].tax_rate : getOrgDefaultTaxRate(currentOrg)}%</div>
+                          <div className="hidden md:block text-slate-500 font-sans">ضريبة المدخلات مفرزة بنسبة {selectedBill.lines && selectedBill.lines.length > 0 ? selectedBill.lines[0].tax_rate : orgDefaultTaxRate}%</div>
                           <div className="text-left font-bold text-emerald-600">{selectedBill.tax_total.toFixed(2)} {currentOrg?.currency_code || ''}</div>
                           <div className="text-left pl-4 text-slate-400">0.00 {currentOrg?.currency_code || ''}</div>
                         </div>

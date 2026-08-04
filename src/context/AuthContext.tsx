@@ -358,7 +358,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sign Up Action
   const signUp = async (email: string, password: string, fullName: string, phone: string): Promise<{ error: string | null, verificationRequired?: boolean }> => {
     try {
-      const callbackUrl = `${window.location.origin}/auth/callback`;
+      const callbackUrl = `${window.location.origin}/auth/callback?flow=signup`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -408,7 +408,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Reset Password email link
   const sendPasswordReset = async (email: string): Promise<{ error: string | null }> => {
     try {
-      const callbackUrl = `${window.location.origin}/auth/callback`;
+      const callbackUrl = `${window.location.origin}/auth/callback?flow=recovery`;
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: callbackUrl,
       });

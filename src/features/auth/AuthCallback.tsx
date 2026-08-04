@@ -1,66 +1,213 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Logo } from '../../components/Logo';
 import { CheckCircle2, ShieldAlert, Loader2 } from 'lucide-react';
 
+interface ErrorText {
+  title: string;
+  description: string;
+}
+
+const resolveErrorMessage = (
+  err?: { message?: string; code?: string; status?: number } | null,
+  errorCodeParam?: string | null,
+  errorDescParam?: string | null
+): ErrorText => {
+  const codeStr = (err?.code || errorCodeParam || '').toLowerCase();
+  const descStr = (err?.message || errorDescParam || '').toLowerCase();
+
+  if (
+    codeStr.includes('expired') ||
+    descStr.includes('expired') ||
+    descStr.includes('token_expired') ||
+    descStr.includes('otp_expired')
+  ) {
+    return {
+      title: 'الرابط منتهي الصلاحية',
+      description: 'رابط التحقق منتهي الصلاحية. يرجى طلب رابط جديد للمتابعة.',
+    };
+  }
+
+  if (
+    codeStr.includes('already_used') ||
+    descStr.includes('already_used') ||
+    descStr.includes('already used') ||
+    descStr.includes('grant_type') ||
+    descStr.includes('invalid_grant') ||
+    descStr.includes('code_verifier') ||
+    descStr.includes('already been used')
+  ) {
+    return {
+      title: 'الرابط مستخدم مسبقاً',
+      description: 'تم استخدام هذا الرابط مسبقاً للتحقق. يمكنك تسجيل الدخول مباشرة أو طلب رابط جديد.',
+    };
+  }
+
+  if (
+    codeStr.includes('invalid') ||
+    descStr.includes('invalid') ||
+    descStr.includes('validation_failed')
+  ) {
+    return {
+      title: 'الرابط غير صالح',
+      description: 'رابط التحقق غير صالح أو يحتوي على رموز غير مكتملة.',
+    };
+  }
+
+  if (err || errorDescParam || errorCodeParam) {
+    return {
+      title: 'تعذر إكمال التحقق',
+      description: 'حدث خطأ أثناء محاولة التأكد من رمز الحساب. يرجى إعادة المحاولة.',
+    };
+  }
+
+  return {
+    title: 'الرابط غير صالح',
+    description: 'رابط التحقق ناقص أو غير صالح. يرجى استخدام الرابط المرسل إلى بريدك الإلكتروني.',
+  };
+};
+
 export const AuthCallback: React.FC = () => {
   const [status, setStatus] = useState<'verifying' | 'success_email' | 'success_recovery' | 'error'>('verifying');
   const [countdown, setCountdown] = useState<number>(2);
+  const [errorMessage, setErrorMessage] = useState<ErrorText>({
+    title: 'الرابط غير صالح',
+    description: 'الرابط غير صالح أو منتهي الصلاحية. اطلب رابطاً جديداً.',
+  });
+  const [isRecoveryFlow, setIsRecoveryFlow] = useState<boolean>(false);
+
+  const hasExecutedRef = useRef(false);
 
   useEffect(() => {
+    if (hasExecutedRef.current) return;
+    hasExecutedRef.current = true;
+
     let active = true;
+
+    const cleanUrlParams = () => {
+      try {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.hash = '';
+        window.history.replaceState({}, document.title, url.toString());
+      } catch (e) {
+        // Ignore history errors
+      }
+    };
 
     const performVerification = async () => {
       try {
         const searchParams = new URLSearchParams(window.location.search);
-        const tokenHash = searchParams.get('token_hash');
-        const type = searchParams.get('type');
-        const error = searchParams.get('error');
-        const errorCode = searchParams.get('error_code');
-        const errorDescription = searchParams.get('error_description');
+        let hashParams = new URLSearchParams();
+        if (window.location.hash && window.location.hash.startsWith('#')) {
+          const hashContent = window.location.hash.substring(1);
+          if (hashContent.includes('=')) {
+            hashParams = new URLSearchParams(hashContent);
+          }
+        }
+
+        const code = searchParams.get('code') || hashParams.get('code');
+        const tokenHash = searchParams.get('token_hash') || hashParams.get('token_hash');
+        const type = searchParams.get('type') || hashParams.get('type');
+        const flow = searchParams.get('flow') || hashParams.get('flow');
+
+        const error = searchParams.get('error') || hashParams.get('error');
+        const errorCode = searchParams.get('error_code') || hashParams.get('error_code');
+        const errorDescription = searchParams.get('error_description') || hashParams.get('error_description');
+
+        const isRecovery = flow === 'recovery' || type === 'recovery';
+        if (active) {
+          setIsRecoveryFlow(isRecovery);
+        }
 
         if (error || errorCode || errorDescription) {
+          cleanUrlParams();
           if (active) {
+            setErrorMessage(resolveErrorMessage(null, errorCode, errorDescription));
             setStatus('error');
           }
           return;
         }
 
-        if (!tokenHash || !type) {
+        // 1. PKCE Code Exchange Flow
+        if (code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          cleanUrlParams();
+
+          if (exchangeError) {
+            if (active) {
+              setErrorMessage(resolveErrorMessage(exchangeError, errorCode, errorDescription));
+              setStatus('error');
+            }
+            return;
+          }
+
           if (active) {
-            setStatus('error');
+            if (isRecovery) {
+              setStatus('success_recovery');
+            } else {
+              setStatus('success_email');
+            }
           }
           return;
         }
 
-        if (type !== 'email' && type !== 'recovery') {
+        // 2. Token Hash Flow
+        if (tokenHash) {
+          const otpType = (type === 'signup' ? 'email' : type) as 'email' | 'recovery';
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: otpType || 'email',
+          });
+          cleanUrlParams();
+
+          if (verifyError) {
+            if (active) {
+              setErrorMessage(resolveErrorMessage(verifyError, errorCode, errorDescription));
+              setStatus('error');
+            }
+            return;
+          }
+
           if (active) {
-            setStatus('error');
+            if (isRecovery) {
+              setStatus('success_recovery');
+            } else {
+              setStatus('success_email');
+            }
           }
           return;
         }
 
-        // Call verifyOtp
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: type as 'email' | 'recovery',
-        });
+        // 3. Automatically Established Session Check
+        const { data: { session } } = await supabase.auth.getSession();
+        cleanUrlParams();
 
-        if (verifyError) {
-          throw verifyError;
+        if (session && session.user) {
+          if (active) {
+            if (isRecovery) {
+              setStatus('success_recovery');
+            } else {
+              setStatus('success_email');
+            }
+          }
+          return;
         }
 
+        // No parameters and no session
         if (active) {
-          if (type === 'email') {
-            setStatus('success_email');
-          } else if (type === 'recovery') {
-            setStatus('success_recovery');
-          }
+          setErrorMessage(resolveErrorMessage(null, null, null));
+          setStatus('error');
         }
-      } catch (err) {
-        // Do NOT log the token hash or authentication URL
+
+      } catch (err: any) {
+        cleanUrlParams();
         console.error('Authentication verification error occurred.');
         if (active) {
+          setErrorMessage({
+            title: 'تعذر إكمال التحقق',
+            description: 'حدث خطأ غير متوقع أثناء معالجة رابط التحقق. يرجى إعادة المحاولة.',
+          });
           setStatus('error');
         }
       }
@@ -88,7 +235,6 @@ export const AuthCallback: React.FC = () => {
       }, 1000);
       return () => clearInterval(timer);
     } else if (status === 'success_recovery') {
-      // Recovery success redirects immediately to /#/reset-password
       window.location.replace(`${window.location.origin}/#/reset-password`);
     }
   }, [status]);
@@ -180,36 +326,28 @@ export const AuthCallback: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <h1 className="text-xl font-bold text-slate-100">الرابط غير صالح</h1>
+              <h1 className="text-xl font-bold text-slate-100">{errorMessage.title}</h1>
               <p className="text-xs text-slate-400 leading-relaxed">
-                الرابط غير صالح أو منتهي الصلاحية. اطلب رابطاً جديداً.
+                {errorMessage.description}
               </p>
             </div>
 
             <div className="pt-2 space-y-3">
-              {(() => {
-                const searchParams = new URLSearchParams(window.location.search);
-                const type = searchParams.get('type');
-                if (type === 'recovery') {
-                  return (
-                    <button
-                      onClick={handleRequestNewReset}
-                      className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold rounded-xl text-xs transition duration-200 cursor-pointer shadow-md"
-                    >
-                      طلب رابط استعادة جديد
-                    </button>
-                  );
-                } else {
-                  return (
-                    <button
-                      onClick={handleBackToLogin}
-                      className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold rounded-xl text-xs transition duration-200 cursor-pointer shadow-md"
-                    >
-                      العودة إلى تسجيل الدخول
-                    </button>
-                  );
-                }
-              })()}
+              {isRecoveryFlow ? (
+                <button
+                  onClick={handleRequestNewReset}
+                  className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold rounded-xl text-xs transition duration-200 cursor-pointer shadow-md"
+                >
+                  طلب رابط استعادة جديد
+                </button>
+              ) : (
+                <button
+                  onClick={handleBackToLogin}
+                  className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold rounded-xl text-xs transition duration-200 cursor-pointer shadow-md"
+                >
+                  العودة إلى تسجيل الدخول
+                </button>
+              )}
             </div>
           </div>
         )}

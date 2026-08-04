@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { salesService, CreateInvoiceInput } from '../../lib/salesService';
@@ -16,6 +16,7 @@ import {
 } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { getOrgDefaultTaxRate, getCountryProfile } from '../../lib/countryProfiles';
+import { calculateTaxLine, calculateInvoiceTotals } from '../../lib/taxCalculation';
 import { 
   formatNumberWithLatinDigits, 
   formatArabicDateWithLatinDigits,
@@ -54,6 +55,20 @@ export const InvoicesPage: React.FC = () => {
   const { currentOrg, roleInCurrentOrg, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  const orgDefaultTaxRate = useMemo(() => {
+    const configuredRate = Number(getOrgDefaultTaxRate(currentOrg));
+
+    if (Number.isFinite(configuredRate) && configuredRate > 0) {
+      return configuredRate;
+    }
+
+    if (!currentOrg || currentOrg.country_code === 'SA') {
+      return 15;
+    }
+
+    return 0;
+  }, [currentOrg]);
   
   // Checking permissions: Owner, admin, accountant can approve/cancel; Sales can only create drafts.
   const canApproveOrCancel = roleInCurrentOrg === 'owner' || roleInCurrentOrg === 'admin' || roleInCurrentOrg === 'accountant';
@@ -114,6 +129,7 @@ export const InvoicesPage: React.FC = () => {
   const [invoiceDate, setInvoiceDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
+  const [pricesIncludeTax, setPricesIncludeTax] = useState<boolean>(false);
 
   // Invoice Lines Form State
   const [lines, setLines] = useState<Array<{
@@ -160,32 +176,15 @@ export const InvoicesPage: React.FC = () => {
 
   // Pre-calculate line totals in real time
   const getCalculatedTotals = () => {
-    let subtotal = 0;
-    let discountTotal = 0;
-    let taxTotal = 0;
-
-    lines.forEach(line => {
-      const gQty = Number(line.quantity) || 0;
-      const gPrice = Number(line.unit_price) || 0;
-      const gDisc = Number(line.discount_amount) || 0;
-      
-      const lineSubtotal = gQty * gPrice;
-      const lineNet = Math.max(0, lineSubtotal - gDisc);
-      const lineTax = lineNet * (line.tax_rate / 100);
-
-      subtotal += lineSubtotal;
-      discountTotal += gDisc;
-      taxTotal += lineTax;
-    });
-
-    const total = subtotal - discountTotal + taxTotal;
-
-    return {
-      subtotal,
-      discountTotal,
-      taxTotal,
-      total
-    };
+    return calculateInvoiceTotals(
+      lines.map(l => ({
+        quantity: l.quantity,
+        enteredUnitPrice: l.unit_price,
+        discountAmount: l.discount_amount,
+        taxRate: l.tax_rate
+      })),
+      pricesIncludeTax
+    );
   };
 
   const { subtotal, discountTotal, taxTotal, total } = getCalculatedTotals();
@@ -203,6 +202,7 @@ export const InvoicesPage: React.FC = () => {
     defaultDue.setDate(defaultDue.getDate() + 30);
     setDueDate(defaultDue.toISOString().split('T')[0]);
     setNotes('');
+    setPricesIncludeTax(false);
     setLines([
       {
         uuid: Math.random().toString(),
@@ -211,13 +211,13 @@ export const InvoicesPage: React.FC = () => {
         quantity: '1',
         unit_price: '0',
         discount_amount: '0',
-        tax_rate: getOrgDefaultTaxRate(currentOrg),
+        tax_rate: orgDefaultTaxRate,
         revenue_account_id: ''
       }
     ]);
     setFormError(null);
     setViewState('add');
-  }, []);
+  }, [currentOrg]);
 
   const handleStartEditInvoice = useCallback((invoice: SalesInvoice) => {
     setEditingInvoice(invoice);
@@ -225,12 +225,13 @@ export const InvoicesPage: React.FC = () => {
     setInvoiceDate(invoice.invoice_date);
     setDueDate(invoice.due_date);
     setNotes(invoice.notes || '');
+    setPricesIncludeTax(invoice.prices_include_tax ?? false);
     setLines((invoice.lines || []).map(l => ({
       uuid: Math.random().toString(),
       item_id: l.item_id,
       description: l.description || '',
       quantity: String(l.quantity),
-      unit_price: String(l.unit_price),
+      unit_price: String(l.entered_unit_price ?? l.unit_price),
       discount_amount: String(l.discount_amount),
       tax_rate: l.tax_rate,
       revenue_account_id: l.revenue_account_id
@@ -249,11 +250,12 @@ export const InvoicesPage: React.FC = () => {
         invoice_date: new Date().toISOString().split('T')[0],
         due_date: new Date().toISOString().split('T')[0],
         notes: `نسخة تصحيحية من: ${oldInvoice.invoice_number}` + (oldInvoice.notes ? `\n\n${oldInvoice.notes}` : ''),
+        prices_include_tax: oldInvoice.prices_include_tax ?? false,
         lines: (oldInvoice.lines || []).map(l => ({
           item_id: l.item_id,
           description: l.description || undefined,
           quantity: l.quantity,
-          unit_price: l.unit_price,
+          unit_price: l.entered_unit_price ?? l.unit_price,
           discount_amount: l.discount_amount,
           tax_rate: l.tax_rate,
           revenue_account_id: l.revenue_account_id
@@ -303,11 +305,8 @@ export const InvoicesPage: React.FC = () => {
       updated[index].description = item.description || item.name || '';
       updated[index].unit_price = String(item.selling_price || 0);
       
-      if (currentOrg?.is_vat_registered === false) {
-        updated[index].tax_rate = 0;
-      } else {
-        updated[index].tax_rate = item.tax_rate ?? getOrgDefaultTaxRate(currentOrg);
-      }
+      const itemTaxRate = Number(item.tax_rate);
+      updated[index].tax_rate = Number.isFinite(itemTaxRate) && itemTaxRate > 0 ? itemTaxRate : orgDefaultTaxRate;
 
       // Determine correct revenue account
       let revId = '';
@@ -321,7 +320,7 @@ export const InvoicesPage: React.FC = () => {
       updated[index].item_id = '';
       updated[index].description = '';
       updated[index].unit_price = '0';
-      updated[index].tax_rate = currentOrg?.is_vat_registered === false ? 0 : getOrgDefaultTaxRate(currentOrg);
+      updated[index].tax_rate = orgDefaultTaxRate;
       updated[index].revenue_account_id = '';
     }
 
@@ -347,7 +346,7 @@ export const InvoicesPage: React.FC = () => {
         quantity: '1',
         unit_price: '0',
         discount_amount: '0',
-        tax_rate: getOrgDefaultTaxRate(currentOrg),
+        tax_rate: orgDefaultTaxRate,
         revenue_account_id: ''
       }
     ]);
@@ -393,12 +392,22 @@ export const InvoicesPage: React.FC = () => {
       return;
     }
 
+    for (let i = 0; i < lines.length; i++) {
+      const taxRate = Number(lines[i].tax_rate);
+      if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) {
+        setFormError(`نسبة الضريبة في البند رقم ${i + 1} يجب أن تكون بين 0 و100.`);
+        setSaveLoading(false);
+        return;
+      }
+    }
+
     try {
       const invoicePayload: CreateInvoiceInput = {
         customer_id: customerId,
         invoice_date: invoiceDate,
         due_date: dueDate,
         notes: notes || undefined,
+        prices_include_tax: pricesIncludeTax,
         lines: lines.map(l => ({
           item_id: l.item_id,
           description: l.description || undefined,
@@ -443,6 +452,15 @@ export const InvoicesPage: React.FC = () => {
 
   // Action: Approve Invoice
   const handleApproveInvoice = async (invoiceId: string) => {
+    if (currentOrg?.is_vat_registered === false) {
+      const targetInvoice = invoices.find(i => i.id === invoiceId) || selectedInvoice;
+      const hasTax = targetInvoice?.lines?.some(l => Number(l.tax_rate) > 0);
+      if (hasTax) {
+        const confirmed = confirm('المنشأة محددة كغير مسجلة في ضريبة القيمة المضافة، لكن الفاتورة تحتوي على ضريبة. راجع إعدادات المنشأة قبل الاعتماد. هل تريد المتابعة؟');
+        if (!confirmed) return;
+      }
+    }
+
     if (!confirm('هل أنت متأكد من اعتماد هذه الفاتورة؟ بعد الاعتماد، سيتم توليد القيد اليومي التلقائي وإغلاق التعديل عليها.')) return;
     setActionLoading('approve');
     setError(null);
@@ -1233,6 +1251,51 @@ export const InvoicesPage: React.FC = () => {
 
               {/* Invoice Lines Grid */}
               <div className="bg-white border border-slate-100 p-5 rounded-2xl space-y-4">
+                
+                {/* Tax Input Method Segmented Control */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                    <span className="text-xs font-bold text-slate-800">طريقة إدخال السعر</span>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      {pricesIncludeTax 
+                        ? 'السعر المدخل هو المبلغ النهائي، وسيستخرج النظام منه السعر قبل الضريبة ومبلغ الضريبة.'
+                        : 'السعر المدخل قبل الضريبة، وسيضيف النظام ضريبة القيمة المضافة فوقه.'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 bg-slate-200/60 p-1 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setPricesIncludeTax(false)}
+                      className={`py-2 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
+                        !pricesIncludeTax
+                          ? 'bg-white text-slate-800 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      إضافة الضريبة إلى السعر
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPricesIncludeTax(true)}
+                      className={`py-2 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
+                        pricesIncludeTax
+                          ? 'bg-brand-blue text-white shadow-sm'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      السعر شامل الضريبة
+                    </button>
+                  </div>
+                </div>
+
+                {/* Warning notice if organization is NOT VAT registered */}
+                {currentOrg?.is_vat_registered === false && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. يمكنك تحديد نسبة الضريبة أثناء تجهيز المسودة، لكن يجب مراجعة إعدادات المنشأة قبل اعتماد فاتورة ضريبية.</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between border-b border-slate-50 pb-2">
                   <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">الأصناف المبيعة والخدمات</h3>
                   <button
@@ -1247,142 +1310,176 @@ export const InvoicesPage: React.FC = () => {
 
                 {/* Lines Rows */}
                 <div className="space-y-3.5">
-                  {lines.map((line, index) => (
-                    <div key={line.uuid} className="bg-slate-50/50 p-4.5 rounded-xl border border-slate-100 space-y-3">
-                      
-                      {/* Row Inputs Panel */}
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        {/* Selected Item */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400">الصنف / الخدمة *</label>
-                          <select
-                            value={line.item_id}
-                            onChange={(e) => handleLineItemChange(index, e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-semibold text-slate-700"
-                          >
-                            <option value="">-- اختر الصنف --</option>
-                            {items.map(it => (
-                              <option key={it.id} value={it.id}>
-                                [{it.item_type === 'product' ? 'منتج' : 'خدمة'}] {it.code} - {it.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                  {lines.map((line, index) => {
+                    const lineRes = calculateTaxLine(
+                      {
+                        quantity: line.quantity,
+                        enteredUnitPrice: line.unit_price,
+                        discountAmount: line.discount_amount,
+                        taxRate: line.tax_rate
+                      },
+                      pricesIncludeTax
+                    );
 
-                        {/* Description */}
-                        <div className="col-span-1 md:col-span-2 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400">الوصف التفصيلي للبند</label>
-                          <input
-                            type="text"
-                            value={line.description}
-                            onChange={(e) => handleUpdateLineField(index, 'description', e.target.value)}
-                            placeholder="وصف البند في الفاتورة..."
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-medium text-slate-700"
-                          />
-                        </div>
-
-                        {/* Revenue Account selection */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400">حساب الإيرادات المباشر *</label>
-                          <select
-                            value={line.revenue_account_id}
-                            onChange={(e) => handleUpdateLineField(index, 'revenue_account_id', e.target.value)}
-                            required
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-semibold text-slate-700"
-                          >
-                            <option value="">-- اختر الحساب --</option>
-                            {accounts.filter(a => a.classification === 'revenue').map(acc => (
-                              <option key={acc.id} value={acc.id}>
-                                {acc.code} - {acc.name_ar}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Calculations Panel */}
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-1 border-t border-slate-100/60 items-end">
-                        {/* Quantity */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400">الكمية *</label>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={line.quantity}
-                            onChange={(e) => handleUpdateLineField(index, 'quantity', normalizeDecimalInput(e.target.value))}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
-                          />
-                        </div>
-
-                        {/* Unit price */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400">سعر الوحدة *</label>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={line.unit_price}
-                            onChange={(e) => handleUpdateLineField(index, 'unit_price', normalizeDecimalInput(e.target.value))}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
-                          />
-                        </div>
-
-                        {/* Discount */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400">قيمة الخصم</label>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={line.discount_amount}
-                            onChange={(e) => handleUpdateLineField(index, 'discount_amount', normalizeDecimalInput(e.target.value))}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
-                          />
-                        </div>
-
-                        {/* Tax rate */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400">نسبة الضريبة (%)</label>
-                          <select
-                            value={line.tax_rate}
-                            onChange={(e) => handleUpdateLineField(index, 'tax_rate', Number(e.target.value))}
-                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-750"
-                          >
-                            {currentOrg?.is_vat_registered !== false ? (
-                              <>
-                                <option value={getOrgDefaultTaxRate(currentOrg)}>{getOrgDefaultTaxRate(currentOrg)}% ضريبة افتراضية</option>
-                                {getOrgDefaultTaxRate(currentOrg) !== 0 && (
-                                  <option value="0">0% معفى</option>
-                                )}
-                              </>
-                            ) : (
-                              <option value="0">0% معفى</option>
-                            )}
-                          </select>
-                        </div>
-
-                        {/* Actions & total */}
-                        <div className="flex items-center justify-between gap-3 bg-white/70 px-2 py-1.5 rounded-lg border border-slate-150 h-8.5">
-                          <div className="text-left">
-                            <span className="text-[9px] text-slate-400 block font-normal leading-none mb-0.5">الصافي شامل</span>
-                            <span className="text-xs font-extrabold text-slate-700 font-mono tracking-tight" style={{ direction: 'ltr' }}>
-                              {formatNumberWithLatinDigits(
-                                Math.max(0, (Number(line.quantity) * Number(line.unit_price)) - Number(line.discount_amount)) * (1 + Number(line.tax_rate) / 100)
-                              )}
-                            </span>
+                    return (
+                      <div key={line.uuid} className="bg-slate-50/50 p-4.5 rounded-xl border border-slate-100 space-y-3">
+                        
+                        {/* Row Inputs Panel */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          {/* Selected Item */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400">الصنف / الخدمة *</label>
+                            <select
+                              value={line.item_id}
+                              onChange={(e) => handleLineItemChange(index, e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-semibold text-slate-700"
+                            >
+                              <option value="">-- اختر الصنف --</option>
+                              {items.map(it => (
+                                <option key={it.id} value={it.id}>
+                                  [{it.item_type === 'product' ? 'منتج' : 'خدمة'}] {it.code} - {it.name}
+                                </option>
+                              ))}
+                            </select>
                           </div>
-                          
-                          <button
-                            type="button"
-                            onClick={() => removeLineRow(index)}
-                            className="p-1 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-md transition cursor-pointer"
-                            title="إزالة هذا البند"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+
+                          {/* Description */}
+                          <div className="col-span-1 md:col-span-2 space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400">الوصف التفصيلي للبند</label>
+                            <input
+                              type="text"
+                              value={line.description}
+                              onChange={(e) => handleUpdateLineField(index, 'description', e.target.value)}
+                              placeholder="وصف البند في الفاتورة..."
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-medium text-slate-700"
+                            />
+                          </div>
+
+                          {/* Revenue Account selection */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400">حساب الإيرادات المباشر *</label>
+                            <select
+                              value={line.revenue_account_id}
+                              onChange={(e) => handleUpdateLineField(index, 'revenue_account_id', e.target.value)}
+                              required
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-semibold text-slate-700"
+                            >
+                              <option value="">-- اختر الحساب --</option>
+                              {accounts.filter(a => a.classification === 'revenue').map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.code} - {acc.name_ar}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
 
+                        {/* Calculations Panel */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-1 border-t border-slate-100/60 items-end">
+                          {/* Quantity */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400">الكمية *</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={line.quantity}
+                              onChange={(e) => handleUpdateLineField(index, 'quantity', normalizeDecimalInput(e.target.value))}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
+                            />
+                          </div>
+
+                          {/* Unit price */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400">
+                              {pricesIncludeTax ? 'سعر الوحدة (شامل الضريبة) *' : 'سعر الوحدة (قبل الضريبة) *'}
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={line.unit_price}
+                              onChange={(e) => handleUpdateLineField(index, 'unit_price', normalizeDecimalInput(e.target.value))}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
+                            />
+                          </div>
+
+                          {/* Discount */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400">قيمة الخصم</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={line.discount_amount}
+                              onChange={(e) => handleUpdateLineField(index, 'discount_amount', normalizeDecimalInput(e.target.value))}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
+                            />
+                          </div>
+
+                          {/* Tax rate */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400">نسبة الضريبة (%)</label>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={line.tax_rate}
+                              onChange={(event) => {
+                                const rawValue = event.target.value;
+
+                                if (rawValue === '') {
+                                  handleUpdateLineField(index, 'tax_rate', '');
+                                  return;
+                                }
+
+                                const parsedValue = Number(rawValue);
+
+                                if (!Number.isFinite(parsedValue)) {
+                                  return;
+                                }
+
+                                handleUpdateLineField(
+                                  index,
+                                  'tax_rate',
+                                  Math.min(100, Math.max(0, parsedValue))
+                                );
+                              }}
+                              onBlur={() => {
+                                const parsedValue = Number(line.tax_rate);
+
+                                if (!Number.isFinite(parsedValue)) {
+                                  handleUpdateLineField(index, 'tax_rate', orgDefaultTaxRate);
+                                }
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
+                              dir="ltr"
+                            />
+                            <span className="text-[10px] text-slate-400 block mt-0.5">النسبة الافتراضية: {orgDefaultTaxRate}%</span>
+                          </div>
+
+                          {/* Actions & total */}
+                          <div className="flex items-center justify-between gap-3 bg-white/70 px-2 py-1.5 rounded-lg border border-slate-150 h-8.5">
+                            <div className="text-left">
+                              <span className="text-[9px] text-slate-400 block font-normal leading-none mb-0.5">الإجمالي شامل</span>
+                              <span className="text-xs font-extrabold text-slate-700 font-mono tracking-tight" style={{ direction: 'ltr' }}>
+                                {formatNumberWithLatinDigits(lineRes.lineTotal)}
+                              </span>
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={() => removeLineRow(index)}
+                              className="p-1 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-md transition cursor-pointer"
+                              title="إزالة هذا البند"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
               </div>
@@ -1468,7 +1565,7 @@ export const InvoicesPage: React.FC = () => {
                     <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(subtotal - discountTotal)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   <div className="flex items-center justify-between text-amber-400">
-                    <span>مجموع الضريبة المضافة ({getOrgDefaultTaxRate(currentOrg)}%):</span>
+                    <span>مجموع الضريبة المضافة ({orgDefaultTaxRate}%):</span>
                     <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(taxTotal)} {currentOrg?.currency_code || ''}</span>
                   </div>
                   
@@ -2164,7 +2261,7 @@ export const InvoicesPage: React.FC = () => {
                   <span className="font-mono" style={{ direction: 'ltr' }}>{formatNumberWithLatinDigits(selectedInvoice.subtotal - selectedInvoice.discount_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>الضريبة المضافة المطبقة ({selectedInvoice.lines && selectedInvoice.lines.length > 0 ? selectedInvoice.lines[0].tax_rate : getOrgDefaultTaxRate(currentOrg)}%):</span>
+                  <span>الضريبة المضافة المطبقة ({selectedInvoice.lines && selectedInvoice.lines.length > 0 ? selectedInvoice.lines[0].tax_rate : orgDefaultTaxRate}%):</span>
                   <span className="font-mono font-semibold" style={{ direction: 'ltr' }}>+ {formatNumberWithLatinDigits(selectedInvoice.tax_total)} {selectedInvoice.currency || currentOrg?.currency_code || ''}</span>
                 </div>
                 

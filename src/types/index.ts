@@ -138,6 +138,8 @@ export interface FiscalYear {
   id: string;
   organization_id: string;
   name: string;
+  name_ar?: string | null;
+  name_en?: string | null;
   start_date: string;
   end_date: string;
   status: 'draft' | 'open' | 'closed' | 'locked';
@@ -350,6 +352,7 @@ export interface SalesInvoice {
   due_date: string;
   status: SalesInvoiceStatus;
   payment_status: PaymentStatus;
+  prices_include_tax: boolean;
   subtotal: number;
   discount_total: number;
   tax_total: number;
@@ -385,6 +388,7 @@ export interface SalesInvoiceLine {
   description: string | null;
   quantity: number;
   unit_price: number;
+  entered_unit_price?: number | null;
   discount_amount: number;
   tax_rate: number;
   tax_amount: number;
@@ -563,6 +567,7 @@ export interface PurchaseBill {
   due_date: string;
   status: PurchaseBillStatus;
   payment_status: PaymentStatus;
+  prices_include_tax: boolean;
   subtotal: number;
   discount_total: number;
   tax_total: number;
@@ -598,6 +603,7 @@ export interface PurchaseBillLine {
   description: string | null;
   quantity: number;
   unit_cost: number;
+  entered_unit_cost?: number | null;
   discount_amount: number;
   tax_rate: number;
   tax_amount: number;

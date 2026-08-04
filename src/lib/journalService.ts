@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { JournalEntry, JournalEntryLine, Account } from '../types';
+import { reportsService } from './reportsService';
 
 export const journalService = {
   // ==========================================
@@ -171,166 +172,79 @@ export const journalService = {
 
 
   // ==========================================
-  // REPORTS
+  // REPORTS (FORWARDED TO UNIFIED REPORTS SERVICE)
   // ==========================================
   async getLedgerReport(
     orgId: string,
     accountId: string,
     filters: {
-      fiscalYearId?: string;
-      startDate?: string;
-      endDate?: string;
+      fiscalYearId: string;
+      startDate: string;
+      endDate: string;
     }
   ) {
-    let query = supabase
-      .from('journal_entry_lines')
-      .select('debit, credit, description, created_at, journal_entries:journal_entries!journal_entry_lines_entry_org_fk!inner(id, entry_number, entry_date, description, status, fiscal_year_id, source_type, source_id, reference)')
-      .eq('organization_id', orgId)
-      .eq('account_id', accountId)
-      .eq('journal_entries.status', 'posted');
-
-    if (filters.fiscalYearId) {
-      query = query.eq('journal_entries.fiscal_year_id', filters.fiscalYearId);
+    if (!filters.fiscalYearId || !filters.startDate || !filters.endDate) {
+      throw new Error('السنة المالية وتاريخ البداية والنهاية عناصر إجبارية لاستخراج التقرير.');
     }
-    if (filters.startDate) {
-      query = query.gte('journal_entries.entry_date', filters.startDate);
-    }
-    if (filters.endDate) {
-      query = query.lte('journal_entries.entry_date', filters.endDate);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    const { data: account, error: accountError } = await supabase
-      .from('accounts')
-      .select('nature, name_ar, name_en, code')
-      .eq('id', accountId)
-      .eq('organization_id', orgId)
-      .single();
-
-    if (accountError) throw accountError;
-
-    // Filtered sorting by date/number safely
-    const sortedData = (data || []).sort((a: any, b: any) => {
-      const dateDiff = new Date(a.journal_entries.entry_date).getTime() - new Date(b.journal_entries.entry_date).getTime();
-      if (dateDiff !== 0) return dateDiff;
-      return a.journal_entries.entry_number.localeCompare(b.journal_entries.entry_number, undefined, { numeric: true });
-    });
-
-    let runningBalance = 0;
-    const records = sortedData.map((row: any) => {
-      const db = Number(row.debit || 0);
-      const cr = Number(row.credit || 0);
-
-      if (account.nature === 'debit') {
-        runningBalance += (db - cr);
-      } else {
-        runningBalance += (cr - db);
-      }
-
-      return {
-        entry_id: row.journal_entries.id,
-        entry_number: row.journal_entries.entry_number,
-        entry_date: row.journal_entries.entry_date,
-        entry_description: row.journal_entries.description,
-        line_description: row.description,
-        debit: db,
-        credit: cr,
-        running_balance: runningBalance,
-        source_type: row.journal_entries.source_type,
-        source_id: row.journal_entries.source_id,
-        reference: row.journal_entries.reference
-      };
-    });
-
+    const report = await reportsService.getLedgerReportAdvanced(
+      orgId,
+      accountId,
+      filters.startDate,
+      filters.endDate,
+      false,
+      filters.fiscalYearId
+    );
     return {
-      account,
-      records
+      account: report.account,
+      records: report.entries.map(e => ({
+        entry_id: e.entry_id,
+        entry_number: e.entry_number || e.reference,
+        entry_date: e.entry_date,
+        entry_description: e.description,
+        line_description: e.description,
+        debit: e.debit,
+        credit: e.credit,
+        running_balance: e.running_balance,
+        source_type: e.source_type,
+        source_id: e.source_id,
+        reference: e.reference
+      }))
     };
   },
 
   async getTrialBalance(
     orgId: string,
     filters: {
-      fiscalYearId?: string;
-      startDate?: string;
-      endDate?: string;
+      fiscalYearId: string;
+      startDate: string;
+      endDate: string;
     }
   ) {
-    const { data: accounts, error: accountsError } = await supabase
-      .from('accounts')
-      .select('*')
-      .eq('organization_id', orgId)
-      .order('code', { ascending: true });
-
-    if (accountsError) throw accountsError;
-
-    let query = supabase
-      .from('journal_entry_lines')
-      .select('account_id, debit, credit, journal_entries:journal_entries!journal_entry_lines_entry_org_fk!inner(status, entry_date, fiscal_year_id)')
-      .eq('organization_id', orgId)
-      .eq('journal_entries.status', 'posted');
-
-    if (filters.fiscalYearId) {
-      query = query.eq('journal_entries.fiscal_year_id', filters.fiscalYearId);
+    if (!filters.fiscalYearId || !filters.startDate || !filters.endDate) {
+      throw new Error('السنة المالية وتاريخ البداية والنهاية عناصر إجبارية لاستخراج التقرير.');
     }
-    if (filters.startDate) {
-      query = query.gte('journal_entries.entry_date', filters.startDate);
-    }
-    if (filters.endDate) {
-      query = query.lte('journal_entries.entry_date', filters.endDate);
-    }
+    const report = await reportsService.getTrialBalanceAdvanced(
+      orgId,
+      filters.startDate,
+      filters.endDate,
+      true,
+      true,
+      true,
+      filters.fiscalYearId
+    );
 
-    const { data: lines, error: linesError } = await query;
-    if (linesError) throw linesError;
-
-    const leafBalances: Record<string, { debit: number; credit: number }> = {};
-    for (const ln of lines || []) {
-      const accId = ln.account_id;
-      const db = Number(ln.debit || 0);
-      const cr = Number(ln.credit || 0);
-      if (!leafBalances[accId]) {
-        leafBalances[accId] = { debit: 0, credit: 0 };
-      }
-      leafBalances[accId].debit += db;
-      leafBalances[accId].credit += cr;
-    }
-
-    const getAccountTotals = (acc: any): { debit: number; credit: number } => {
-      const children = (accounts || []).filter((a: any) => a.parent_id === acc.id);
-      if (children.length === 0) {
-        return leafBalances[acc.id] || { debit: 0, credit: 0 };
-      }
-
-      let totDb = 0;
-      let totCr = 0;
-      for (const child of children) {
-        const sub = getAccountTotals(child);
-        totDb += sub.debit;
-        totCr += sub.credit;
-      }
-      return { debit: totDb, credit: totCr };
-    };
-
-    const trialBalanceRows = (accounts || []).map((acc: any) => {
-      const totals = getAccountTotals(acc);
-      const net = acc.nature === 'debit' ? (totals.debit - totals.credit) : (totals.credit - totals.debit);
-      return {
-        id: acc.id,
-        code: acc.code,
-        name_ar: acc.name_ar,
-        name_en: acc.name_en,
-        classification: acc.classification,
-        nature: acc.nature,
-        allow_direct_posting: acc.allow_direct_posting,
-        debit: totals.debit,
-        credit: totals.credit,
-        net_balance: net
-      };
-    });
-
-    return trialBalanceRows;
+    return report.accounts.map(acc => ({
+      id: acc.account_id,
+      code: acc.code,
+      name_ar: acc.name_ar,
+      name_en: acc.name_en,
+      classification: acc.classification,
+      nature: acc.nature,
+      allow_direct_posting: acc.allow_direct_posting,
+      debit: acc.period_debit,
+      credit: acc.period_credit,
+      net_balance: acc.net_balance
+    }));
   },
 
   async resolveJournalEntrySource(orgId: string, entryId: string): Promise<{

@@ -27,6 +27,7 @@ export const LedgerReportPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   
   // Date and filter states
+  const [selectedFiscalYearId, setSelectedFiscalYearId] = useState<string>('');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -45,10 +46,12 @@ export const LedgerReportPage: React.FC = () => {
     if (!reportData) return;
     
     const currency = currentOrg?.currency_code || '';
-    const csvRows: any[][] = [
+    const selectedFyName = fiscalYears.find(y => y.id === selectedFiscalYearId)?.name_ar || fiscalYears.find(y => y.id === selectedFiscalYearId)?.name || '';
+    const csvRows: (string | number | boolean | null | undefined)[][] = [
       ['منشأة', currentOrg?.name_ar || currentOrg?.name_en || ''],
       ['التقرير', 'دفتر الأستاذ التفصيلي'],
       ['الحساب المالي', `${reportData.account.code} - ${reportData.account.name_ar}`],
+      ['السنة المالية', selectedFyName],
       ['الفترة من', dateFrom],
       ['الفترة إلى', dateTo],
       ['العملة', currency],
@@ -61,7 +64,7 @@ export const LedgerReportPage: React.FC = () => {
       ['التاريخ', 'رقم القيد', 'المرجع', 'الوصف', 'مدين', 'دائن', 'الرصيد الجاري'],
       ...reportData.entries.map(e => [
         e.entry_date,
-        e.reference || '',
+        e.entry_number || e.reference || '',
         e.reference || '',
         e.description || '',
         e.debit,
@@ -95,6 +98,7 @@ export const LedgerReportPage: React.FC = () => {
       const paramAccountId = searchParams.get('accountId') || searchParams.get('account_id');
       const paramDateFrom = searchParams.get('dateFrom') || searchParams.get('date_from');
       const paramDateTo = searchParams.get('dateTo') || searchParams.get('date_to');
+      const paramFyId = searchParams.get('fiscalYearId') || searchParams.get('fiscal_year_id');
 
       let initialAccountId = '';
       if (paramAccountId && postable.some(a => a.id === paramAccountId)) {
@@ -109,32 +113,27 @@ export const LedgerReportPage: React.FC = () => {
       const years = await accountingService.getFiscalYears(currentOrg!.id);
       setFiscalYears(years);
       
+      const activeYear = (paramFyId ? years.find(y => y.id === paramFyId) : null) || years.find(y => y.is_current) || years[0];
+      let initialFyId = '';
       let initialDateFrom = '';
       let initialDateTo = '';
 
-      if (paramDateFrom && paramDateTo) {
-        initialDateFrom = paramDateFrom;
-        initialDateTo = paramDateTo;
-        setDateFrom(paramDateFrom);
-        setDateTo(paramDateTo);
+      if (activeYear) {
+        initialFyId = activeYear.id;
+        setSelectedFiscalYearId(activeYear.id);
+        initialDateFrom = paramDateFrom || activeYear.start_date;
+        initialDateTo = paramDateTo || activeYear.end_date;
       } else {
-        const activeYear = years.find(y => y.is_current) || years[0];
-        if (activeYear) {
-          initialDateFrom = activeYear.start_date;
-          initialDateTo = activeYear.end_date;
-          setDateFrom(activeYear.start_date);
-          setDateTo(activeYear.end_date);
-        } else {
-          const cy = new Date().getFullYear();
-          initialDateFrom = `${cy}-01-01`;
-          initialDateTo = `${cy}-12-31`;
-          setDateFrom(initialDateFrom);
-          setDateTo(initialDateTo);
-        }
+        const cy = new Date().getFullYear();
+        initialDateFrom = paramDateFrom || `${cy}-01-01`;
+        initialDateTo = paramDateTo || `${cy}-12-31`;
       }
 
+      setDateFrom(initialDateFrom);
+      setDateTo(initialDateTo);
+
       if (initialAccountId && initialDateFrom && initialDateTo) {
-        fetchReport(initialAccountId, initialDateFrom, initialDateTo);
+        fetchReport(initialAccountId, initialDateFrom, initialDateTo, initialFyId);
       }
     } catch (err) {
       setError(getErrorMessage(err));
@@ -142,8 +141,17 @@ export const LedgerReportPage: React.FC = () => {
     }
   };
 
-  const fetchReport = async (accId = selectedAccountId, from = dateFrom, to = dateTo) => {
+  const fetchReport = async (
+    accId = selectedAccountId,
+    from = dateFrom,
+    to = dateTo,
+    fyId = selectedFiscalYearId
+  ) => {
     if (!currentOrg || !accId || !from || !to) return;
+    if (from && to && new Date(from) > new Date(to)) {
+      setError("تاريخ البداية لا يمكن أن يكون بعد تاريخ النهاية (الفترة معكوسة غير صالحة).");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -152,15 +160,16 @@ export const LedgerReportPage: React.FC = () => {
         accId,
         from,
         to,
-        excludeClosingEntries
+        excludeClosingEntries,
+        fyId
       );
       setReportData(data);
     } catch (err) {
       const errMsg = getErrorMessage(err);
       if (errMsg.includes('permission') || errMsg.includes('غير مصرح')) {
-        setError('ليس لديك صلاحية لعرض دفتر الأستاذ المحاسبي.');
+        setError('ليس لديك صلاحية لعرض هذا التقرير المالي الحساس.');
       } else {
-        setError(getErrorMessage(err));
+        setError(errMsg);
       }
     } finally {
       setLoading(false);
@@ -205,6 +214,35 @@ export const LedgerReportPage: React.FC = () => {
       <form onSubmit={handleSubmit} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4 print:hidden">
         <div className="flex flex-wrap gap-4 items-end">
           
+          {/* Fiscal Year Selector */}
+          <div className="space-y-1.5 shrink-0">
+            <label className="text-xs font-bold text-slate-500 block">السنة المالية</label>
+            <div className="relative">
+              <select
+                value={selectedFiscalYearId}
+                onChange={(e) => {
+                  const fyId = e.target.value;
+                  setSelectedFiscalYearId(fyId);
+                  const fy = fiscalYears.find(y => y.id === fyId);
+                  if (fy) {
+                    setDateFrom(fy.start_date);
+                    setDateTo(fy.end_date);
+                    fetchReport(selectedAccountId, fy.start_date, fy.end_date, fy.id);
+                  }
+                }}
+                className="bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2 pr-9 outline-none focus:border-brand-blue font-bold min-w-[160px]"
+                required
+              >
+                {fiscalYears.map((fy) => (
+                  <option key={fy.id} value={fy.id}>
+                    {fy.name_ar || fy.name || fy.name_en} {fy.is_current ? '(الحالية)' : ''}
+                  </option>
+                ))}
+              </select>
+              <Bookmark className="w-4 h-4 text-slate-400 absolute right-3 top-2.5 pointer-events-none" />
+            </div>
+          </div>
+
           {/* Account Selector */}
           <div className="space-y-1.5 shrink-0 w-full sm:w-64">
             <label className="text-xs font-bold text-slate-500 block">اختر الحساب القابل للترحيل</label>

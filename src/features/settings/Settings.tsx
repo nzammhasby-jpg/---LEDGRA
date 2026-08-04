@@ -1322,6 +1322,41 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* VAT Registration Toggle Box */}
+                  <div className="bg-slate-100/70 border border-slate-200 p-4 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-extrabold text-slate-800 block">التسجيل في ضريبة القيمة المضافة (VAT Registration)</label>
+                        <span className="text-[11px] text-slate-500">حدد ما إذا كانت المنشأة مسجلة ضريبيًا وتخضع للائحة ضريبة القيمة المضافة</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          name="is_vat_registered"
+                          checked={formData.is_vat_registered}
+                          disabled={!isPrivileged}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData(prev => ({
+                              ...prev,
+                              is_vat_registered: checked,
+                              default_tax_rate: prev.default_tax_rate || getCountryProfile(prev.country_code || 'SA').defaultTaxRate
+                            }));
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
+                      </label>
+                    </div>
+
+                    {!formData.is_vat_registered && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-[11px] font-semibold text-amber-800 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>هذه المنشأة غير مسجلة في ضريبة القيمة المضافة. يمكنك تحديد نسبة الضريبة عند إعداد الفواتير، لكن ينبغي مراجعة الإعدادات الضريبية قبل اعتماد الفواتير الضريبية.</span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-[11px] font-bold text-slate-500 block mb-1">
@@ -1347,7 +1382,7 @@ export const Settings: React.FC = () => {
                         name="vat_number"
                         value={formData.vat_number}
                         onChange={handleInputChange}
-                        disabled={!isPrivileged}
+                        disabled={!isPrivileged || !formData.is_vat_registered}
                         placeholder={currentProfile.code === 'SA' ? '15 رقمًا للرقم الضريبي' : 'الرقم الضريبي / رقم المكلّف'}
                         className="w-full text-xs font-bold border border-slate-200 py-2.5 px-3 rounded-xl focus:border-brand-blue outline-none transition font-sans disabled:bg-slate-100"
                       />
@@ -2596,7 +2631,11 @@ export const Settings: React.FC = () => {
                   </div>
                   <div className="p-4 bg-slate-50 rounded-xl space-y-1">
                     <span className="text-slate-400 block text-[10px]">حالة التسجيل الضريبي:</span>
-                    <strong className="text-slate-800">مسجل - الرقم الضريبي {currentOrg?.vat_number || 'غير متوفر'}</strong>
+                    <strong className="text-slate-800">
+                      {currentOrg?.is_vat_registered 
+                        ? `مسجل - الرقم الضريبي ${currentOrg?.vat_number || 'غير متوفر'}`
+                        : 'غير مسجل في ضريبة القيمة المضافة'}
+                    </strong>
                   </div>
                 </div>
               </div>

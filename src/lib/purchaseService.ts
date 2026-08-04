@@ -15,6 +15,7 @@ export interface CreatePurchaseBillInput {
   bill_date: string;
   due_date: string;
   notes?: string;
+  prices_include_tax?: boolean;
   lines: Array<{
     item_id?: string;
     description?: string;
@@ -86,6 +87,7 @@ export const purchaseService = {
       p_due_date: input.due_date,
       p_notes: input.notes || null,
       p_lines: input.lines,
+      p_prices_include_tax: input.prices_include_tax ?? false,
     });
 
     if (error) throw error;
@@ -102,6 +104,7 @@ export const purchaseService = {
       p_due_date: input.due_date,
       p_notes: input.notes || null,
       p_lines: input.lines,
+      p_prices_include_tax: input.prices_include_tax ?? false,
     });
 
     if (error) throw error;

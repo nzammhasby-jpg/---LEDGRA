@@ -156,7 +156,12 @@ export const AccountingLayout: React.FC = () => {
             clearPreselectedAccount={() => setPreselectedAccountId(null)}
           />
         ) : activeTab === 'trial' ? (
-          <TrialBalance />
+          <TrialBalance 
+            onViewLedger={(accountId) => {
+              setPreselectedAccountId(accountId);
+              setActiveTab('ledger');
+            }}
+          />
         ) : activeTab === 'opening_balances' ? (
           <OpeningBalancesWizard />
         ) : (
