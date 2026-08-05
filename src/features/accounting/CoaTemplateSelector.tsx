@@ -98,6 +98,13 @@ export const CoaTemplateSelector: React.FC<CoaTemplateSelectorProps> = ({
 
   useEffect(() => {
     let active = true;
+
+    if (hasAccountsAlready) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     const fetchTemplates = async () => {
       setLoading(true);
       setError(null);
@@ -111,7 +118,7 @@ export const CoaTemplateSelector: React.FC<CoaTemplateSelectorProps> = ({
           }
         }
       } catch (err: any) {
-        if (active) {
+        if (active && !hasAccountsAlready) {
           setError('فشل تحميل قوالب دليل الحسابات المتاحة.');
           console.error(err);
         }
@@ -124,7 +131,7 @@ export const CoaTemplateSelector: React.FC<CoaTemplateSelectorProps> = ({
     return () => {
       active = false;
     };
-  }, []);
+  }, [hasAccountsAlready]);
 
   const handleSeedCOA = async () => {
     if (!orgId) return;

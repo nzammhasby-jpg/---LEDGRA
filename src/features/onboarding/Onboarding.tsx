@@ -201,12 +201,14 @@ export const Onboarding: React.FC = () => {
   // Load initial draft state of organization if it already exists (Requirement 6)
   React.useEffect(() => {
     if (currentOrg && !currentOrg.onboarding_completed) {
+      const cCode = currentOrg.country_code || 'SA';
+      const cProf = getCountryProfile(cCode);
       methods.reset({
         name_ar: currentOrg.name_ar || '',
         name_en: currentOrg.name_en || '',
         activity_type: currentOrg.activity_type || 'الخدمات التقنية وتقنية المعلومات',
-        country_code: currentOrg.country_code || 'SA',
-        city: currentOrg.city || 'الرياض',
+        country_code: cCode,
+        city: currentOrg.city || cProf.cities[0] || 'الرياض',
         phone: currentOrg.phone || profile?.phone || '',
         email: currentOrg.email || '',
         legal_type: currentOrg.legal_type || 'individual',
@@ -214,7 +216,7 @@ export const Onboarding: React.FC = () => {
         vat_number: currentOrg.vat_number || '',
         is_vat_registered: currentOrg.is_vat_registered || false,
         fiscal_year_start: currentOrg.fiscal_year_start || '2026-01-01',
-        currency_code: currentOrg.currency_code || 'SAR',
+        currency_code: currentOrg.currency_code || cProf.currencyCode,
         primary_language: currentOrg.primary_language || 'ar',
         accounting_mode: (currentOrg.accounting_mode as 'simple' | 'pro') || 'pro',
         use_system_start: currentOrg.system_start_date || new Date().toISOString().split('T')[0],
@@ -230,7 +232,7 @@ export const Onboarding: React.FC = () => {
   const handleNext = async () => {
     let fieldsToValidate: Array<keyof OnboardingFields> = [];
     if (step === 1) {
-      fieldsToValidate = ['name_ar', 'name_en', 'activity_type', 'city', 'phone', 'email'];
+      fieldsToValidate = ['name_ar', 'name_en', 'activity_type', 'country_code', 'city', 'phone', 'email'];
     } else if (step === 2) {
       fieldsToValidate = ['legal_type', 'cr_number', 'vat_number', 'fiscal_year_start'];
     } else if (step === 3) {
@@ -241,6 +243,11 @@ export const Onboarding: React.FC = () => {
     if (isStepValid) {
       // Save progress to database on step transition so state is not lost
       const vals = methods.getValues();
+      const selectedCountryProf = getCountryProfile(vals.country_code || 'SA');
+      const countryCodeToSave = selectedCountryProf.code;
+      const currencyCodeToSave = vals.currency_code || selectedCountryProf.currencyCode;
+      const defaultTaxRateToSave = selectedCountryProf.defaultTaxRate;
+
       try {
         setIsSaving(true);
         setApiError(null);
@@ -255,7 +262,9 @@ export const Onboarding: React.FC = () => {
               name_ar: vals.name_ar,
               name_en: vals.name_en || '',
               activity_type: vals.activity_type,
-              country_code: vals.country_code || 'SA',
+              country_code: countryCodeToSave,
+              currency_code: currencyCodeToSave,
+              default_tax_rate: defaultTaxRateToSave,
               city: vals.city,
               phone: vals.phone?.trim() ? vals.phone.trim() : null,
               email: vals.email,
@@ -267,7 +276,6 @@ export const Onboarding: React.FC = () => {
               system_start_date: vals.use_system_start || new Date().toISOString().split('T')[0],
               accounting_mode: vals.accounting_mode || 'pro',
               starting_balances_later: vals.starting_balances_later ?? true,
-              currency_code: vals.currency_code || 'SAR',
               primary_language: vals.primary_language || 'ar',
               onboarding_completed: false,
               onboarding_step: 2
@@ -282,6 +290,9 @@ export const Onboarding: React.FC = () => {
               name_ar: vals.name_ar,
               name_en: vals.name_en || '',
               activity_type: vals.activity_type,
+              country_code: countryCodeToSave,
+              currency_code: currencyCodeToSave,
+              default_tax_rate: defaultTaxRateToSave,
               city: vals.city,
               phone: vals.phone?.trim() ? vals.phone.trim() : null,
               email: vals.email,
@@ -359,14 +370,21 @@ export const Onboarding: React.FC = () => {
         ? currentOrg
         : orgsList.find(o => !o.onboarding_completed);
 
+      const selectedCountryProf = getCountryProfile(data.country_code || 'SA');
+      const countryCodeToSave = selectedCountryProf.code;
+      const currencyCodeToSave = data.currency_code || selectedCountryProf.currencyCode;
+      const defaultTaxRateToSave = selectedCountryProf.defaultTaxRate;
       const cleanPhone = data.phone?.trim() ? data.phone.trim() : null;
+
       if (draftOrg) {
         // Update existing org to final status
         response = await updateOrg(draftOrg.id, {
           name_ar: data.name_ar,
           name_en: data.name_en || '',
           activity_type: data.activity_type,
-          country_code: data.country_code || 'SA',
+          country_code: countryCodeToSave,
+          currency_code: currencyCodeToSave,
+          default_tax_rate: defaultTaxRateToSave,
           city: data.city,
           phone: cleanPhone,
           email: data.email,
@@ -388,7 +406,9 @@ export const Onboarding: React.FC = () => {
           name_ar: data.name_ar,
           name_en: data.name_en || '',
           activity_type: data.activity_type,
-          country_code: data.country_code || 'SA',
+          country_code: countryCodeToSave,
+          currency_code: currencyCodeToSave,
+          default_tax_rate: defaultTaxRateToSave,
           city: data.city,
           phone: cleanPhone,
           email: data.email,
@@ -551,9 +571,9 @@ export const Onboarding: React.FC = () => {
                             <div
                               id="country-card-sa"
                               onClick={() => {
-                                setValue('country_code', 'SA');
-                                setValue('currency_code', countryProfiles.SA.currencyCode);
-                                setValue('city', countryProfiles.SA.cities[0]);
+                                setValue('country_code', 'SA', { shouldValidate: true, shouldDirty: true });
+                                setValue('currency_code', countryProfiles.SA.currencyCode, { shouldValidate: true, shouldDirty: true });
+                                setValue('city', countryProfiles.SA.cities[0], { shouldValidate: true, shouldDirty: true });
                               }}
                               className={`cursor-pointer border-2 rounded-2xl p-4 flex items-center justify-between transition ${
                                 currentValues.country_code === 'SA'
@@ -575,9 +595,9 @@ export const Onboarding: React.FC = () => {
                             <div
                               id="country-card-ye"
                               onClick={() => {
-                                setValue('country_code', 'YE');
-                                setValue('currency_code', countryProfiles.YE.currencyCode);
-                                setValue('city', countryProfiles.YE.cities[0]);
+                                setValue('country_code', 'YE', { shouldValidate: true, shouldDirty: true });
+                                setValue('currency_code', countryProfiles.YE.currencyCode, { shouldValidate: true, shouldDirty: true });
+                                setValue('city', countryProfiles.YE.cities[0], { shouldValidate: true, shouldDirty: true });
                               }}
                               className={`cursor-pointer border-2 rounded-2xl p-4 flex items-center justify-between transition ${
                                 currentValues.country_code === 'YE'
@@ -588,7 +608,7 @@ export const Onboarding: React.FC = () => {
                               <div className="text-right">
                                 <span className="text-xs font-bold text-slate-900 block">{countryProfiles.YE.nameAr}</span>
                                 <span className="text-[10px] text-slate-500 block mt-1">العملة الأساسية: {countryProfiles.YE.currencyNameAr} ({countryProfiles.YE.currencyCode})</span>
-                                <span className="text-[10px] text-slate-500 block mt-0.5">ضريبة افتراضية: {countryProfiles.YE.defaultTaxRate}% {countryProfiles.YE.zatcaEnabled ? '(ZATCA مدعوم)' : ''}</span>
+                                <span className="text-[10px] text-slate-500 block mt-0.5">ضريبة افتراضية: {countryProfiles.YE.defaultTaxRate}%</span>
                               </div>
                               <Globe2 className={`w-6 h-6 transition-colors ${
                                 currentValues.country_code === 'YE' ? 'text-brand-purple' : 'text-slate-400'
