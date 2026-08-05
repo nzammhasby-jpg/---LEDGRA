@@ -353,8 +353,8 @@ export const InvoicesPage: React.FC = () => {
       updated[index].description = item.description || item.name || '';
       updated[index].unit_price = String(item.selling_price || 0);
       
-      const itemTaxRate = Number(item.tax_rate);
-      updated[index].tax_rate = Number.isFinite(itemTaxRate) && itemTaxRate > 0 ? itemTaxRate : orgDefaultTaxRate;
+      const itemTaxRate = item.tax_rate !== undefined && item.tax_rate !== null && String(item.tax_rate).trim() !== '' ? Number(item.tax_rate) : NaN;
+      updated[index].tax_rate = Number.isFinite(itemTaxRate) ? itemTaxRate : orgDefaultTaxRate;
 
       // Determine correct revenue account
       let revId = '';
@@ -1342,7 +1342,7 @@ export const InvoicesPage: React.FC = () => {
                 {currentOrg?.is_vat_registered === false && (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. يمكنك تحديد نسبة الضريبة أثناء تجهيز المسودة، لكن يجب مراجعة إعدادات المنشأة قبل اعتماد فاتورة ضريبية.</span>
+                    <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. راجع إعدادات المنشأة والضريبة قبل اعتماد فاتورة ضريبية.</span>
                   </div>
                 )}
 
@@ -1425,7 +1425,7 @@ export const InvoicesPage: React.FC = () => {
                         </div>
 
                         {/* Calculations Panel */}
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-1 border-t border-slate-100/60 items-end">
+                        <div className={`grid grid-cols-2 ${pricesIncludeTax ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-3 pt-1 border-t border-slate-100/60 items-end`}>
                           {/* Quantity */}
                           <div className="space-y-1">
                             <label className="text-[10px] font-bold text-slate-400">الكمية *</label>
@@ -1465,47 +1465,45 @@ export const InvoicesPage: React.FC = () => {
                           </div>
 
                           {/* Tax rate */}
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400">نسبة الضريبة (%)</label>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              value={line.tax_rate}
-                              onChange={(event) => {
-                                const rawValue = event.target.value;
+                          {!pricesIncludeTax && (
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-400">نسبة الضريبة (%)</label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={line.tax_rate}
+                                onChange={(event) => {
+                                  const rawValue = event.target.value;
+                                  const normalized = normalizeDecimalInput(rawValue);
 
-                                if (rawValue === '') {
-                                  handleUpdateLineField(index, 'tax_rate', '');
-                                  return;
-                                }
+                                  if (normalized === '') {
+                                    handleUpdateLineField(index, 'tax_rate', '');
+                                    return;
+                                  }
 
-                                const parsedValue = Number(rawValue);
+                                  const parsedValue = Number(normalized);
 
-                                if (!Number.isFinite(parsedValue)) {
-                                  return;
-                                }
+                                  if (!Number.isFinite(parsedValue)) {
+                                    return;
+                                  }
 
-                                handleUpdateLineField(
-                                  index,
-                                  'tax_rate',
-                                  Math.min(100, Math.max(0, parsedValue))
-                                );
-                              }}
-                              onBlur={() => {
-                                const parsedValue = Number(line.tax_rate);
-
-                                if (!Number.isFinite(parsedValue)) {
-                                  handleUpdateLineField(index, 'tax_rate', orgDefaultTaxRate);
-                                }
-                              }}
-                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
-                              dir="ltr"
-                            />
-                            <span className="text-[10px] text-slate-400 block mt-0.5">النسبة الافتراضية: {orgDefaultTaxRate}%</span>
-                          </div>
+                                  handleUpdateLineField(
+                                    index,
+                                    'tax_rate',
+                                    Math.min(100, Math.max(0, parsedValue))
+                                  );
+                                }}
+                                onBlur={() => {
+                                  if ((line.tax_rate as any) === '' || line.tax_rate === undefined || line.tax_rate === null) {
+                                    handleUpdateLineField(index, 'tax_rate', orgDefaultTaxRate);
+                                  }
+                                }}
+                                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
+                                dir="ltr"
+                              />
+                              <span className="text-[10px] text-slate-400 block mt-0.5">النسبة الافتراضية: {orgDefaultTaxRate}%</span>
+                            </div>
+                          )}
 
                           {/* Actions & total */}
                           <div className="flex items-center justify-between gap-3 bg-white/70 px-2 py-1.5 rounded-lg border border-slate-150 h-8.5">

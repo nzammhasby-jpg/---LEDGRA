@@ -323,8 +323,8 @@ export const PurchaseBillsPage: React.FC = () => {
       updated[index].description = item.description || item.name || '';
       updated[index].unit_cost = String(item.purchase_price || 0);
       
-      const itemTaxRate = Number(item.tax_rate);
-      updated[index].tax_rate = Number.isFinite(itemTaxRate) && itemTaxRate > 0 ? itemTaxRate : orgDefaultTaxRate;
+      const itemTaxRate = item.tax_rate !== undefined && item.tax_rate !== null && String(item.tax_rate).trim() !== '' ? Number(item.tax_rate) : NaN;
+      updated[index].tax_rate = Number.isFinite(itemTaxRate) ? itemTaxRate : orgDefaultTaxRate;
 
       if (item.is_stockable) {
         updated[index].inventory_account_id = item.inventory_account_id || settings?.default_inventory_account_id || '';
@@ -354,6 +354,8 @@ export const PurchaseBillsPage: React.FC = () => {
       updated[index].unit_cost = normalizeDecimalInput(englishValue);
     } else if (field === 'discount_amount') {
       updated[index].discount_amount = normalizeDecimalInput(englishValue);
+    } else if (field === 'tax_rate') {
+      (updated[index] as any).tax_rate = value;
     } else {
       (updated[index] as any)[field] = value;
     }
@@ -1081,7 +1083,7 @@ export const PurchaseBillsPage: React.FC = () => {
             {currentOrg?.is_vat_registered === false && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. يمكنك تحديد نسبة الضريبة أثناء تجهيز المسودة، لكن يجب مراجعة إعدادات المنشأة قبل اعتماد فاتورة ضريبية.</span>
+                <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. راجع إعدادات المنشأة والضريبة قبل اعتماد فاتورة ضريبية.</span>
               </div>
             )}
 
@@ -1105,7 +1107,7 @@ export const PurchaseBillsPage: React.FC = () => {
                     <th className="p-3 w-20 text-center">الكمية</th>
                     <th className="p-3 w-28 text-center">{pricesIncludeTax ? 'التكلفة (شامل الضريبة)' : 'التكلفة (دون ضريبة)'}</th>
                     <th className="p-3 w-24 text-center">الخصم ({currentOrg?.currency_code || ''})</th>
-                    <th className="p-3 w-16 text-center">الضريبة</th>
+                    {!pricesIncludeTax && <th className="p-3 w-20 text-center">نسبة الضريبة (%)</th>}
                     <th className="p-3 w-1/4">الحساب المحاسبي للبند</th>
                     <th className="p-3 text-left pl-6">الإجمالي الفرعي</th>
                   </tr>
@@ -1195,45 +1197,43 @@ export const PurchaseBillsPage: React.FC = () => {
                         </td>
 
                         {/* Tax rate select */}
-                        <td className="p-3 text-center font-mono font-bold text-slate-500">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            max="100"
-                            step="0.01"
-                            value={line.tax_rate}
-                            onChange={(event) => {
-                              const rawValue = event.target.value;
+                        {!pricesIncludeTax && (
+                          <td className="p-3 text-center font-mono font-bold text-slate-500">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={line.tax_rate}
+                              onChange={(event) => {
+                                const rawValue = event.target.value;
+                                const normalized = normalizeDecimalInput(toEnglishDigits(rawValue));
 
-                              if (rawValue === '') {
-                                updateLineField(idx, 'tax_rate', '');
-                                return;
-                              }
+                                if (normalized === '') {
+                                  updateLineField(idx, 'tax_rate', '');
+                                  return;
+                                }
 
-                              const parsedValue = Number(rawValue);
+                                const parsedValue = Number(normalized);
 
-                              if (!Number.isFinite(parsedValue)) {
-                                return;
-                              }
+                                if (!Number.isFinite(parsedValue)) {
+                                  return;
+                                }
 
-                              updateLineField(
-                                idx,
-                                'tax_rate',
-                                String(Math.min(100, Math.max(0, parsedValue)))
-                              );
-                            }}
-                            onBlur={() => {
-                              const parsedValue = Number(line.tax_rate);
-
-                              if (!Number.isFinite(parsedValue)) {
-                                updateLineField(idx, 'tax_rate', String(orgDefaultTaxRate));
-                              }
-                            }}
-                            className="w-20 p-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center font-sans"
-                            dir="ltr"
-                          />
-                        </td>
+                                updateLineField(
+                                  idx,
+                                  'tax_rate',
+                                  String(Math.min(100, Math.max(0, parsedValue)))
+                                );
+                              }}
+                              onBlur={() => {
+                                if ((line.tax_rate as any) === '' || line.tax_rate === undefined || line.tax_rate === null) {
+                                  updateLineField(idx, 'tax_rate', String(orgDefaultTaxRate));
+                                }
+                              }}
+                              className="w-20 p-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center font-sans"
+                              dir="ltr"
+                            />
+                          </td>
+                        )}
 
                         {/* Account Selector */}
                         <td className="p-3">
