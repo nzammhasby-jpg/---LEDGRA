@@ -15,7 +15,7 @@ interface AuthContextType {
   dataError: string | null;
   clearDataError: () => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string, phone: string) => Promise<{ error: string | null, verificationRequired?: boolean }>;
+  signUp: (email: string, password: string, fullName: string, phone?: string | null) => Promise<{ error: string | null, verificationRequired?: boolean }>;
   signOut: () => Promise<void>;
   sendPasswordReset: (email: string) => Promise<{ error: string | null }>;
   updateUserPassword: (password: string) => Promise<{ error: string | null }>;
@@ -356,9 +356,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Sign Up Action
-  const signUp = async (email: string, password: string, fullName: string, phone: string): Promise<{ error: string | null, verificationRequired?: boolean }> => {
+  const signUp = async (email: string, password: string, fullName: string, phone?: string | null): Promise<{ error: string | null, verificationRequired?: boolean }> => {
     try {
       const callbackUrl = `${window.location.origin}/auth/callback?flow=signup`;
+      const cleanPhone = phone && phone.trim() !== '' ? phone.trim() : null;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -366,7 +367,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailRedirectTo: callbackUrl,
           data: {
             full_name: fullName,
-            phone: phone,
+            phone: cleanPhone,
           },
         },
       });

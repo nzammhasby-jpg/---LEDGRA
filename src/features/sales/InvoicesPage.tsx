@@ -219,72 +219,120 @@ export const InvoicesPage: React.FC = () => {
     setViewState('add');
   }, [currentOrg]);
 
-  const handleStartEditInvoice = useCallback((invoice: SalesInvoice) => {
-    setEditingInvoice(invoice);
-    setCustomerId(invoice.customer_id);
-    setInvoiceDate(invoice.invoice_date);
-    setDueDate(invoice.due_date);
-    setNotes(invoice.notes || '');
-    setPricesIncludeTax(invoice.prices_include_tax ?? false);
-    setLines((invoice.lines || []).map(l => ({
-      uuid: Math.random().toString(),
-      item_id: l.item_id,
-      description: l.description || '',
-      quantity: String(l.quantity),
-      unit_price: String(l.entered_unit_price ?? l.unit_price),
-      discount_amount: String(l.discount_amount),
-      tax_rate: l.tax_rate,
-      revenue_account_id: l.revenue_account_id
-    })));
-    setFormError(null);
-    setViewState('add');
-  }, []);
+  const handleStartEditInvoice = useCallback(async (invoiceOrId: SalesInvoice | string) => {
+    const invoiceId = typeof invoiceOrId === 'string' ? invoiceOrId : invoiceOrId?.id;
+    if (!currentOrg?.id || !invoiceId) return;
 
-  const handleCreateCorrectionCopy = useCallback(async (oldInvoice: SalesInvoice) => {
-    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من الفاتورة رقم ${oldInvoice.invoice_number}؟`)) return;
+    setActionLoading(`edit-${invoiceId}`);
+    setFormError(null);
+    setError(null);
+
+    try {
+      const fullInvoice = await salesService.getSalesInvoice(currentOrg.id, invoiceId);
+      if (!fullInvoice || !fullInvoice.id) {
+        throw new Error('المستند غير موجود');
+      }
+
+      setEditingInvoice(fullInvoice);
+      setCustomerId(fullInvoice.customer_id);
+      setInvoiceDate(fullInvoice.invoice_date);
+      setDueDate(fullInvoice.due_date);
+      setNotes(fullInvoice.notes || '');
+      setPricesIncludeTax(fullInvoice.prices_include_tax ?? false);
+      setLines((fullInvoice.lines || []).map(l => ({
+        uuid: Math.random().toString(),
+        item_id: l.item_id || '',
+        description: l.description || '',
+        quantity: String(l.quantity ?? 1),
+        unit_price: String(l.entered_unit_price ?? l.unit_price ?? 0),
+        discount_amount: String(l.discount_amount || 0),
+        tax_rate: l.tax_rate ?? orgDefaultTaxRate,
+        revenue_account_id: l.revenue_account_id || ''
+      })));
+      setViewState('add');
+    } catch (err: any) {
+      console.error(err);
+      setError('تعذر تحميل تفاصيل المستند. حاول مرة أخرى.');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [currentOrg, orgDefaultTaxRate]);
+
+  const handleCreateCorrectionCopy = useCallback(async (oldInvoiceOrId: SalesInvoice | string) => {
+    const oldInvoiceId = typeof oldInvoiceOrId === 'string' ? oldInvoiceOrId : oldInvoiceOrId?.id;
+    if (!currentOrg?.id || !oldInvoiceId) return;
+
+    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من هذه الفاتورة؟`)) return;
+
+    setActionLoading(`correct-${oldInvoiceId}`);
     setSaveLoading(true);
     setFormError(null);
+    setError(null);
+
     try {
+      const fullOldInvoice = await salesService.getSalesInvoice(currentOrg.id, oldInvoiceId);
+      if (!fullOldInvoice || !fullOldInvoice.id) {
+        throw new Error('المستند غير موجود');
+      }
+
       const copyPayload: CreateInvoiceInput = {
-        customer_id: oldInvoice.customer_id,
+        customer_id: fullOldInvoice.customer_id,
         invoice_date: new Date().toISOString().split('T')[0],
         due_date: new Date().toISOString().split('T')[0],
-        notes: `نسخة تصحيحية من: ${oldInvoice.invoice_number}` + (oldInvoice.notes ? `\n\n${oldInvoice.notes}` : ''),
-        prices_include_tax: oldInvoice.prices_include_tax ?? false,
-        lines: (oldInvoice.lines || []).map(l => ({
+        notes: `نسخة تصحيحية من: ${fullOldInvoice.invoice_number}` + (fullOldInvoice.notes ? `\n\n${fullOldInvoice.notes}` : ''),
+        prices_include_tax: fullOldInvoice.prices_include_tax ?? false,
+        lines: (fullOldInvoice.lines || []).map(l => ({
           item_id: l.item_id,
           description: l.description || undefined,
           quantity: l.quantity,
           unit_price: l.entered_unit_price ?? l.unit_price,
-          discount_amount: l.discount_amount,
-          tax_rate: l.tax_rate,
-          revenue_account_id: l.revenue_account_id
+          discount_amount: l.discount_amount || 0,
+          tax_rate: l.tax_rate ?? orgDefaultTaxRate,
+          revenue_account_id: l.revenue_account_id || undefined
         }))
       };
 
-      const newId = await salesService.createSalesInvoice(currentOrg!.id, copyPayload);
+      const newId = await salesService.createSalesInvoice(currentOrg.id, copyPayload);
       
-      await auditService.logAction(currentOrg!.id, profile?.id || null, 'correction_copy_created', {
+      await auditService.logAction(currentOrg.id, profile?.id || null, 'correction_copy_created', {
         source_type: 'sales_invoice',
-        original_id: oldInvoice.id,
-        original_number: oldInvoice.invoice_number,
+        original_id: fullOldInvoice.id,
+        original_number: fullOldInvoice.invoice_number,
         new_draft_id: newId
       });
 
-      // Reload invoices
-      const updatedList = await salesService.getSalesInvoices(currentOrg!.id);
+      // Reload list
+      const updatedList = await salesService.getSalesInvoices(currentOrg.id);
       setInvoices(updatedList);
 
-      // Open in edit mode immediately
-      const newInvoice = updatedList.find(i => i.id === newId) || await salesService.getSalesInvoice(currentOrg!.id, newId);
-      handleStartEditInvoice(newInvoice);
+      // Open new draft invoice in edit mode after fetching full details
+      const newInvoiceFull = await salesService.getSalesInvoice(currentOrg.id, newId);
+
+      setEditingInvoice(newInvoiceFull);
+      setCustomerId(newInvoiceFull.customer_id);
+      setInvoiceDate(newInvoiceFull.invoice_date);
+      setDueDate(newInvoiceFull.due_date);
+      setNotes(newInvoiceFull.notes || '');
+      setPricesIncludeTax(newInvoiceFull.prices_include_tax ?? false);
+      setLines((newInvoiceFull.lines || []).map(l => ({
+        uuid: Math.random().toString(),
+        item_id: l.item_id || '',
+        description: l.description || '',
+        quantity: String(l.quantity ?? 1),
+        unit_price: String(l.entered_unit_price ?? l.unit_price ?? 0),
+        discount_amount: String(l.discount_amount || 0),
+        tax_rate: l.tax_rate ?? orgDefaultTaxRate,
+        revenue_account_id: l.revenue_account_id || ''
+      })));
+      setViewState('add');
     } catch (err: any) {
-      setFormError(getErrorMessage(err));
-      alert(`فشل إنشاء النسخة التصحيحية: ${getErrorMessage(err)}`);
+      console.error(err);
+      setError('تعذر تحميل تفاصيل المستند. حاول مرة أخرى.');
     } finally {
       setSaveLoading(false);
+      setActionLoading(null);
     }
-  }, [currentOrg, profile, handleStartEditInvoice]);
+  }, [currentOrg, profile, orgDefaultTaxRate]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -1007,7 +1055,8 @@ export const InvoicesPage: React.FC = () => {
                             {inv.status === 'draft' && (
                               <button
                                 onClick={() => handleStartEditInvoice(inv)}
-                                className="p-1 px-1.5 text-purple-600 hover:bg-purple-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                disabled={actionLoading !== null}
+                                className="p-1 px-1.5 text-purple-600 hover:bg-purple-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer disabled:opacity-50"
                                 title="تعديل الفاتورة المسودة"
                               >
                                 <Edit className="w-3.5 h-3.5" />
@@ -1019,7 +1068,8 @@ export const InvoicesPage: React.FC = () => {
                             {inv.status === 'approved' && (
                               <button
                                 onClick={() => handleCreateCorrectionCopy(inv)}
-                                className="p-1 px-1.5 text-amber-600 hover:bg-amber-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                disabled={actionLoading !== null}
+                                className="p-1 px-1.5 text-amber-600 hover:bg-amber-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer disabled:opacity-50"
                                 title="إنشاء نسخة تصحيحية من هذه الفاتورة المعتمدة"
                               >
                                 <RefreshCw className="w-3.5 h-3.5" />
@@ -1643,7 +1693,8 @@ export const InvoicesPage: React.FC = () => {
               {selectedInvoice.status === 'draft' && (
                 <button
                   onClick={() => handleStartEditInvoice(selectedInvoice)}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                  disabled={actionLoading !== null}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <Edit className="w-4 h-4" />
                   <span>تعديل المسودة</span>
@@ -1654,7 +1705,8 @@ export const InvoicesPage: React.FC = () => {
               {selectedInvoice.status === 'approved' && (
                 <button
                   onClick={() => handleCreateCorrectionCopy(selectedInvoice)}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                  disabled={actionLoading !== null}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>إنشاء نسخة تصحيحية</span>

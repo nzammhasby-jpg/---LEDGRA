@@ -92,6 +92,15 @@ describe('Country Profiles and Business Rules', () => {
   });
 
   describe('Phone Number Validation', () => {
+    it('should treat empty, null, or undefined phone as valid (optional phone requirement)', () => {
+      expect(validatePhone('SA', '')).toEqual({ isValid: true });
+      expect(validatePhone('SA', null)).toEqual({ isValid: true });
+      expect(validatePhone('SA', undefined)).toEqual({ isValid: true });
+      expect(validatePhone('YE', '')).toEqual({ isValid: true });
+      expect(validatePhone('YE', null)).toEqual({ isValid: true });
+      expect(validatePhone('YE', undefined)).toEqual({ isValid: true });
+    });
+
     it('should validate Saudi phone numbers correctly', () => {
       expect(validatePhone('SA', '0512345678')).toEqual({ isValid: true });
       expect(validatePhone('SA', '512345678')).toEqual({ isValid: true });
@@ -108,6 +117,7 @@ describe('Country Profiles and Business Rules', () => {
       expect(validatePhone('YE', '712345678')).toEqual({ isValid: true });
       expect(validatePhone('YE', '967712345678')).toEqual({ isValid: true });
       expect(validatePhone('YE', '12345678')).toEqual({ isValid: true });
+      expect(validatePhone('YE', '+967 712345678')).toEqual({ isValid: true });
 
       // Invalid YE
       const yeInvalidResult = validatePhone('YE', 'abc');

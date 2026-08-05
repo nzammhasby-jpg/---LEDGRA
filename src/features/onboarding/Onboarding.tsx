@@ -44,9 +44,9 @@ const onboardingSchema = z.object({
   country_code: z.string().default('SA'),
   city: z.string().min(1, { message: 'المدينة مطلوبة' }),
   phone: z.preprocess((val) => {
-    if (typeof val === 'string') return normalizeIntegerInput(val);
+    if (typeof val === 'string') return val.trim();
     return val;
-  }, z.string()),
+  }, z.string().optional().or(z.literal(''))),
   email: z.string().min(1, { message: 'البريد الإلكتروني مطلوب' }).email({ message: 'البريد الإلكتروني غير صحيح' }),
   
   // Step 2
@@ -257,7 +257,7 @@ export const Onboarding: React.FC = () => {
               activity_type: vals.activity_type,
               country_code: vals.country_code || 'SA',
               city: vals.city,
-              phone: vals.phone,
+              phone: vals.phone?.trim() ? vals.phone.trim() : null,
               email: vals.email,
               legal_type: vals.legal_type || 'individual',
               vat_number: vals.vat_number || '',
@@ -283,7 +283,7 @@ export const Onboarding: React.FC = () => {
               name_en: vals.name_en || '',
               activity_type: vals.activity_type,
               city: vals.city,
-              phone: vals.phone,
+              phone: vals.phone?.trim() ? vals.phone.trim() : null,
               email: vals.email,
               onboarding_step: 2
             });
@@ -359,6 +359,7 @@ export const Onboarding: React.FC = () => {
         ? currentOrg
         : orgsList.find(o => !o.onboarding_completed);
 
+      const cleanPhone = data.phone?.trim() ? data.phone.trim() : null;
       if (draftOrg) {
         // Update existing org to final status
         response = await updateOrg(draftOrg.id, {
@@ -367,7 +368,7 @@ export const Onboarding: React.FC = () => {
           activity_type: data.activity_type,
           country_code: data.country_code || 'SA',
           city: data.city,
-          phone: data.phone,
+          phone: cleanPhone,
           email: data.email,
           legal_type: data.legal_type,
           cr_number: data.cr_number,
@@ -389,7 +390,7 @@ export const Onboarding: React.FC = () => {
           activity_type: data.activity_type,
           country_code: data.country_code || 'SA',
           city: data.city,
-          phone: data.phone,
+          phone: cleanPhone,
           email: data.email,
           legal_type: data.legal_type,
           cr_number: data.cr_number,
@@ -671,19 +672,14 @@ export const Onboarding: React.FC = () => {
                           </div>
 
                           <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1.5">رقم جوال المنشأة *</label>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">رقم جوال المنشأة (اختياري)</label>
                             <input
                               id="input-phone"
                               type="tel"
-                              placeholder={currentProfile.phonePlaceholder}
-                              {...register('phone', {
-                                onChange: (e) => {
-                                  e.target.value = normalizeIntegerInput(e.target.value);
-                                }
-                              })}
+                              placeholder={currentProfile.phonePlaceholder ? `${currentProfile.phonePlaceholder} (اختياري)` : '05XXXXXXXX (اختياري)'}
+                              {...register('phone')}
                               className="w-full px-3 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-brand-blue/10 focus:border-brand-blue transition text-left font-mono tabular-nums"
                               dir="ltr"
-                              inputMode="numeric"
                             />
                             {methods.formState.errors.phone && (
                               <p className="text-xs text-red-600 mt-1">{methods.formState.errors.phone.message}</p>

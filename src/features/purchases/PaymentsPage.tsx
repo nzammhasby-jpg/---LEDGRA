@@ -225,70 +225,123 @@ export const PaymentsPage: React.FC = () => {
     setCashBankAccountId(defaultAcc ? defaultAcc.id : '');
   }, [settings, cashBankAccounts]);
 
-  const handleStartEditPayment = useCallback((payment: Payment) => {
-    setEditingPayment(payment);
-    setVendorId(payment.vendor_id);
-    setPaymentDate(payment.payment_date);
-    setAmount(String(payment.amount));
-    setPaymentMethod(payment.payment_method);
-    setCashAccountId(payment.cash_account_id || '');
-    setBankAccountId(payment.bank_account_id || '');
-    setCashBankAccountId(payment.cash_bank_account_id || '');
-    setReference(payment.reference || '');
-    setNotes(payment.notes || '');
-    const allocMap: Record<string, string> = {};
-    (payment.allocations || []).forEach(al => {
-      allocMap[al.purchase_bill_id] = String(al.allocated_amount);
-    });
-    setAllocations(allocMap);
-    setFormError(null);
-    setViewState('add');
-  }, [cashBankAccounts]);
+  const handleStartEditPayment = useCallback(async (paymentOrId: Payment | string) => {
+    const paymentId = typeof paymentOrId === 'string' ? paymentOrId : paymentOrId?.id;
+    if (!currentOrg?.id || !paymentId) return;
 
-  const handleCreateCorrectionCopy = useCallback(async (oldPayment: Payment) => {
-    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من سند الصرف رقم ${oldPayment.payment_number}؟`)) return;
+    setActionLoading(`edit-${paymentId}`);
+    setFormError(null);
+    setError(null);
+
+    try {
+      const fullPayment = await purchaseService.getPayment(currentOrg.id, paymentId);
+      if (!fullPayment || !fullPayment.id) {
+        throw new Error('المستند غير موجود');
+      }
+
+      setEditingPayment(fullPayment);
+      setVendorId(fullPayment.vendor_id);
+      setPaymentDate(fullPayment.payment_date);
+      setAmount(String(fullPayment.amount));
+      setPaymentMethod(fullPayment.payment_method);
+      setCashAccountId(fullPayment.cash_account_id || '');
+      setBankAccountId(fullPayment.bank_account_id || '');
+      setCashBankAccountId(fullPayment.cash_bank_account_id || '');
+      setReference(fullPayment.reference || '');
+      setNotes(fullPayment.notes || '');
+
+      const allocMap: Record<string, string> = {};
+      (fullPayment.allocations || []).forEach(al => {
+        if (al.purchase_bill_id) {
+          allocMap[al.purchase_bill_id] = String(al.allocated_amount || 0);
+        }
+      });
+      setAllocations(allocMap);
+      setViewState('add');
+    } catch (err: any) {
+      console.error(err);
+      setError('تعذر تحميل تفاصيل المستند. حاول مرة أخرى.');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [currentOrg]);
+
+  const handleCreateCorrectionCopy = useCallback(async (oldPaymentOrId: Payment | string) => {
+    const oldPaymentId = typeof oldPaymentOrId === 'string' ? oldPaymentOrId : oldPaymentOrId?.id;
+    if (!currentOrg?.id || !oldPaymentId) return;
+
+    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من سند الصرف هذا؟`)) return;
+
+    setActionLoading(`correct-${oldPaymentId}`);
     setSaveLoading(true);
     setFormError(null);
+    setError(null);
+
     try {
+      const fullOldPayment = await purchaseService.getPayment(currentOrg.id, oldPaymentId);
+      if (!fullOldPayment || !fullOldPayment.id) {
+        throw new Error('المستند غير موجود');
+      }
+
       const copyPayload: CreatePaymentInput = {
-        vendor_id: oldPayment.vendor_id,
+        vendor_id: fullOldPayment.vendor_id,
         payment_date: new Date().toISOString().split('T')[0],
-        amount: oldPayment.amount,
-        payment_method: oldPayment.payment_method,
-        cash_account_id: oldPayment.cash_account_id || undefined,
-        bank_account_id: oldPayment.bank_account_id || undefined,
-        cash_bank_account_id: oldPayment.cash_bank_account_id || undefined,
-        reference: oldPayment.reference || undefined,
-        notes: `نسخة تصحيحية من سند الصرف: ${oldPayment.payment_number}` + (oldPayment.notes ? `\n\n${oldPayment.notes}` : ''),
-        allocations: (oldPayment.allocations || []).map(al => ({
+        amount: fullOldPayment.amount,
+        payment_method: fullOldPayment.payment_method,
+        cash_account_id: fullOldPayment.cash_account_id || undefined,
+        bank_account_id: fullOldPayment.bank_account_id || undefined,
+        cash_bank_account_id: fullOldPayment.cash_bank_account_id || undefined,
+        reference: fullOldPayment.reference || undefined,
+        notes: `نسخة تصحيحية من سند الصرف: ${fullOldPayment.payment_number}` + (fullOldPayment.notes ? `\n\n${fullOldPayment.notes}` : ''),
+        allocations: (fullOldPayment.allocations || []).map(al => ({
           purchase_bill_id: al.purchase_bill_id,
           allocated_amount: al.allocated_amount
         }))
       };
 
-      const newId = await purchaseService.createPayment(currentOrg!.id, copyPayload);
+      const newId = await purchaseService.createPayment(currentOrg.id, copyPayload);
       
-      await auditService.logAction(currentOrg!.id, profile?.id || null, 'correction_copy_created', {
+      await auditService.logAction(currentOrg.id, profile?.id || null, 'correction_copy_created', {
         source_type: 'payment',
-        original_id: oldPayment.id,
-        original_number: oldPayment.payment_number,
+        original_id: fullOldPayment.id,
+        original_number: fullOldPayment.payment_number,
         new_draft_id: newId
       });
 
       // Reload list
-      const updatedList = await purchaseService.getPayments(currentOrg!.id);
+      const updatedList = await purchaseService.getPayments(currentOrg.id);
       setPayments(updatedList);
 
-      // Open in edit mode immediately
-      const newPayment = updatedList.find(p => p.id === newId) || await purchaseService.getPayment(currentOrg!.id, newId);
-      handleStartEditPayment(newPayment);
+      // Open new draft payment in edit mode after fetching full details
+      const newPaymentFull = await purchaseService.getPayment(currentOrg.id, newId);
+
+      setEditingPayment(newPaymentFull);
+      setVendorId(newPaymentFull.vendor_id);
+      setPaymentDate(newPaymentFull.payment_date);
+      setAmount(String(newPaymentFull.amount));
+      setPaymentMethod(newPaymentFull.payment_method);
+      setCashAccountId(newPaymentFull.cash_account_id || '');
+      setBankAccountId(newPaymentFull.bank_account_id || '');
+      setCashBankAccountId(newPaymentFull.cash_bank_account_id || '');
+      setReference(newPaymentFull.reference || '');
+      setNotes(newPaymentFull.notes || '');
+
+      const allocMap: Record<string, string> = {};
+      (newPaymentFull.allocations || []).forEach(al => {
+        if (al.purchase_bill_id) {
+          allocMap[al.purchase_bill_id] = String(al.allocated_amount || 0);
+        }
+      });
+      setAllocations(allocMap);
+      setViewState('add');
     } catch (err: any) {
-      setFormError(getErrorMessage(err));
-      alert(`فشل إنشاء النسخة التصحيحية: ${getErrorMessage(err)}`);
+      console.error(err);
+      setError('تعذر تحميل تفاصيل المستند. حاول مرة أخرى.');
     } finally {
       setSaveLoading(false);
+      setActionLoading(null);
     }
-  }, [currentOrg, profile, handleStartEditPayment]);
+  }, [currentOrg, profile]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -673,7 +726,8 @@ export const PaymentsPage: React.FC = () => {
                           {p.status === 'draft' && (
                             <button
                               onClick={() => handleStartEditPayment(p)}
-                              className="bg-purple-50 hover:bg-purple-100 text-purple-600 p-2 rounded-lg transition cursor-pointer"
+                              disabled={actionLoading !== null}
+                              className="bg-purple-50 hover:bg-purple-100 text-purple-600 p-2 rounded-lg transition cursor-pointer disabled:opacity-50"
                               title="تعديل السند المسودة"
                             >
                               <Edit className="w-3.5 h-3.5" />
@@ -684,7 +738,8 @@ export const PaymentsPage: React.FC = () => {
                           {p.status === 'approved' && (
                             <button
                               onClick={() => handleCreateCorrectionCopy(p)}
-                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 p-2 rounded-lg transition cursor-pointer"
+                              disabled={actionLoading !== null}
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 p-2 rounded-lg transition cursor-pointer disabled:opacity-50"
                               title="إنشاء نسخة تصحيحية من هذا السند المعتمد"
                             >
                               <RefreshCw className="w-3.5 h-3.5" />
@@ -1100,7 +1155,8 @@ export const PaymentsPage: React.FC = () => {
               {selectedPayment.status === 'draft' && (
                 <button
                   onClick={() => handleStartEditPayment(selectedPayment)}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                  disabled={actionLoading !== null}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
                 >
                   <Edit className="w-4 h-4" />
                   <span>تعديل السند</span>
@@ -1111,7 +1167,8 @@ export const PaymentsPage: React.FC = () => {
               {selectedPayment.status === 'approved' && (
                 <button
                   onClick={() => handleCreateCorrectionCopy(selectedPayment)}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                  disabled={actionLoading !== null}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>نسخة تصحيحية</span>

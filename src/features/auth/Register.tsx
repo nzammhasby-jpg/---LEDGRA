@@ -8,21 +8,31 @@ import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../i18n/translations';
 import { Logo } from '../../components/Logo';
 import { Mail, Lock, CheckCircle2, ShieldAlert, Sparkles, Building2, Phone, User } from 'lucide-react';
-import { normalizeIntegerInput } from '../../lib/formatters';
+import { validatePhone } from '../../lib/countryProfiles';
 
 const registerSchema = z.object({
   fullName: z.string().min(3, { message: 'الاسم الكامل يجب أن لا يقل عن 3 أحرف' }),
   email: z.string().min(1, { message: 'البريد الإلكتروني مطلوب' }).email({ message: 'البريد الإلكتروني غير صحيح' }),
-  phone: z.string()
-    .regex(/^05\d{8}$/, { message: 'أدخل رقم جوال سعودي صحيح يبدأ بـ 05 ويتكون من 10 أرقام.' }),
+  phone: z.string().optional().or(z.literal('')),
   password: z.string().min(6, { message: 'كلمة المرور يجب أن لا تقل عن 6 أحرف' }),
   confirmPassword: z.string().min(1, { message: 'تأكيد كلمة المرور مطلوب' }),
   agreeTerms: z.boolean().refine((val) => val === true, {
     message: 'يجب الموافقة على الشروط والأحكام و سياسة الخصوصية',
   }),
 }).refine((data) => data.password === data.confirmPassword, {
-  message: 'كلمتا المرور غير متابقتين',
+  message: 'كلمتا المرور غير متطابقتين',
   path: ['confirmPassword'],
+}).superRefine((data, ctx) => {
+  if (data.phone && data.phone.trim() !== '') {
+    const res = validatePhone('SA', data.phone);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.errorAr || 'رقم الجوال غير صحيح',
+        path: ['phone']
+      });
+    }
+  }
 });
 
 type RegisterFields = z.infer<typeof registerSchema>;
@@ -54,7 +64,8 @@ export const Register: React.FC = () => {
     setApiSuccess(false);
     setRegistrationSuccess(false);
     try {
-      const response = await signUp(data.email, data.password, data.fullName, data.phone);
+      const cleanPhone = data.phone && data.phone.trim() !== '' ? data.phone.trim() : null;
+      const response = await signUp(data.email, data.password, data.fullName, cleanPhone);
       if (response.error) {
         const errorMsg = response.error.toLowerCase();
         if (errorMsg.includes('already exists') || errorMsg.includes('already registered') || errorMsg.includes('مسجل مسبق')) {
@@ -256,7 +267,7 @@ export const Register: React.FC = () => {
                 {/* Phone */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    رقم الجوال (السعودي)
+                    رقم الجوال (اختياري)
                   </label>
                   <div className="relative">
                     <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
@@ -264,18 +275,13 @@ export const Register: React.FC = () => {
                     </span>
                     <input
                       id="reg-phone-field"
-                      type="text"
-                      placeholder="05XXXXXXXX"
-                      {...register('phone', {
-                        onChange: (e) => {
-                          e.target.value = normalizeIntegerInput(e.target.value);
-                        }
-                      })}
+                      type="tel"
+                      placeholder="05XXXXXXXX (اختياري)"
+                      {...register('phone')}
                       className={`w-full pr-9 pl-3 py-2 bg-white border ${
                         errors.phone ? 'border-red-400 focus:ring-red-100' : 'border-slate-200 focus:ring-brand-blue/20'
                       } rounded-xl text-sm focus:outline-none focus:ring-4 transition text-left font-mono tabular-nums`}
                       dir="ltr"
-                      inputMode="numeric"
                     />
                   </div>
                   {errors.phone && (

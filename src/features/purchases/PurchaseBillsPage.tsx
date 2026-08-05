@@ -192,76 +192,126 @@ export const PurchaseBillsPage: React.FC = () => {
     setViewState('add');
   };
 
-  const handleStartEditBill = useCallback((bill: PurchaseBill) => {
-    setEditingBill(bill);
-    setVendorId(bill.vendor_id);
-    setVendorInvoiceNumber(bill.vendor_invoice_number || '');
-    setBillDate(bill.bill_date);
-    setDueDate(bill.due_date);
-    setNotes(bill.notes || '');
-    setPricesIncludeTax(bill.prices_include_tax ?? false);
-    setLines((bill.lines || []).map(l => ({
-      uuid: Math.random().toString(),
-      item_id: l.item_id,
-      description: l.description || '',
-      quantity: String(l.quantity),
-      unit_cost: String(l.entered_unit_cost ?? l.unit_cost),
-      discount_amount: String(l.discount_amount),
-      tax_rate: l.tax_rate,
-      expense_account_id: l.expense_account_id || '',
-      inventory_account_id: l.inventory_account_id || ''
-    })));
-    setFormError(null);
-    setViewState('add');
-  }, []);
+  const handleStartEditBill = useCallback(async (billOrId: PurchaseBill | string) => {
+    const billId = typeof billOrId === 'string' ? billOrId : billOrId?.id;
+    if (!currentOrg?.id || !billId) return;
 
-  const handleCreateCorrectionCopy = useCallback(async (oldBill: PurchaseBill) => {
-    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من الفاتورة رقم ${oldBill.bill_number}؟`)) return;
+    setActionLoading(`edit-${billId}`);
+    setFormError(null);
+    setError(null);
+
+    try {
+      const fullBill = await purchaseService.getPurchaseBill(currentOrg.id, billId);
+      if (!fullBill || !fullBill.id) {
+        throw new Error('المستند غير موجود');
+      }
+
+      setEditingBill(fullBill);
+      setVendorId(fullBill.vendor_id);
+      setVendorInvoiceNumber(fullBill.vendor_invoice_number || '');
+      setBillDate(fullBill.bill_date);
+      setDueDate(fullBill.due_date);
+      setNotes(fullBill.notes || '');
+      setPricesIncludeTax(fullBill.prices_include_tax ?? false);
+      setLines((fullBill.lines || []).map(l => ({
+        uuid: Math.random().toString(),
+        item_id: l.item_id || '',
+        description: l.description || '',
+        quantity: String(l.quantity ?? 1),
+        unit_cost: String(l.entered_unit_cost ?? l.unit_cost ?? 0),
+        discount_amount: String(l.discount_amount || 0),
+        tax_rate: l.tax_rate ?? orgDefaultTaxRate,
+        expense_account_id: l.expense_account_id || '',
+        inventory_account_id: l.inventory_account_id || ''
+      })));
+      setViewState('add');
+    } catch (err: any) {
+      console.error(err);
+      setError('تعذر تحميل تفاصيل المستند. حاول مرة أخرى.');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [currentOrg, orgDefaultTaxRate]);
+
+  const handleCreateCorrectionCopy = useCallback(async (oldBillOrId: PurchaseBill | string) => {
+    const oldBillId = typeof oldBillOrId === 'string' ? oldBillOrId : oldBillOrId?.id;
+    if (!currentOrg?.id || !oldBillId) return;
+
+    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من هذه الفاتورة؟`)) return;
+
+    setActionLoading(`correct-${oldBillId}`);
     setSaveLoading(true);
     setFormError(null);
+    setError(null);
+
     try {
+      const fullOldBill = await purchaseService.getPurchaseBill(currentOrg.id, oldBillId);
+      if (!fullOldBill || !fullOldBill.id) {
+        throw new Error('المستند غير موجود');
+      }
+
       const copyPayload: CreatePurchaseBillInput = {
-        vendor_id: oldBill.vendor_id,
-        vendor_invoice_number: oldBill.vendor_invoice_number ? `${oldBill.vendor_invoice_number}-CORR` : undefined,
+        vendor_id: fullOldBill.vendor_id,
+        vendor_invoice_number: fullOldBill.vendor_invoice_number ? `${fullOldBill.vendor_invoice_number}-CORR` : undefined,
         bill_date: new Date().toISOString().split('T')[0],
         due_date: new Date().toISOString().split('T')[0],
-        notes: `نسخة تصحيحية من الفاتورة: ${oldBill.bill_number}` + (oldBill.notes ? `\n\n${oldBill.notes}` : ''),
-        prices_include_tax: oldBill.prices_include_tax ?? false,
-        lines: (oldBill.lines || []).map(l => ({
+        notes: `نسخة تصحيحية من الفاتورة: ${fullOldBill.bill_number}` + (fullOldBill.notes ? `\n\n${fullOldBill.notes}` : ''),
+        prices_include_tax: fullOldBill.prices_include_tax ?? false,
+        lines: (fullOldBill.lines || []).map(l => ({
           item_id: l.item_id,
           description: l.description || undefined,
           quantity: l.quantity,
           unit_cost: l.entered_unit_cost ?? l.unit_cost,
-          discount_amount: l.discount_amount,
-          tax_rate: l.tax_rate,
+          discount_amount: l.discount_amount || 0,
+          tax_rate: l.tax_rate ?? orgDefaultTaxRate,
           expense_account_id: l.expense_account_id || undefined,
           inventory_account_id: l.inventory_account_id || undefined
         }))
       };
 
-      const newId = await purchaseService.createPurchaseBill(currentOrg!.id, copyPayload);
+      const newId = await purchaseService.createPurchaseBill(currentOrg.id, copyPayload);
       
-      await auditService.logAction(currentOrg!.id, profile?.id || null, 'correction_copy_created', {
+      await auditService.logAction(currentOrg.id, profile?.id || null, 'correction_copy_created', {
         source_type: 'purchase_bill',
-        original_id: oldBill.id,
-        original_number: oldBill.bill_number,
+        original_id: fullOldBill.id,
+        original_number: fullOldBill.bill_number,
         new_draft_id: newId
       });
 
-      // Reload bills
-      const updatedList = await purchaseService.getPurchaseBills(currentOrg!.id);
+      // Reload list
+      const updatedList = await purchaseService.getPurchaseBills(currentOrg.id);
       setBills(updatedList);
 
-      // Open in edit mode immediately
-      const newBill = updatedList.find(b => b.id === newId) || await purchaseService.getPurchaseBill(currentOrg!.id, newId);
-      handleStartEditBill(newBill);
+      // Fetch full details of newly created bill by newId
+      const newBillFull = await purchaseService.getPurchaseBill(currentOrg.id, newId);
+
+      setEditingBill(newBillFull);
+      setVendorId(newBillFull.vendor_id);
+      setVendorInvoiceNumber(newBillFull.vendor_invoice_number || '');
+      setBillDate(newBillFull.bill_date);
+      setDueDate(newBillFull.due_date);
+      setNotes(newBillFull.notes || '');
+      setPricesIncludeTax(newBillFull.prices_include_tax ?? false);
+      setLines((newBillFull.lines || []).map(l => ({
+        uuid: Math.random().toString(),
+        item_id: l.item_id || '',
+        description: l.description || '',
+        quantity: String(l.quantity ?? 1),
+        unit_cost: String(l.entered_unit_cost ?? l.unit_cost ?? 0),
+        discount_amount: String(l.discount_amount || 0),
+        tax_rate: l.tax_rate ?? orgDefaultTaxRate,
+        expense_account_id: l.expense_account_id || '',
+        inventory_account_id: l.inventory_account_id || ''
+      })));
+      setViewState('add');
     } catch (err: any) {
-      setFormError(getErrorMessage(err));
-      alert(`فشل إنشاء النسخة التصحيحية: ${getErrorMessage(err)}`);
+      console.error(err);
+      setError('تعذر تحميل تفاصيل المستند. حاول مرة أخرى.');
     } finally {
       setSaveLoading(false);
+      setActionLoading(null);
     }
-  }, [currentOrg, profile, handleStartEditBill]);
+  }, [currentOrg, profile, orgDefaultTaxRate]);
 
   // Handle item change in row to auto-populate description, cost, tax rate, and accounts
   const handleLineItemChange = (index: number, itemId: string) => {
@@ -751,7 +801,8 @@ export const PurchaseBillsPage: React.FC = () => {
                           {b.status === 'draft' && (
                             <button
                               onClick={() => handleStartEditBill(b)}
-                              className="bg-purple-50 hover:bg-purple-100 text-purple-600 p-2 rounded-lg transition cursor-pointer"
+                              disabled={actionLoading !== null}
+                              className="bg-purple-50 hover:bg-purple-100 text-purple-600 p-2 rounded-lg transition cursor-pointer disabled:opacity-50"
                               title="تعديل الفاتورة المسودة"
                             >
                               <Edit className="w-3.5 h-3.5" />
@@ -762,7 +813,8 @@ export const PurchaseBillsPage: React.FC = () => {
                           {b.status === 'approved' && (
                             <button
                               onClick={() => handleCreateCorrectionCopy(b)}
-                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 p-2 rounded-lg transition cursor-pointer"
+                              disabled={actionLoading !== null}
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-600 p-2 rounded-lg transition cursor-pointer disabled:opacity-50"
                               title="إنشاء نسخة تصحيحية من هذه الفاتورة المعتمدة"
                             >
                               <RefreshCw className="w-3.5 h-3.5" />
@@ -1319,7 +1371,8 @@ export const PurchaseBillsPage: React.FC = () => {
               {selectedBill.status === 'draft' && (
                 <button
                   onClick={() => handleStartEditBill(selectedBill)}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                  disabled={actionLoading !== null}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
                 >
                   <Edit className="w-4 h-4" />
                   <span>تعديل الفاتورة</span>
@@ -1330,7 +1383,8 @@ export const PurchaseBillsPage: React.FC = () => {
               {selectedBill.status === 'approved' && (
                 <button
                   onClick={() => handleCreateCorrectionCopy(selectedBill)}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                  disabled={actionLoading !== null}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>نسخة تصحيحية</span>

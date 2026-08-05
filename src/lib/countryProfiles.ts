@@ -145,37 +145,45 @@ export function validatePhone(
   const code = (countryCode || 'SA').toUpperCase() as SupportedCountryCode;
   const val = (value || '').trim();
 
+  // Phone is completely optional
   if (!val) {
-    return { isValid: false, errorAr: 'رقم الجوال مطلوب.' };
+    return { isValid: true };
+  }
+
+  const cleanVal = val.replace(/[\s\-+()]/g, '');
+  if (!/^\d+$/.test(cleanVal)) {
+    if (code === 'YE') {
+      return { isValid: false, errorAr: 'رقم الجوال اليمني غير صحيح.' };
+    }
+    return { isValid: false, errorAr: 'رقم الجوال يجب أن يحتوي على أرقام فقط.' };
   }
 
   if (code === 'SA') {
-    const cleanVal = val.replace(/[\s\-+]/g, '');
-    if (/^9665\d{8}$/.test(cleanVal)) {
+    if (/^9665\d{8}$/.test(cleanVal) || /^5\d{8}$/.test(cleanVal) || /^05\d{8}$/.test(cleanVal)) {
       return { isValid: true };
     }
-    if (/^5\d{8}$/.test(cleanVal)) {
+    if (/^967\d{8,9}$/.test(cleanVal)) {
       return { isValid: true };
     }
-    if (/^05\d{8}$/.test(cleanVal)) {
+    if (cleanVal.length >= 8 && cleanVal.length <= 15 && !/^0[0-46-9]/.test(cleanVal)) {
       return { isValid: true };
     }
     return { isValid: false, errorAr: 'رقم الجوال غير صحيح. يجب أن يبدأ بـ 05 أو 5 أو مفتاح البلد 966.' };
   } else if (code === 'YE') {
-    const cleanVal = val.replace(/[\s\-+]/g, '');
-    if (/^967\d{9}$/.test(cleanVal)) {
+    if (/^967\d{8,9}$/.test(cleanVal) || /^7\d{8}$/.test(cleanVal) || /^07\d{8}$/.test(cleanVal) || /^9665\d{8}$/.test(cleanVal)) {
       return { isValid: true };
     }
-    if (/^7\d{8}$/.test(cleanVal)) {
-      return { isValid: true };
-    }
-    if (cleanVal.length >= 7 && /^\d+$/.test(cleanVal)) {
+    if (cleanVal.length >= 7 && cleanVal.length <= 15) {
       return { isValid: true };
     }
     return { isValid: false, errorAr: 'رقم الجوال اليمني غير صحيح.' };
   }
 
-  return { isValid: true };
+  if (cleanVal.length >= 7 && cleanVal.length <= 15) {
+    return { isValid: true };
+  }
+
+  return { isValid: false, errorAr: 'رقم الجوال غير صحيح.' };
 }
 
 export function getOrgDefaultTaxRate(org: { country_code?: string | null; default_tax_rate?: number | null; is_vat_registered?: boolean | null } | null | undefined): number {

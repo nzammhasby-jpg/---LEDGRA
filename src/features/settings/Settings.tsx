@@ -8,7 +8,7 @@ import { normalizeIntegerInput } from '../../lib/formatters';
 import { organizationSettingsService } from '../../lib/organizationSettingsService';
 import { ZatcaSettingsComp } from './ZatcaSettings';
 import { useOrganizationSubscription } from '../../hooks/useOrganizationSubscription';
-import { getCountryProfile, countryProfiles } from '../../lib/countryProfiles';
+import { getCountryProfile, countryProfiles, validatePhone } from '../../lib/countryProfiles';
 import { 
   Building, 
   Users, 
@@ -115,11 +115,21 @@ export const Settings: React.FC = () => {
     setProfileError(null);
 
     try {
+      const cleanPhone = profilePhone.trim() ? profilePhone.trim() : null;
+      if (cleanPhone) {
+        const valRes = validatePhone(currentOrg?.country_code || 'SA', cleanPhone);
+        if (!valRes.isValid) {
+          setProfileError(valRes.errorAr || 'رقم الجوال غير صحيح.');
+          setProfileSaving(false);
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({
-          full_name: profileName,
-          phone: profilePhone
+          full_name: profileName.trim() || null,
+          phone: cleanPhone
         })
         .eq('id', user.id);
 

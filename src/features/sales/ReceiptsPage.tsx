@@ -225,70 +225,123 @@ export const ReceiptsPage: React.FC = () => {
     setViewState('add');
   };
 
-  const handleStartEditReceipt = useCallback((receipt: Receipt) => {
-    setEditingReceipt(receipt);
-    setCustomerId(receipt.customer_id);
-    setReceiptDate(receipt.receipt_date);
-    setAmount(String(receipt.amount));
-    setPaymentMethod(receipt.payment_method);
-    setCashAccountId(receipt.cash_account_id || '');
-    setBankAccountId(receipt.bank_account_id || '');
-    setCashBankAccountId(receipt.cash_bank_account_id || '');
-    setReference(receipt.reference || '');
-    setNotes(receipt.notes || '');
-    const allocMap: Record<string, string> = {};
-    (receipt.allocations || []).forEach(al => {
-      allocMap[al.sales_invoice_id] = String(al.allocated_amount);
-    });
-    setAllocations(allocMap);
-    setFormError(null);
-    setViewState('add');
-  }, [cashBankAccounts]);
+  const handleStartEditReceipt = useCallback(async (receiptOrId: Receipt | string) => {
+    const receiptId = typeof receiptOrId === 'string' ? receiptOrId : receiptOrId?.id;
+    if (!currentOrg?.id || !receiptId) return;
 
-  const handleCreateCorrectionCopy = useCallback(async (oldReceipt: Receipt) => {
-    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من السند رقم ${oldReceipt.receipt_number}؟`)) return;
+    setActionLoading(`edit-${receiptId}`);
+    setFormError(null);
+    setError(null);
+
+    try {
+      const fullReceipt = await salesService.getReceipt(currentOrg.id, receiptId);
+      if (!fullReceipt || !fullReceipt.id) {
+        throw new Error('المستند غير موجود');
+      }
+
+      setEditingReceipt(fullReceipt);
+      setCustomerId(fullReceipt.customer_id);
+      setReceiptDate(fullReceipt.receipt_date);
+      setAmount(String(fullReceipt.amount));
+      setPaymentMethod(fullReceipt.payment_method);
+      setCashAccountId(fullReceipt.cash_account_id || '');
+      setBankAccountId(fullReceipt.bank_account_id || '');
+      setCashBankAccountId(fullReceipt.cash_bank_account_id || '');
+      setReference(fullReceipt.reference || '');
+      setNotes(fullReceipt.notes || '');
+
+      const allocMap: Record<string, string> = {};
+      (fullReceipt.allocations || []).forEach(al => {
+        if (al.sales_invoice_id) {
+          allocMap[al.sales_invoice_id] = String(al.allocated_amount || 0);
+        }
+      });
+      setAllocations(allocMap);
+      setViewState('add');
+    } catch (err: any) {
+      console.error(err);
+      setError('تعذر تحميل تفاصيل المستند. حاول مرة أخرى.');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [currentOrg]);
+
+  const handleCreateCorrectionCopy = useCallback(async (oldReceiptOrId: Receipt | string) => {
+    const oldReceiptId = typeof oldReceiptOrId === 'string' ? oldReceiptOrId : oldReceiptOrId?.id;
+    if (!currentOrg?.id || !oldReceiptId) return;
+
+    if (!confirm(`هل أنت متأكد من إنشاء نسخة تصحيحية من هذا السند؟`)) return;
+
+    setActionLoading(`correct-${oldReceiptId}`);
     setSaveLoading(true);
     setFormError(null);
+    setError(null);
+
     try {
+      const fullOldReceipt = await salesService.getReceipt(currentOrg.id, oldReceiptId);
+      if (!fullOldReceipt || !fullOldReceipt.id) {
+        throw new Error('المستند غير موجود');
+      }
+
       const copyPayload: CreateReceiptInput = {
-        customer_id: oldReceipt.customer_id,
+        customer_id: fullOldReceipt.customer_id,
         receipt_date: new Date().toISOString().split('T')[0],
-        amount: oldReceipt.amount,
-        payment_method: oldReceipt.payment_method,
-        cash_account_id: oldReceipt.cash_account_id || undefined,
-        bank_account_id: oldReceipt.bank_account_id || undefined,
-        cash_bank_account_id: oldReceipt.cash_bank_account_id || undefined,
-        reference: oldReceipt.reference || undefined,
-        notes: `نسخة تصحيحية من السند: ${oldReceipt.receipt_number}` + (oldReceipt.notes ? `\n\n${oldReceipt.notes}` : ''),
-        allocations: (oldReceipt.allocations || []).map(al => ({
+        amount: fullOldReceipt.amount,
+        payment_method: fullOldReceipt.payment_method,
+        cash_account_id: fullOldReceipt.cash_account_id || undefined,
+        bank_account_id: fullOldReceipt.bank_account_id || undefined,
+        cash_bank_account_id: fullOldReceipt.cash_bank_account_id || undefined,
+        reference: fullOldReceipt.reference || undefined,
+        notes: `نسخة تصحيحية من السند: ${fullOldReceipt.receipt_number}` + (fullOldReceipt.notes ? `\n\n${fullOldReceipt.notes}` : ''),
+        allocations: (fullOldReceipt.allocations || []).map(al => ({
           sales_invoice_id: al.sales_invoice_id,
           allocated_amount: al.allocated_amount
         }))
       };
 
-      const newId = await salesService.createReceipt(currentOrg!.id, copyPayload);
+      const newId = await salesService.createReceipt(currentOrg.id, copyPayload);
       
-      await auditService.logAction(currentOrg!.id, profile?.id || null, 'correction_copy_created', {
+      await auditService.logAction(currentOrg.id, profile?.id || null, 'correction_copy_created', {
         source_type: 'receipt',
-        original_id: oldReceipt.id,
-        original_number: oldReceipt.receipt_number,
+        original_id: fullOldReceipt.id,
+        original_number: fullOldReceipt.receipt_number,
         new_draft_id: newId
       });
 
-      // Reload lists
-      const updatedList = await salesService.getReceipts(currentOrg!.id);
+      // Reload list
+      const updatedList = await salesService.getReceipts(currentOrg.id);
       setReceipts(updatedList);
 
-      // Open in edit mode immediately
-      const newReceipt = updatedList.find(r => r.id === newId) || await salesService.getReceipt(currentOrg!.id, newId);
-      handleStartEditReceipt(newReceipt);
+      // Open new draft receipt in edit mode after fetching full details
+      const newReceiptFull = await salesService.getReceipt(currentOrg.id, newId);
+
+      setEditingReceipt(newReceiptFull);
+      setCustomerId(newReceiptFull.customer_id);
+      setReceiptDate(newReceiptFull.receipt_date);
+      setAmount(String(newReceiptFull.amount));
+      setPaymentMethod(newReceiptFull.payment_method);
+      setCashAccountId(newReceiptFull.cash_account_id || '');
+      setBankAccountId(newReceiptFull.bank_account_id || '');
+      setCashBankAccountId(newReceiptFull.cash_bank_account_id || '');
+      setReference(newReceiptFull.reference || '');
+      setNotes(newReceiptFull.notes || '');
+
+      const allocMap: Record<string, string> = {};
+      (newReceiptFull.allocations || []).forEach(al => {
+        if (al.sales_invoice_id) {
+          allocMap[al.sales_invoice_id] = String(al.allocated_amount || 0);
+        }
+      });
+      setAllocations(allocMap);
+      setViewState('add');
     } catch (err: any) {
-      setFormError(getErrorMessage(err));
-      alert(`فشل إنشاء النسخة التصحيحية: ${getErrorMessage(err)}`);
+      console.error(err);
+      setError('تعذر تحميل تفاصيل المستند. حاول مرة أخرى.');
     } finally {
       setSaveLoading(false);
+      setActionLoading(null);
     }
-  }, [currentOrg, profile, handleStartEditReceipt]);
+  }, [currentOrg, profile]);
 
   // Submit Receipt draft
   const handleSubmitReceipt = async (e: React.FormEvent) => {
@@ -707,7 +760,8 @@ export const ReceiptsPage: React.FC = () => {
                             {rc.status === 'draft' && (
                               <button
                                 onClick={() => handleStartEditReceipt(rc)}
-                                className="p-1 px-1.5 text-purple-600 hover:bg-purple-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                disabled={actionLoading !== null}
+                                className="p-1 px-1.5 text-purple-600 hover:bg-purple-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer disabled:opacity-50"
                                 title="تعديل السند المسودة"
                               >
                                 <Edit className="w-3.5 h-3.5" />
@@ -719,7 +773,8 @@ export const ReceiptsPage: React.FC = () => {
                             {rc.status === 'approved' && (
                               <button
                                 onClick={() => handleCreateCorrectionCopy(rc)}
-                                className="p-1 px-1.5 text-amber-600 hover:bg-amber-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer"
+                                disabled={actionLoading !== null}
+                                className="p-1 px-1.5 text-amber-600 hover:bg-amber-50 rounded transition flex items-center gap-1 text-[10px] font-semibold cursor-pointer disabled:opacity-50"
                                 title="إنشاء نسخة تصحيحية من هذا السند المعتمد"
                               >
                                 <RefreshCw className="w-3.5 h-3.5" />
@@ -1203,7 +1258,8 @@ export const ReceiptsPage: React.FC = () => {
               {selectedReceipt.status === 'draft' && (
                 <button
                   onClick={() => handleStartEditReceipt(selectedReceipt)}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                  disabled={actionLoading !== null}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <Edit className="w-4 h-4" />
                   <span>تعديل المسودة</span>
@@ -1214,7 +1270,8 @@ export const ReceiptsPage: React.FC = () => {
               {selectedReceipt.status === 'approved' && (
                 <button
                   onClick={() => handleCreateCorrectionCopy(selectedReceipt)}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5"
+                  disabled={actionLoading !== null}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl cursor-pointer transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>إنشاء نسخة تصحيحية</span>
