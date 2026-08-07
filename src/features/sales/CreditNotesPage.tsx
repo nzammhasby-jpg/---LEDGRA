@@ -6,6 +6,7 @@ import { masterDataService } from '../../lib/masterDataService';
 import { SalesCreditNote, SalesInvoice, SalesInvoiceLine, Customer } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatNumberWithLatinDigits } from '../../lib/formatters';
+import { calculateReturnLine } from '../../lib/returnCalculation';
 import { 
   Plus, 
   Search, 
@@ -50,6 +51,10 @@ export const CreditNotesPage: React.FC = () => {
     originalLine: SalesInvoiceLine;
     quantityToReturn: number;
     availableQuantity: number;
+    prevApprovedReturnedQty: number;
+    prevApprovedReturnedSubtotal: number;
+    prevApprovedReturnedTax: number;
+    prevApprovedReturnedTotal: number;
     selected: boolean;
   }>>([]);
 
@@ -111,23 +116,34 @@ export const CreditNotesPage: React.FC = () => {
       
       // Calculate remaining quantities available to return for each line
       const linesWithAvailable = await Promise.all((fullInvoice.lines || []).map(async (line) => {
-        // Find total quantity already returned in APPROVED credit notes
-        let returnedQty = 0;
+        // Find total quantity & financial amounts already returned in APPROVED credit notes
+        let prevApprovedReturnedQty = 0;
+        let prevApprovedReturnedSubtotal = 0;
+        let prevApprovedReturnedTax = 0;
+        let prevApprovedReturnedTotal = 0;
+
         creditNotes.forEach(cn => {
           if (cn.status === 'approved' && cn.original_invoice_id === invoice.id) {
             cn.lines?.forEach(cnl => {
               if (cnl.original_invoice_line_id === line.id) {
-                returnedQty += Number(cnl.quantity);
+                prevApprovedReturnedQty += Number(cnl.quantity || 0);
+                prevApprovedReturnedSubtotal += Number(cnl.subtotal || 0);
+                prevApprovedReturnedTax += Number(cnl.tax_amount || 0);
+                prevApprovedReturnedTotal += Number(cnl.total_amount || 0);
               }
             });
           }
         });
 
-        const available = Number(line.quantity) - returnedQty;
+        const available = Number(line.quantity) - prevApprovedReturnedQty;
         return {
           originalLine: line,
           quantityToReturn: available > 0 ? available : 0,
           availableQuantity: available,
+          prevApprovedReturnedQty,
+          prevApprovedReturnedSubtotal,
+          prevApprovedReturnedTax,
+          prevApprovedReturnedTotal,
           selected: available > 0
         };
       }));
@@ -561,9 +577,16 @@ export const CreditNotesPage: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-200 font-sans">
                       {linesToReturn.map((line, idx) => {
-                        const estSubtotal = line.quantityToReturn * Number(line.originalLine.unit_price);
-                        const estTax = estSubtotal * (Number(line.originalLine.tax_rate) / 100);
-                        const estTotal = estSubtotal + estTax;
+                        const calculated = calculateReturnLine({
+                          originalLine: line.originalLine,
+                          returnedQuantity: line.quantityToReturn,
+                          prevApprovedReturnedQty: line.prevApprovedReturnedQty,
+                          prevApprovedReturnedSubtotal: line.prevApprovedReturnedSubtotal,
+                          prevApprovedReturnedTax: line.prevApprovedReturnedTax,
+                          prevApprovedReturnedTotal: line.prevApprovedReturnedTotal,
+                        });
+                        const estTotal = calculated.totalAmount;
+                        const hasDiscount = Number(line.originalLine.discount_amount || 0) > 0;
 
                         return (
                           <tr key={line.originalLine.id} className={`hover:bg-slate-50 ${line.selected ? 'bg-slate-50/50' : 'opacity-60'}`}>
@@ -584,6 +607,9 @@ export const CreditNotesPage: React.FC = () => {
                               {line.originalLine.item?.name || 'صنف غير محدد'}
                               {line.originalLine.description && (
                                 <span className="text-[10px] text-slate-400 block mt-0.5">{line.originalLine.description}</span>
+                              )}
+                              {hasDiscount && (
+                                <span className="text-[10px] text-amber-700 font-medium block mt-0.5">قيمة المرتجع تشمل الخصم المطبق في الفاتورة الأصلية</span>
                               )}
                             </td>
                             <td className="py-3 px-3 text-center font-mono font-semibold text-slate-500">{line.originalLine.quantity}</td>

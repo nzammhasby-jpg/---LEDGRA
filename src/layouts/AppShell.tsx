@@ -98,6 +98,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   // Highlight page title depending on router path
   const getPageTitle = () => {
+    if (location.pathname.startsWith('/sales/quotations')) {
+      return 'عروض الأسعار للعملاء';
+    }
     if (location.pathname.startsWith('/sales/invoices')) {
       return 'فواتير المبيعات';
     }
@@ -160,6 +163,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   // Sidebar Links
   const sidebarItems = [
     { name: t('sidebar.home'), path: '/', icon: Home, isSoon: false },
+    { name: 'عروض الأسعار', path: '/sales/quotations', icon: FileText, isSoon: false },
     { name: 'فواتير المبيعات', path: '/sales/invoices', icon: Tag, isSoon: false },
     { name: 'الإشعارات الدائنة', path: '/sales/credit-notes', icon: FileMinus, isSoon: false },
     { name: 'سندات القبض', path: '/sales/receipts', icon: ArrowRightLeft, isSoon: false },

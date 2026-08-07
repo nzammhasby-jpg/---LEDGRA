@@ -4,14 +4,20 @@ import { useAuth } from '../../context/AuthContext';
 import { purchaseService, CreatePurchaseBillInput } from '../../lib/purchaseService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
+import { bankingService } from '../../lib/bankingService';
 import { auditService } from '../../lib/auditService';
 import { 
   PurchaseBill, 
   Vendor, 
   Item, 
   Account, 
-  AccountingSettings 
+  AccountingSettings,
+  InvoicePaymentMethod,
+  PaymentDetails,
+  CashBankAccount
 } from '../../types';
+import { PaymentMethodSection } from '../../components/payment/PaymentMethodSection';
+import { formatPaymentDetailsSummary, validatePaymentSplit } from '../../lib/paymentMethodUtils';
 import { getErrorMessage } from '../../lib/errors';
 import { getOrgDefaultTaxRate, getCountryProfile } from '../../lib/countryProfiles';
 import { calculateTaxLine, calculateInvoiceTotals } from '../../lib/taxCalculation';
@@ -101,6 +107,13 @@ export const PurchaseBillsPage: React.FC = () => {
   const [notes, setNotes] = useState<string>('');
   const [pricesIncludeTax, setPricesIncludeTax] = useState<boolean>(false);
 
+  // Payment Method Form State
+  const [paymentMethod, setPaymentMethod] = useState<InvoicePaymentMethod>('credit');
+  const [paymentReference, setPaymentReference] = useState<string>('');
+  const [paymentNotes, setPaymentNotes] = useState<string>('');
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>({});
+  const [cashBankAccounts, setCashBankAccounts] = useState<CashBankAccount[]>([]);
+
   // Bill Lines Form State
   const [lines, setLines] = useState<Array<{
     uuid: string; // client-side key
@@ -125,12 +138,13 @@ export const PurchaseBillsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [allBills, allVendors, allItems, allAccounts, taxSettings] = await Promise.all([
+      const [allBills, allVendors, allItems, allAccounts, taxSettings, accountsCb] = await Promise.all([
         purchaseService.getPurchaseBills(currentOrg!.id, { showDeleted }),
         masterDataService.getVendors(currentOrg!.id),
         masterDataService.getItems(currentOrg!.id),
         accountingService.getAccounts(currentOrg!.id),
-        accountingService.getAccountingSettings(currentOrg!.id).catch(() => null)
+        accountingService.getAccountingSettings(currentOrg!.id).catch(() => null),
+        bankingService.listCashBankAccounts(currentOrg!.id).catch(() => [])
       ]);
 
       setBills(allBills);
@@ -138,6 +152,7 @@ export const PurchaseBillsPage: React.FC = () => {
       setItems(allItems.filter(i => i.is_active));
       setAccounts(allAccounts.filter(a => a.is_active));
       setSettings(taxSettings);
+      setCashBankAccounts(accountsCb);
     } catch (err: any) {
       setError(getErrorMessage(err));
     } finally {
@@ -175,6 +190,10 @@ export const PurchaseBillsPage: React.FC = () => {
     setDueDate(defaultDue.toISOString().split('T')[0]);
     setNotes('');
     setPricesIncludeTax(false);
+    setPaymentMethod('credit');
+    setPaymentReference('');
+    setPaymentNotes('');
+    setPaymentDetails({});
     setLines([
       {
         uuid: Math.random().toString(),
@@ -213,6 +232,10 @@ export const PurchaseBillsPage: React.FC = () => {
       setDueDate(fullBill.due_date);
       setNotes(fullBill.notes || '');
       setPricesIncludeTax(fullBill.prices_include_tax ?? false);
+      setPaymentMethod(fullBill.payment_method || 'credit');
+      setPaymentReference(fullBill.payment_reference || '');
+      setPaymentNotes(fullBill.payment_notes || '');
+      setPaymentDetails(fullBill.payment_details || {});
       setLines((fullBill.lines || []).map(l => ({
         uuid: Math.random().toString(),
         item_id: l.item_id || '',
@@ -257,6 +280,10 @@ export const PurchaseBillsPage: React.FC = () => {
         due_date: new Date().toISOString().split('T')[0],
         notes: `نسخة تصحيحية من الفاتورة: ${fullOldBill.bill_number}` + (fullOldBill.notes ? `\n\n${fullOldBill.notes}` : ''),
         prices_include_tax: fullOldBill.prices_include_tax ?? false,
+        payment_method: fullOldBill.payment_method || 'credit',
+        payment_reference: fullOldBill.payment_reference || undefined,
+        payment_notes: fullOldBill.payment_notes || undefined,
+        payment_details: fullOldBill.payment_details || {},
         lines: (fullOldBill.lines || []).map(l => ({
           item_id: l.item_id,
           description: l.description || undefined,
@@ -445,6 +472,13 @@ export const PurchaseBillsPage: React.FC = () => {
       });
     }
 
+    // Payment method split validation
+    const splitValidation = validatePaymentSplit(paymentMethod, total, paymentDetails);
+    if (!splitValidation.isValid) {
+      setFormError(splitValidation.errorMsg || 'مجموع مبالغ طرق السداد يجب أن يساوي المبلغ المدفوع.');
+      return;
+    }
+
     setSaveLoading(true);
     try {
       const input: CreatePurchaseBillInput = {
@@ -454,6 +488,10 @@ export const PurchaseBillsPage: React.FC = () => {
         due_date: dueDate,
         notes: notes || undefined,
         prices_include_tax: pricesIncludeTax,
+        payment_method: paymentMethod,
+        payment_reference: paymentReference || undefined,
+        payment_notes: paymentNotes || undefined,
+        payment_details: paymentDetails,
         lines: processedLines
       };
 
@@ -1039,45 +1077,27 @@ export const PurchaseBillsPage: React.FC = () => {
 
             </div>
           </div>
-
-          {/* Line items editor card */}
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden space-y-4 p-5">
             
-            {/* Tax Input Method Segmented Control */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                <span className="text-xs font-bold text-slate-800">طريقة إدخال السعر</span>
+            {/* Tax Input Method Fixed Checkbox */}
+            <label className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 cursor-pointer hover:bg-slate-100/50 transition">
+              <input
+                type="checkbox"
+                checked={pricesIncludeTax}
+                onChange={(e) => setPricesIncludeTax(e.target.checked)}
+                className="w-4 h-4 rounded text-brand-blue border-slate-300 focus:ring-brand-blue cursor-pointer"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-800 select-none">
+                  السعر شامل الضريبة
+                </span>
                 <span className="text-[11px] text-slate-500 font-medium">
                   {pricesIncludeTax 
-                    ? 'السعر المدخل هو المبلغ النهائي، وسيستخرج النظام منه السعر قبل الضريبة ومبلغ الضريبة.'
-                    : 'السعر المدخل قبل الضريبة، وسيضيف النظام ضريبة القيمة المضافة فوقه.'}
+                    ? 'التكلفة المدخلة للوحدة شاملاً ضريبة القيمة المضافة، وسيقوم النظام باستخراج صافي التكلفة والضريبة آلياً.'
+                    : 'التكلفة المدخلة للوحدة قبل الضريبة، وسيقوم النظام بإضافة الضريبة بناءً على النسبة المحددة.'}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 bg-slate-200/60 p-1 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setPricesIncludeTax(false)}
-                  className={`py-2 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
-                    !pricesIncludeTax
-                      ? 'bg-white text-slate-800 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  إضافة الضريبة إلى التكلفة
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPricesIncludeTax(true)}
-                  className={`py-2 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
-                    pricesIncludeTax
-                      ? 'bg-brand-blue text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  التكلفة شاملة الضريبة
-                </button>
-              </div>
-            </div>
+            </label>
 
             {/* Warning notice if organization is NOT VAT registered */}
             {currentOrg?.is_vat_registered === false && (
@@ -1107,7 +1127,7 @@ export const PurchaseBillsPage: React.FC = () => {
                     <th className="p-3 w-20 text-center">الكمية</th>
                     <th className="p-3 w-28 text-center">{pricesIncludeTax ? 'التكلفة (شامل الضريبة)' : 'التكلفة (دون ضريبة)'}</th>
                     <th className="p-3 w-24 text-center">الخصم ({currentOrg?.currency_code || ''})</th>
-                    {!pricesIncludeTax && <th className="p-3 w-20 text-center">نسبة الضريبة (%)</th>}
+                    <th className="p-3 w-20 text-center">نسبة الضريبة (%)</th>
                     <th className="p-3 w-1/4">الحساب المحاسبي للبند</th>
                     <th className="p-3 text-left pl-6">الإجمالي الفرعي</th>
                   </tr>
@@ -1196,44 +1216,42 @@ export const PurchaseBillsPage: React.FC = () => {
                           />
                         </td>
 
-                        {/* Tax rate select */}
-                        {!pricesIncludeTax && (
-                          <td className="p-3 text-center font-mono font-bold text-slate-500">
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={line.tax_rate}
-                              onChange={(event) => {
-                                const rawValue = event.target.value;
-                                const normalized = normalizeDecimalInput(toEnglishDigits(rawValue));
+                        {/* Tax rate input - ALWAYS VISIBLE */}
+                        <td className="p-3 text-center font-mono font-bold text-slate-500">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={line.tax_rate}
+                            onChange={(event) => {
+                              const rawValue = event.target.value;
+                              const normalized = normalizeDecimalInput(toEnglishDigits(rawValue));
 
-                                if (normalized === '') {
-                                  updateLineField(idx, 'tax_rate', '');
-                                  return;
-                                }
+                              if (normalized === '') {
+                                updateLineField(idx, 'tax_rate', '');
+                                return;
+                              }
 
-                                const parsedValue = Number(normalized);
+                              const parsedValue = Number(normalized);
 
-                                if (!Number.isFinite(parsedValue)) {
-                                  return;
-                                }
+                              if (!Number.isFinite(parsedValue)) {
+                                return;
+                              }
 
-                                updateLineField(
-                                  idx,
-                                  'tax_rate',
-                                  String(Math.min(100, Math.max(0, parsedValue)))
-                                );
-                              }}
-                              onBlur={() => {
-                                if ((line.tax_rate as any) === '' || line.tax_rate === undefined || line.tax_rate === null) {
-                                  updateLineField(idx, 'tax_rate', String(orgDefaultTaxRate));
-                                }
-                              }}
-                              className="w-20 p-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center font-sans"
-                              dir="ltr"
-                            />
-                          </td>
-                        )}
+                              updateLineField(
+                                idx,
+                                'tax_rate',
+                                String(Math.min(100, Math.max(0, parsedValue)))
+                              );
+                            }}
+                            onBlur={() => {
+                              if ((line.tax_rate as any) === '' || line.tax_rate === undefined || line.tax_rate === null) {
+                                updateLineField(idx, 'tax_rate', String(orgDefaultTaxRate));
+                              }
+                            }}
+                            className="w-20 p-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center font-sans"
+                            dir="ltr"
+                          />
+                        </td>
 
                         {/* Account Selector */}
                         <td className="p-3">
@@ -1286,6 +1304,21 @@ export const PurchaseBillsPage: React.FC = () => {
               </table>
             </div>
           </div>
+
+          {/* Payment Method Form Section */}
+          <PaymentMethodSection
+            paymentMethod={paymentMethod}
+            setPaymentMethod={setPaymentMethod}
+            paymentReference={paymentReference}
+            setPaymentReference={setPaymentReference}
+            paymentNotes={paymentNotes}
+            setPaymentNotes={setPaymentNotes}
+            paymentDetails={paymentDetails}
+            setPaymentDetails={setPaymentDetails}
+            totalAmount={total}
+            cashBankAccounts={cashBankAccounts}
+            isQuotation={false}
+          />
 
           {/* Notes and financial summaries layout */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

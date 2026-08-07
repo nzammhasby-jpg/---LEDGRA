@@ -17,6 +17,7 @@ import { CustomersPage } from './features/customers/CustomersPage';
 import { VendorsPage } from './features/vendors/VendorsPage';
 import { ItemsPage } from './features/items/ItemsPage';
 import { InvoicesPage } from './features/sales/InvoicesPage';
+import { QuotationsPage } from './features/sales/QuotationsPage';
 import { CreditNotesPage } from './features/sales/CreditNotesPage';
 import { ReceiptsPage } from './features/sales/ReceiptsPage';
 import { PurchaseBillsPage } from './features/purchases/PurchaseBillsPage';
@@ -40,6 +41,7 @@ import { AppErrorBoundary } from './components/AppErrorBoundary';
 
 // Official Print Feature Component Pages
 import { SalesInvoicePrint } from './features/print/SalesInvoicePrint';
+import { SalesQuotationPrint } from './features/print/SalesQuotationPrint';
 import { ReceiptPrint } from './features/print/ReceiptPrint';
 import { PurchaseBillPrint } from './features/print/PurchaseBillPrint';
 import { PaymentPrint } from './features/print/PaymentPrint';
@@ -425,6 +427,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             
             {/* Sales Invoices & Receipts Module */}
+            <Route path="/sales/quotations" element={<QuotationsPage />} />
             <Route path="/sales/invoices" element={<InvoicesPage />} />
             <Route path="/sales/credit-notes" element={<CreditNotesPage />} />
             <Route path="/sales/receipts" element={<ReceiptsPage />} />
@@ -453,6 +456,7 @@ export default function App() {
 
           {/* Protected Financial A4 Clean Print Templates (Without Sidebar/Header AppShell) */}
           <Route element={<ProtectedPrintRoute />}>
+            <Route path="/print/sales-quotation/:id" element={<SalesQuotationPrint />} />
             <Route path="/print/sales-invoice/:id" element={<SalesInvoicePrint />} />
             <Route path="/print/sales-credit-note/:id" element={<SalesCreditNotePrint />} />
             <Route path="/print/purchase-debit-note/:id" element={<PurchaseDebitNotePrint />} />

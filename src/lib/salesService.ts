@@ -6,7 +6,9 @@ import {
   Receipt, 
   PaymentMethod,
   ReceiptStatus,
-  SalesCreditNote
+  SalesCreditNote,
+  InvoicePaymentMethod,
+  PaymentDetails
 } from '../types';
 
 export interface CreateInvoiceInput {
@@ -15,6 +17,10 @@ export interface CreateInvoiceInput {
   due_date: string;
   notes?: string;
   prices_include_tax?: boolean;
+  payment_method?: InvoicePaymentMethod;
+  payment_reference?: string;
+  payment_notes?: string;
+  payment_details?: PaymentDetails;
   lines: Array<{
     item_id: string;
     description?: string;
@@ -85,6 +91,10 @@ export const salesService = {
       p_notes: input.notes || null,
       p_lines: input.lines,
       p_prices_include_tax: input.prices_include_tax ?? false,
+      p_payment_method: input.payment_method || 'credit',
+      p_payment_reference: input.payment_reference || null,
+      p_payment_notes: input.payment_notes || null,
+      p_payment_details: input.payment_details || {}
     });
 
     if (error) throw error;
@@ -101,6 +111,10 @@ export const salesService = {
       p_notes: input.notes || null,
       p_lines: input.lines,
       p_prices_include_tax: input.prices_include_tax ?? false,
+      p_payment_method: input.payment_method || 'credit',
+      p_payment_reference: input.payment_reference || null,
+      p_payment_notes: input.payment_notes || null,
+      p_payment_details: input.payment_details || {}
     });
 
     if (error) throw error;
@@ -286,7 +300,7 @@ export const salesService = {
   async getCreditNotes(orgId: string, options?: { showDeleted?: boolean; onlyDeleted?: boolean }): Promise<SalesCreditNote[]> {
     let query = supabase
       .from('sales_credit_notes')
-      .select('*, customer:customers(*), original_invoice:sales_invoices(*)')
+      .select('*, customer:customers(*), original_invoice:sales_invoices(*), lines:sales_credit_note_lines(*, item:items(*))')
       .eq('organization_id', orgId);
 
     if (options?.onlyDeleted) {

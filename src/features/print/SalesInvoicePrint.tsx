@@ -9,6 +9,7 @@ import { SalesInvoice } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatNumberWithLatinDigits, formatArabicDateWithLatinDigits } from '../../lib/formatters';
 import { getCountryProfile, getOrgDefaultTaxRate } from '../../lib/countryProfiles';
+import { formatPaymentDetailsSummary } from '../../lib/paymentMethodUtils';
 import { PrintActions } from './PrintActions';
 import { PrintHeader } from './PrintHeader';
 import { PrintFooter } from './PrintFooter';
@@ -208,13 +209,25 @@ export const SalesInvoicePrint: React.FC = () => {
 
         {/* Tax calculation note banner */}
         {isVat && (
-          <div className="mb-3 text-[11px] font-bold text-slate-600 flex items-center justify-between bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+          <div className="mb-2 text-[11px] font-bold text-slate-600 flex items-center justify-between bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
             <span>احتساب الضريبة:</span>
             <span className={invoice.prices_include_tax ? "text-emerald-700 font-extrabold" : "text-slate-700"}>
               {invoice.prices_include_tax ? 'الأسعار المدخلة شاملة ضريبة القيمة المضافة' : 'الأسعار المدخلة غير شاملة ضريبة القيمة المضافة'}
             </span>
           </div>
         )}
+
+        {/* Payment method banner */}
+        <div className="mb-3 text-[11px] font-bold text-slate-600 flex items-center justify-between bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+          <span>طريقة السداد:</span>
+          <span className="text-brand-blue font-extrabold">
+            {formatPaymentDetailsSummary(
+              invoice.payment_method || 'credit',
+              invoice.payment_reference,
+              invoice.payment_details
+            )}
+          </span>
+        </div>
 
         {/* Sales lines list table */}
         <div className="mb-8 print:mb-4 overflow-x-auto text-right font-sans" dir="rtl">

@@ -6,6 +6,7 @@ import { masterDataService } from '../../lib/masterDataService';
 import { PurchaseDebitNote, PurchaseBill, PurchaseBillLine, Vendor } from '../../types';
 import { getErrorMessage } from '../../lib/errors';
 import { formatNumberWithLatinDigits } from '../../lib/formatters';
+import { calculateReturnLine } from '../../lib/returnCalculation';
 import { 
   Plus, 
   Search, 
@@ -58,6 +59,10 @@ export const DebitNotesPage: React.FC = () => {
     originalLine: PurchaseBillLine;
     quantityToReturn: number;
     availableQuantity: number;
+    prevApprovedReturnedQty: number;
+    prevApprovedReturnedSubtotal: number;
+    prevApprovedReturnedTax: number;
+    prevApprovedReturnedTotal: number;
     selected: boolean;
   }>>([]);
 
@@ -119,23 +124,34 @@ export const DebitNotesPage: React.FC = () => {
       
       // Calculate remaining quantities available to return for each line
       const linesWithAvailable = await Promise.all((fullBill.lines || []).map(async (line) => {
-        // Find total quantity already returned in APPROVED debit notes
-        let returnedQty = 0;
+        // Find total quantity & financial amounts already returned in APPROVED debit notes
+        let prevApprovedReturnedQty = 0;
+        let prevApprovedReturnedSubtotal = 0;
+        let prevApprovedReturnedTax = 0;
+        let prevApprovedReturnedTotal = 0;
+
         debitNotes.forEach(dn => {
           if (dn.status === 'approved' && dn.original_bill_id === bill.id) {
             dn.lines?.forEach(dn_l => {
               if (dn_l.original_bill_line_id === line.id) {
-                returnedQty += Number(dn_l.quantity);
+                prevApprovedReturnedQty += Number(dn_l.quantity || 0);
+                prevApprovedReturnedSubtotal += Number(dn_l.subtotal || 0);
+                prevApprovedReturnedTax += Number(dn_l.tax_amount || 0);
+                prevApprovedReturnedTotal += Number(dn_l.total_amount || 0);
               }
             });
           }
         });
 
-        const available = Number(line.quantity) - returnedQty;
+        const available = Number(line.quantity) - prevApprovedReturnedQty;
         return {
           originalLine: line,
           quantityToReturn: available > 0 ? available : 0,
           availableQuantity: available,
+          prevApprovedReturnedQty,
+          prevApprovedReturnedSubtotal,
+          prevApprovedReturnedTax,
+          prevApprovedReturnedTotal,
           selected: available > 0
         };
       }));
@@ -597,9 +613,23 @@ export const DebitNotesPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {linesToReturn.map((line, idx) => {
-                    const currentLineSubtotal = roundPrice(line.quantityToReturn * Number(line.originalLine.unit_cost));
-                    const currentLineTax = roundPrice(currentLineSubtotal * (Number(line.originalLine.tax_rate) / 100));
-                    const currentLineTotal = roundPrice(currentLineSubtotal + currentLineTax);
+                    const calculated = calculateReturnLine({
+                      originalLine: {
+                        quantity: line.originalLine.quantity,
+                        unit_cost: line.originalLine.unit_cost,
+                        discount_amount: line.originalLine.discount_amount,
+                        tax_rate: line.originalLine.tax_rate,
+                        tax_amount: line.originalLine.tax_amount,
+                        line_total: line.originalLine.line_total,
+                      },
+                      returnedQuantity: line.quantityToReturn,
+                      prevApprovedReturnedQty: line.prevApprovedReturnedQty,
+                      prevApprovedReturnedSubtotal: line.prevApprovedReturnedSubtotal,
+                      prevApprovedReturnedTax: line.prevApprovedReturnedTax,
+                      prevApprovedReturnedTotal: line.prevApprovedReturnedTotal,
+                    });
+                    const currentLineTotal = calculated.totalAmount;
+                    const hasDiscount = Number(line.originalLine.discount_amount || 0) > 0;
 
                     return (
                       <tr key={line.originalLine.id} className={`hover:bg-slate-50/50 transition ${line.selected ? 'bg-amber-50/20' : ''}`}>
@@ -619,6 +649,9 @@ export const DebitNotesPage: React.FC = () => {
                         <td className="p-3">
                           <p className="font-bold text-slate-800">{line.originalLine.item?.name || 'بند شراء غير مخزني'}</p>
                           <p className="text-[10px] text-slate-400 font-mono">{line.originalLine.description}</p>
+                          {hasDiscount && (
+                            <p className="text-[10px] text-amber-700 font-medium mt-0.5">قيمة المرتجع تشمل الخصم المطبق في الفاتورة الأصلية</p>
+                          )}
                         </td>
                         <td className="p-3 text-center font-mono font-bold text-slate-500">{Number(line.originalLine.quantity)}</td>
                         <td className="p-3 text-center font-mono font-bold text-green-700">{line.availableQuantity}</td>
@@ -626,6 +659,7 @@ export const DebitNotesPage: React.FC = () => {
                           <input
                             type="number"
                             min="0.0001"
+                            max={line.availableQuantity}
                             step="any"
                             value={line.quantityToReturn}
                             disabled={!line.selected}
@@ -658,9 +692,22 @@ export const DebitNotesPage: React.FC = () => {
                 {formatNumberWithLatinDigits(
                   linesToReturn.reduce((sum, line) => {
                     if (!line.selected) return sum;
-                    const sub = line.quantityToReturn * Number(line.originalLine.unit_cost);
-                    const tax = sub * (Number(line.originalLine.tax_rate) / 100);
-                    return sum + sub + tax;
+                    const calculated = calculateReturnLine({
+                      originalLine: {
+                        quantity: line.originalLine.quantity,
+                        unit_cost: line.originalLine.unit_cost,
+                        discount_amount: line.originalLine.discount_amount,
+                        tax_rate: line.originalLine.tax_rate,
+                        tax_amount: line.originalLine.tax_amount,
+                        line_total: line.originalLine.line_total,
+                      },
+                      returnedQuantity: line.quantityToReturn,
+                      prevApprovedReturnedQty: line.prevApprovedReturnedQty,
+                      prevApprovedReturnedSubtotal: line.prevApprovedReturnedSubtotal,
+                      prevApprovedReturnedTax: line.prevApprovedReturnedTax,
+                      prevApprovedReturnedTotal: line.prevApprovedReturnedTotal,
+                    });
+                    return sum + calculated.totalAmount;
                   }, 0)
                 )} {selectedBill.currency}
               </p>

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { salesService, CreateInvoiceInput } from '../../lib/salesService';
 import { masterDataService } from '../../lib/masterDataService';
 import { accountingService } from '../../lib/accountingService';
+import { bankingService } from '../../lib/bankingService';
 import { zatcaService } from '../../lib/zatcaService';
 import { supabase } from '../../lib/supabase';
 import { auditService } from '../../lib/auditService';
@@ -12,8 +13,13 @@ import {
   Customer, 
   Item, 
   Account, 
-  AccountingSettings 
+  AccountingSettings,
+  InvoicePaymentMethod,
+  PaymentDetails,
+  CashBankAccount
 } from '../../types';
+import { PaymentMethodSection } from '../../components/payment/PaymentMethodSection';
+import { formatPaymentDetailsSummary, validatePaymentSplit } from '../../lib/paymentMethodUtils';
 import { getErrorMessage } from '../../lib/errors';
 import { getOrgDefaultTaxRate, getCountryProfile } from '../../lib/countryProfiles';
 import { calculateTaxLine, calculateInvoiceTotals } from '../../lib/taxCalculation';
@@ -131,6 +137,13 @@ export const InvoicesPage: React.FC = () => {
   const [notes, setNotes] = useState<string>('');
   const [pricesIncludeTax, setPricesIncludeTax] = useState<boolean>(false);
 
+  // Payment Method Form State
+  const [paymentMethod, setPaymentMethod] = useState<InvoicePaymentMethod>('credit');
+  const [paymentReference, setPaymentReference] = useState<string>('');
+  const [paymentNotes, setPaymentNotes] = useState<string>('');
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>({});
+  const [cashBankAccounts, setCashBankAccounts] = useState<CashBankAccount[]>([]);
+
   // Invoice Lines Form State
   const [lines, setLines] = useState<Array<{
     uuid: string; // client-side key
@@ -154,12 +167,13 @@ export const InvoicesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [allInvoices, allCustomers, allItems, allAccounts, taxSettings] = await Promise.all([
+      const [allInvoices, allCustomers, allItems, allAccounts, taxSettings, accountsCb] = await Promise.all([
         salesService.getSalesInvoices(currentOrg!.id, { showDeleted }),
         masterDataService.getCustomers(currentOrg!.id),
         masterDataService.getItems(currentOrg!.id),
         accountingService.getAccounts(currentOrg!.id),
-        accountingService.getAccountingSettings(currentOrg!.id).catch(() => null)
+        accountingService.getAccountingSettings(currentOrg!.id).catch(() => null),
+        bankingService.listCashBankAccounts(currentOrg!.id).catch(() => [])
       ]);
 
       setInvoices(allInvoices);
@@ -167,6 +181,7 @@ export const InvoicesPage: React.FC = () => {
       setItems(allItems.filter(i => i.is_active));
       setAccounts(allAccounts.filter(a => a.is_active));
       setSettings(taxSettings);
+      setCashBankAccounts(accountsCb);
     } catch (err: any) {
       setError(getErrorMessage(err));
     } finally {
@@ -203,6 +218,10 @@ export const InvoicesPage: React.FC = () => {
     setDueDate(defaultDue.toISOString().split('T')[0]);
     setNotes('');
     setPricesIncludeTax(false);
+    setPaymentMethod('credit');
+    setPaymentReference('');
+    setPaymentNotes('');
+    setPaymentDetails({});
     setLines([
       {
         uuid: Math.random().toString(),
@@ -217,7 +236,7 @@ export const InvoicesPage: React.FC = () => {
     ]);
     setFormError(null);
     setViewState('add');
-  }, [currentOrg]);
+  }, [currentOrg, orgDefaultTaxRate]);
 
   const handleStartEditInvoice = useCallback(async (invoiceOrId: SalesInvoice | string) => {
     const invoiceId = typeof invoiceOrId === 'string' ? invoiceOrId : invoiceOrId?.id;
@@ -239,6 +258,10 @@ export const InvoicesPage: React.FC = () => {
       setDueDate(fullInvoice.due_date);
       setNotes(fullInvoice.notes || '');
       setPricesIncludeTax(fullInvoice.prices_include_tax ?? false);
+      setPaymentMethod(fullInvoice.payment_method || 'credit');
+      setPaymentReference(fullInvoice.payment_reference || '');
+      setPaymentNotes(fullInvoice.payment_notes || '');
+      setPaymentDetails(fullInvoice.payment_details || {});
       setLines((fullInvoice.lines || []).map(l => ({
         uuid: Math.random().toString(),
         item_id: l.item_id || '',
@@ -281,6 +304,10 @@ export const InvoicesPage: React.FC = () => {
         due_date: new Date().toISOString().split('T')[0],
         notes: `نسخة تصحيحية من: ${fullOldInvoice.invoice_number}` + (fullOldInvoice.notes ? `\n\n${fullOldInvoice.notes}` : ''),
         prices_include_tax: fullOldInvoice.prices_include_tax ?? false,
+        payment_method: fullOldInvoice.payment_method || 'credit',
+        payment_reference: fullOldInvoice.payment_reference || undefined,
+        payment_notes: fullOldInvoice.payment_notes || undefined,
+        payment_details: fullOldInvoice.payment_details || {},
         lines: (fullOldInvoice.lines || []).map(l => ({
           item_id: l.item_id,
           description: l.description || undefined,
@@ -449,6 +476,14 @@ export const InvoicesPage: React.FC = () => {
       }
     }
 
+    // Payment method split validation
+    const splitValidation = validatePaymentSplit(paymentMethod, total, paymentDetails);
+    if (!splitValidation.isValid) {
+      setFormError(splitValidation.errorMsg || 'مجموع مبالغ طرق السداد يجب أن يساوي المبلغ المدفوع.');
+      setSaveLoading(false);
+      return;
+    }
+
     try {
       const invoicePayload: CreateInvoiceInput = {
         customer_id: customerId,
@@ -456,6 +491,10 @@ export const InvoicesPage: React.FC = () => {
         due_date: dueDate,
         notes: notes || undefined,
         prices_include_tax: pricesIncludeTax,
+        payment_method: paymentMethod,
+        payment_reference: paymentReference || undefined,
+        payment_notes: paymentNotes || undefined,
+        payment_details: paymentDetails,
         lines: lines.map(l => ({
           item_id: l.item_id,
           description: l.description || undefined,
@@ -1302,41 +1341,25 @@ export const InvoicesPage: React.FC = () => {
               {/* Invoice Lines Grid */}
               <div className="bg-white border border-slate-100 p-5 rounded-2xl space-y-4">
                 
-                {/* Tax Input Method Segmented Control */}
-                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                    <span className="text-xs font-bold text-slate-800">طريقة إدخال السعر</span>
+                {/* Tax Input Method Fixed Checkbox */}
+                <label className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 cursor-pointer hover:bg-slate-100/50 transition">
+                  <input
+                    type="checkbox"
+                    checked={pricesIncludeTax}
+                    onChange={(e) => setPricesIncludeTax(e.target.checked)}
+                    className="w-4 h-4 rounded text-brand-blue border-slate-300 focus:ring-brand-blue cursor-pointer"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-800 select-none">
+                      السعر شامل الضريبة
+                    </span>
                     <span className="text-[11px] text-slate-500 font-medium">
                       {pricesIncludeTax 
-                        ? 'السعر المدخل هو المبلغ النهائي، وسيستخرج النظام منه السعر قبل الضريبة ومبلغ الضريبة.'
-                        : 'السعر المدخل قبل الضريبة، وسيضيف النظام ضريبة القيمة المضافة فوقه.'}
+                        ? 'السعر المدخل للوحدة شاملاً ضريبة القيمة المضافة، وسيقوم النظام باستخراج صافي السعر والضريبة آلياً.'
+                        : 'السعر المدخل للوحدة قبل الضريبة، وسيقوم النظام بإضافة الضريبة بناءً على النسبة المحددة.'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 bg-slate-200/60 p-1 rounded-lg">
-                    <button
-                      type="button"
-                      onClick={() => setPricesIncludeTax(false)}
-                      className={`py-2 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
-                        !pricesIncludeTax
-                          ? 'bg-white text-slate-800 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      إضافة الضريبة إلى السعر
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPricesIncludeTax(true)}
-                      className={`py-2 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
-                        pricesIncludeTax
-                          ? 'bg-brand-blue text-white shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      السعر شامل الضريبة
-                    </button>
-                  </div>
-                </div>
+                </label>
 
                 {/* Warning notice if organization is NOT VAT registered */}
                 {currentOrg?.is_vat_registered === false && (
@@ -1424,8 +1447,8 @@ export const InvoicesPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Calculations Panel */}
-                        <div className={`grid grid-cols-2 ${pricesIncludeTax ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-3 pt-1 border-t border-slate-100/60 items-end`}>
+                        {/* Calculations Panel - ALWAYS 5 COLUMNS */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-1 border-t border-slate-100/60 items-end">
                           {/* Quantity */}
                           <div className="space-y-1">
                             <label className="text-[10px] font-bold text-slate-400">الكمية *</label>
@@ -1464,51 +1487,49 @@ export const InvoicesPage: React.FC = () => {
                             />
                           </div>
 
-                          {/* Tax rate */}
-                          {!pricesIncludeTax && (
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-400">نسبة الضريبة (%)</label>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={line.tax_rate}
-                                onChange={(event) => {
-                                  const rawValue = event.target.value;
-                                  const normalized = normalizeDecimalInput(rawValue);
+                          {/* Tax rate - ALWAYS VISIBLE */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400">نسبة الضريبة (%)</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={line.tax_rate}
+                              onChange={(event) => {
+                                const rawValue = event.target.value;
+                                const normalized = normalizeDecimalInput(rawValue);
 
-                                  if (normalized === '') {
-                                    handleUpdateLineField(index, 'tax_rate', '');
-                                    return;
-                                  }
+                                if (normalized === '') {
+                                  handleUpdateLineField(index, 'tax_rate', '');
+                                  return;
+                                }
 
-                                  const parsedValue = Number(normalized);
+                                const parsedValue = Number(normalized);
 
-                                  if (!Number.isFinite(parsedValue)) {
-                                    return;
-                                  }
+                                if (!Number.isFinite(parsedValue)) {
+                                  return;
+                                }
 
-                                  handleUpdateLineField(
-                                    index,
-                                    'tax_rate',
-                                    Math.min(100, Math.max(0, parsedValue))
-                                  );
-                                }}
-                                onBlur={() => {
-                                  if ((line.tax_rate as any) === '' || line.tax_rate === undefined || line.tax_rate === null) {
-                                    handleUpdateLineField(index, 'tax_rate', orgDefaultTaxRate);
-                                  }
-                                }}
-                                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
-                                dir="ltr"
-                              />
-                              <span className="text-[10px] text-slate-400 block mt-0.5">النسبة الافتراضية: {orgDefaultTaxRate}%</span>
-                            </div>
-                          )}
+                                handleUpdateLineField(
+                                  index,
+                                  'tax_rate',
+                                  Math.min(100, Math.max(0, parsedValue))
+                                );
+                              }}
+                              onBlur={() => {
+                                if ((line.tax_rate as any) === '' || line.tax_rate === undefined || line.tax_rate === null) {
+                                  handleUpdateLineField(index, 'tax_rate', orgDefaultTaxRate);
+                                }
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
+                              dir="ltr"
+                            />
+                            <span className="text-[10px] text-slate-400 block mt-0.5">الافتراضية: {orgDefaultTaxRate}%</span>
+                          </div>
 
                           {/* Actions & total */}
                           <div className="flex items-center justify-between gap-3 bg-white/70 px-2 py-1.5 rounded-lg border border-slate-150 h-8.5">
                             <div className="text-left">
-                              <span className="text-[9px] text-slate-400 block font-normal leading-none mb-0.5">الإجمالي شامل</span>
+                              <span className="text-[9px] text-slate-400 block font-normal leading-none mb-0.5">الإجمالي</span>
                               <span className="text-xs font-extrabold text-slate-700 font-mono tracking-tight" style={{ direction: 'ltr' }}>
                                 {formatNumberWithLatinDigits(lineRes.lineTotal)}
                               </span>
@@ -1531,6 +1552,21 @@ export const InvoicesPage: React.FC = () => {
                 </div>
 
               </div>
+
+              {/* Payment Method Form Section */}
+              <PaymentMethodSection
+                paymentMethod={paymentMethod}
+                setPaymentMethod={setPaymentMethod}
+                paymentReference={paymentReference}
+                setPaymentReference={setPaymentReference}
+                paymentNotes={paymentNotes}
+                setPaymentNotes={setPaymentNotes}
+                paymentDetails={paymentDetails}
+                setPaymentDetails={setPaymentDetails}
+                totalAmount={total}
+                cashBankAccounts={cashBankAccounts}
+                isQuotation={false}
+              />
 
             </div>
 

@@ -338,10 +338,37 @@ export interface Item {
 }
 
 // ==========================================
-// Phase 5: Sales Invoices and Receipts (المبيعات والمتحصلات)
+// Phase 5: Sales Invoices, Quotations and Receipts (المبيعات والعروض والمتحصلات)
 // ==========================================
 export type SalesInvoiceStatus = 'draft' | 'approved' | 'cancelled';
 export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid';
+
+export type InvoicePaymentMethod = 
+  | 'cash' 
+  | 'credit' 
+  | 'card' 
+  | 'cheque' 
+  | 'bank_transfer' 
+  | 'cash_and_card' 
+  | 'bank_transfer_and_cash';
+
+export interface ChequeDetails {
+  cheque_number?: string;
+  cheque_bank_name?: string;
+  cheque_date?: string;
+  cheque_status?: 'received' | 'under_collection' | 'cleared' | 'bounced';
+}
+
+export interface PaymentDetails extends ChequeDetails {
+  cash_account_id?: string;
+  bank_account_id?: string;
+  card_account_id?: string;
+  cash_amount?: number;
+  card_amount?: number;
+  bank_transfer_amount?: number;
+  card_reference?: string;
+  bank_reference?: string;
+}
 
 export interface SalesInvoice {
   id: string;
@@ -353,6 +380,11 @@ export interface SalesInvoice {
   status: SalesInvoiceStatus;
   payment_status: PaymentStatus;
   prices_include_tax: boolean;
+  payment_method: InvoicePaymentMethod;
+  payment_reference: string | null;
+  payment_notes: string | null;
+  payment_details: PaymentDetails;
+  source_quotation_id?: string | null;
   subtotal: number;
   discount_total: number;
   tax_total: number;
@@ -568,6 +600,10 @@ export interface PurchaseBill {
   status: PurchaseBillStatus;
   payment_status: PaymentStatus;
   prices_include_tax: boolean;
+  payment_method: InvoicePaymentMethod;
+  payment_reference: string | null;
+  payment_notes: string | null;
+  payment_details: PaymentDetails;
   subtotal: number;
   discount_total: number;
   tax_total: number;
@@ -592,6 +628,63 @@ export interface PurchaseBill {
   restored_by?: string | null;
   vendor?: Vendor;
   lines?: PurchaseBillLine[];
+}
+
+// ==========================================
+// Sales Quotations (عروض الأسعار)
+// ==========================================
+export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted' | 'cancelled';
+
+export interface SalesQuotation {
+  id: string;
+  organization_id: string;
+  quotation_number: string;
+  customer_id: string;
+  quotation_date: string;
+  valid_until: string | null;
+  status: QuotationStatus;
+  prices_include_tax: boolean;
+  payment_method: InvoicePaymentMethod;
+  payment_reference: string | null;
+  payment_notes: string | null;
+  payment_details: PaymentDetails;
+  subtotal: number;
+  discount_total: number;
+  tax_total: number;
+  total: number;
+  currency: string;
+  notes: string | null;
+  terms_and_conditions: string | null;
+  converted_invoice_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_reason?: string | null;
+  restored_at?: string | null;
+  restored_by?: string | null;
+  customer?: Customer;
+  lines?: SalesQuotationLine[];
+}
+
+export interface SalesQuotationLine {
+  id: string;
+  organization_id: string;
+  sales_quotation_id: string;
+  item_id: string | null;
+  line_number: number;
+  description: string | null;
+  quantity: number;
+  unit_price: number;
+  entered_unit_price?: number | null;
+  discount_amount: number;
+  tax_rate: number;
+  tax_amount: number;
+  line_total: number;
+  revenue_account_id?: string | null;
+  created_at: string;
+  item?: Item;
 }
 
 export interface PurchaseBillLine {
