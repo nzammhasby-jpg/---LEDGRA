@@ -1518,7 +1518,6 @@ export const InvoicesPage: React.FC = () => {
                               className="w-full px-2.5 py-1.5 bg-white border border-slate-200 focus:outline-none focus:border-brand-blue rounded-lg text-xs font-bold text-slate-700 text-left font-sans"
                               dir="ltr"
                             />
-                            <span className="text-[10px] text-slate-400 block mt-0.5">الافتراضية: {orgDefaultTaxRate}%</span>
                           </div>
 
                           {/* Actions & total */}
