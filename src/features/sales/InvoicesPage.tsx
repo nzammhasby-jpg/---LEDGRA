@@ -380,8 +380,9 @@ export const InvoicesPage: React.FC = () => {
       updated[index].description = item.description || item.name || '';
       updated[index].unit_price = String(item.selling_price || 0);
       
-      const itemTaxRate = item.tax_rate !== undefined && item.tax_rate !== null && String(item.tax_rate).trim() !== '' ? Number(item.tax_rate) : NaN;
-      updated[index].tax_rate = Number.isFinite(itemTaxRate) ? itemTaxRate : orgDefaultTaxRate;
+      const parsedTaxRate = item.tax_rate !== undefined && item.tax_rate !== null ? Number(item.tax_rate) : NaN;
+      const itemTaxRate = (Number.isFinite(parsedTaxRate) && parsedTaxRate > 0) ? parsedTaxRate : orgDefaultTaxRate;
+      updated[index].tax_rate = itemTaxRate;
 
       // Determine correct revenue account
       let revId = '';
@@ -1341,36 +1342,22 @@ export const InvoicesPage: React.FC = () => {
               {/* Invoice Lines Grid */}
               <div className="bg-white border border-slate-100 p-5 rounded-2xl space-y-4">
                 
-                {/* Tax Input Method Fixed Checkbox */}
-                <label className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 cursor-pointer hover:bg-slate-100/50 transition">
-                  <input
-                    type="checkbox"
-                    checked={pricesIncludeTax}
-                    onChange={(e) => setPricesIncludeTax(e.target.checked)}
-                    className="w-4 h-4 rounded text-brand-blue border-slate-300 focus:ring-brand-blue cursor-pointer"
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800 select-none">
-                      السعر شامل الضريبة
-                    </span>
-                    <span className="text-[11px] text-slate-500 font-medium">
-                      {pricesIncludeTax 
-                        ? 'السعر المدخل للوحدة شاملاً ضريبة القيمة المضافة، وسيقوم النظام باستخراج صافي السعر والضريبة آلياً.'
-                        : 'السعر المدخل للوحدة قبل الضريبة، وسيقوم النظام بإضافة الضريبة بناءً على النسبة المحددة.'}
-                    </span>
+                {/* Section Header with simplified inline tax checkbox */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">الأصناف المبيعة والخدمات</h3>
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none bg-slate-50 hover:bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200 transition">
+                      <input
+                        type="checkbox"
+                        checked={pricesIncludeTax}
+                        onChange={(e) => setPricesIncludeTax(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-slate-700">
+                        السعر شامل الضريبة
+                      </span>
+                    </label>
                   </div>
-                </label>
-
-                {/* Warning notice if organization is NOT VAT registered */}
-                {currentOrg?.is_vat_registered === false && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. راجع إعدادات المنشأة والضريبة قبل اعتماد فاتورة ضريبية.</span>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between border-b border-slate-50 pb-2">
-                  <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">الأصناف المبيعة والخدمات</h3>
                   <button
                     type="button"
                     onClick={addLineRow}
@@ -1380,6 +1367,14 @@ export const InvoicesPage: React.FC = () => {
                     <span>إضافة بند جديد</span>
                   </button>
                 </div>
+
+                {/* Warning notice if organization is NOT VAT registered */}
+                {currentOrg?.is_vat_registered === false && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. راجع إعدادات المنشأة والضريبة قبل اعتماد فاتورة ضريبية.</span>
+                  </div>
+                )}
 
                 {/* Lines Rows */}
                 <div className="space-y-3.5">

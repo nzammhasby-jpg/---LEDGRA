@@ -199,13 +199,16 @@ export const QuotationsPage: React.FC = () => {
     const matchedItem = items.find(i => i.id === itemId);
     const defaultRevenueAcc = accounts.find(a => a.classification === 'revenue' && a.allow_direct_posting)?.id || '';
 
+    const parsedTaxRate = matchedItem?.tax_rate !== undefined && matchedItem?.tax_rate !== null ? Number(matchedItem.tax_rate) : NaN;
+    const itemTaxRate = (Number.isFinite(parsedTaxRate) && parsedTaxRate > 0) ? parsedTaxRate : orgDefaultTaxRate;
+
     const newLines = [...lines];
     newLines[index] = {
       ...newLines[index],
       item_id: itemId,
       description: matchedItem ? matchedItem.name : newLines[index].description,
       unit_price: matchedItem ? String(matchedItem.selling_price || 0) : newLines[index].unit_price,
-      tax_rate: matchedItem?.tax_rate ?? orgDefaultTaxRate,
+      tax_rate: itemTaxRate,
       revenue_account_id: matchedItem?.sales_account_id || matchedItem?.service_revenue_account_id || defaultRevenueAcc
     };
     setLines(newLines);
@@ -709,28 +712,22 @@ export const QuotationsPage: React.FC = () => {
           {/* Line Items Card */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
             
-            {/* Tax Inclusive Toggle */}
-            <label className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 cursor-pointer hover:bg-slate-100/50 transition">
-              <input
-                type="checkbox"
-                checked={pricesIncludeTax}
-                onChange={(e) => setPricesIncludeTax(e.target.checked)}
-                className="w-4 h-4 rounded text-brand-blue border-slate-300 focus:ring-brand-blue cursor-pointer"
-              />
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-800 select-none">
-                  السعر شامل الضريبة
-                </span>
-                <span className="text-[11px] text-slate-500 font-medium">
-                  {pricesIncludeTax 
-                    ? 'السعر المدخل للوحدة شاملاً ضريبة القيمة المضافة، وسيقوم النظام باستخراج صافي السعر والضريبة آلياً.'
-                    : 'السعر المدخل للوحدة قبل الضريبة، وسيقوم النظام بإضافة الضريبة بناءً على النسبة المحددة.'}
-                </span>
+            {/* Header with simplified inline tax checkbox */}
+            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-slate-700">بنود عرض السعر</span>
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none bg-white hover:bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200 transition">
+                  <input
+                    type="checkbox"
+                    checked={pricesIncludeTax}
+                    onChange={(e) => setPricesIncludeTax(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-slate-700">
+                    السعر شامل الضريبة
+                  </span>
+                </label>
               </div>
-            </label>
-
-            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">بنود عرض السعر</span>
               <button
                 type="button"
                 onClick={addLineRow}

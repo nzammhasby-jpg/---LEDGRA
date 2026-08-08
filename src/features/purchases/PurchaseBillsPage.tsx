@@ -350,8 +350,9 @@ export const PurchaseBillsPage: React.FC = () => {
       updated[index].description = item.description || item.name || '';
       updated[index].unit_cost = String(item.purchase_price || 0);
       
-      const itemTaxRate = item.tax_rate !== undefined && item.tax_rate !== null && String(item.tax_rate).trim() !== '' ? Number(item.tax_rate) : NaN;
-      updated[index].tax_rate = Number.isFinite(itemTaxRate) ? itemTaxRate : orgDefaultTaxRate;
+      const parsedTaxRate = item.tax_rate !== undefined && item.tax_rate !== null ? Number(item.tax_rate) : NaN;
+      const itemTaxRate = (Number.isFinite(parsedTaxRate) && parsedTaxRate > 0) ? parsedTaxRate : orgDefaultTaxRate;
+      updated[index].tax_rate = itemTaxRate;
 
       if (item.is_stockable) {
         updated[index].inventory_account_id = item.inventory_account_id || settings?.default_inventory_account_id || '';
@@ -1079,36 +1080,22 @@ export const PurchaseBillsPage: React.FC = () => {
           </div>
           <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden space-y-4 p-5">
             
-            {/* Tax Input Method Fixed Checkbox */}
-            <label className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 cursor-pointer hover:bg-slate-100/50 transition">
-              <input
-                type="checkbox"
-                checked={pricesIncludeTax}
-                onChange={(e) => setPricesIncludeTax(e.target.checked)}
-                className="w-4 h-4 rounded text-brand-blue border-slate-300 focus:ring-brand-blue cursor-pointer"
-              />
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-800 select-none">
-                  السعر شامل الضريبة
-                </span>
-                <span className="text-[11px] text-slate-500 font-medium">
-                  {pricesIncludeTax 
-                    ? 'التكلفة المدخلة للوحدة شاملاً ضريبة القيمة المضافة، وسيقوم النظام باستخراج صافي التكلفة والضريبة آلياً.'
-                    : 'التكلفة المدخلة للوحدة قبل الضريبة، وسيقوم النظام بإضافة الضريبة بناءً على النسبة المحددة.'}
-                </span>
+            {/* Section Header with simplified inline tax checkbox */}
+            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-slate-700">بنود التكاليف والمشتريات</span>
+                <label className="inline-flex items-center gap-2 cursor-pointer select-none bg-white hover:bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200 transition">
+                  <input
+                    type="checkbox"
+                    checked={pricesIncludeTax}
+                    onChange={(e) => setPricesIncludeTax(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-slate-700">
+                    السعر شامل الضريبة
+                  </span>
+                </label>
               </div>
-            </label>
-
-            {/* Warning notice if organization is NOT VAT registered */}
-            {currentOrg?.is_vat_registered === false && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. راجع إعدادات المنشأة والضريبة قبل اعتماد فاتورة ضريبية.</span>
-              </div>
-            )}
-
-            <div className="p-2 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">بنود التكاليف والمشتريات</span>
               <button
                 type="button"
                 onClick={addLineRow}
@@ -1117,6 +1104,14 @@ export const PurchaseBillsPage: React.FC = () => {
                 <Plus className="w-3.5 h-3.5 text-slate-500" /> إضافة بند
               </button>
             </div>
+
+            {/* Warning notice if organization is NOT VAT registered */}
+            {currentOrg?.is_vat_registered === false && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>هذه المنشأة محددة حاليًا كغير مسجلة في ضريبة القيمة المضافة. راجع إعدادات المنشأة والضريبة قبل اعتماد فاتورة ضريبية.</span>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-right border-collapse text-xs">
