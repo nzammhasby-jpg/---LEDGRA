@@ -622,7 +622,7 @@ export const platformService = {
     sortOrder: number;
   }): Promise<void> {
     const { error } = await supabase.rpc('platform_update_subscription_plan', {
-      p_plan_id: planId,
+      p_id: planId,
       p_code: params.code,
       p_name_ar: params.nameAr,
       p_name_en: params.nameEn,
@@ -653,7 +653,7 @@ export const platformService = {
    */
   async archivePlan(planId: string): Promise<void> {
     const { error } = await supabase.rpc('platform_archive_subscription_plan', {
-      p_plan_id: planId
+      p_id: planId
     });
     if (error) {
       throw error;
@@ -665,7 +665,7 @@ export const platformService = {
    */
   async restorePlan(planId: string): Promise<void> {
     const { error } = await supabase.rpc('platform_restore_subscription_plan', {
-      p_plan_id: planId
+      p_id: planId
     });
     if (error) {
       throw error;

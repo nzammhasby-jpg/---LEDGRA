@@ -337,5 +337,33 @@ export const accountingService = {
 
     if (error) throw error;
     return data;
+  },
+
+  // ==========================================
+  // TRASH USER PROFILES (SECURE MULTI-TENANT)
+  // ==========================================
+  async getTrashUserProfiles(orgId: string, userIds: string[]): Promise<Record<string, { full_name: string }>> {
+    if (!orgId || !userIds || userIds.length === 0) return {};
+
+    const { data, error } = await supabase.rpc('get_organization_trash_user_profiles', {
+      p_organization_id: orgId,
+      p_user_ids: userIds
+    });
+
+    if (error) {
+      console.error('Error fetching trash user profiles via secure RPC:', error);
+      return {};
+    }
+
+    const profileMap: Record<string, { full_name: string }> = {};
+    if (data && Array.isArray(data)) {
+      data.forEach((p: { id: string; full_name?: string }) => {
+        if (p.id) {
+          profileMap[p.id] = { full_name: p.full_name?.trim() || 'مستخدم النظام' };
+        }
+      });
+    }
+
+    return profileMap;
   }
 };

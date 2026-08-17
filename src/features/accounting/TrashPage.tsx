@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { salesService } from '../../lib/salesService';
 import { purchaseService } from '../../lib/purchaseService';
+import { accountingService } from '../../lib/accountingService';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
 import { 
   Trash2, 
   RotateCcw, 
@@ -37,7 +37,7 @@ interface TrashDocument {
 export const TrashPage: React.FC = () => {
   const { currentOrg, roleInCurrentOrg } = useAuth();
   const [documents, setDocuments] = useState<TrashDocument[]>([]);
-  const [profiles, setProfiles] = useState<Record<string, { full_name?: string; email: string }>>({});
+  const [profiles, setProfiles] = useState<Record<string, { full_name: string }>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -232,21 +232,11 @@ export const TrashPage: React.FC = () => {
       combined.sort((a, b) => new Date(b.deleted_at).getTime() - new Date(a.deleted_at).getTime());
       setDocuments(combined);
 
-      // Collect unique deleted_by UUIDs to fetch profile details
+      // Collect unique deleted_by UUIDs to fetch profile details securely for this organization
       const userIds = Array.from(new Set(combined.map(d => d.deleted_by).filter(Boolean)));
       if (userIds.length > 0) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', userIds);
-
-        if (profileData) {
-          const profileMap: Record<string, { full_name?: string; email: string }> = {};
-          profileData.forEach(p => {
-            profileMap[p.id] = { full_name: p.full_name, email: p.email };
-          });
-          setProfiles(profileMap);
-        }
+        const profileMap = await accountingService.getTrashUserProfiles(currentOrg.id, userIds);
+        setProfiles(profileMap);
       }
     } catch (err: any) {
       console.error('Error fetching trash documents:', err);
@@ -450,9 +440,7 @@ export const TrashPage: React.FC = () => {
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                 {filteredDocuments.map(doc => {
                   const deletedByUser = profiles[doc.deleted_by];
-                  const deleterText = deletedByUser 
-                    ? (deletedByUser.full_name || deletedByUser.email) 
-                    : 'مستخدم النظام';
+                  const deleterText = deletedByUser?.full_name?.trim() || 'مستخدم النظام';
 
                   return (
                     <tr key={doc.id} className="hover:bg-slate-50/50 transition">
