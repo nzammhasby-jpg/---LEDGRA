@@ -115,12 +115,7 @@ export const TaxReportPage: React.FC = () => {
         setError('تنبيه: لم يتم ضبط الحسابات الافتراضية للضرائب في إعدادات المنشأة المحاسبية.');
       }
     } catch (err) {
-      const errMsg = getErrorMessage(err);
-      if (errMsg.includes('permission') || errMsg.includes('غير مصرح')) {
-        setError('ليس لديك صلاحية لعرض هذا التقرير الضريبي الحساس.');
-      } else {
-        setError('تعذر تحميل التقرير الضريبي للضريبة المضافة. الرجاء التحقق من الصلاحيات.');
-      }
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

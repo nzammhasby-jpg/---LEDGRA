@@ -165,12 +165,7 @@ export const LedgerReportPage: React.FC = () => {
       );
       setReportData(data);
     } catch (err) {
-      const errMsg = getErrorMessage(err);
-      if (errMsg.includes('permission') || errMsg.includes('غير مصرح')) {
-        setError('ليس لديك صلاحية لعرض هذا التقرير المالي الحساس.');
-      } else {
-        setError(errMsg);
-      }
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

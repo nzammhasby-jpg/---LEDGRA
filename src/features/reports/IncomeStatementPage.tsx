@@ -238,12 +238,7 @@ export const IncomeStatementPage: React.FC = () => {
         setCompData(cData);
       }
     } catch (err) {
-      const errMsg = getErrorMessage(err);
-      if (errMsg.includes('permission') || errMsg.includes('غير مصرح')) {
-        setError('ليس لديك صلاحية لعرض هذا التقرير المالي الحساس.');
-      } else {
-        setError('تعذر تحميل تقرير قائمة الدخل المتقدم. الرجاء التحقق من المدخلات.');
-      }
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
