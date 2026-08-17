@@ -1525,6 +1525,8 @@ GRANT EXECUTE ON FUNCTION public.get_vendor_statement(uuid, uuid, date, date) TO
 
 
 -- 9. Customer Aging Report RPC (تقرير أعمار ذمم العملاء)
+DROP FUNCTION IF EXISTS public.get_customer_aging_report(uuid, date);
+
 CREATE OR REPLACE FUNCTION public.get_customer_aging_report(
     p_organization_id uuid,
     p_as_of_date date DEFAULT current_date
@@ -1667,6 +1669,8 @@ GRANT EXECUTE ON FUNCTION public.get_customer_aging_report(uuid, date) TO authen
 
 
 -- 10. Vendor Aging Report RPC (تقرير أعمار ذمم الموردين)
+DROP FUNCTION IF EXISTS public.get_vendor_aging_report(uuid, date);
+
 CREATE OR REPLACE FUNCTION public.get_vendor_aging_report(
     p_organization_id uuid,
     p_as_of_date date DEFAULT current_date
@@ -1812,55 +1816,48 @@ GRANT EXECUTE ON FUNCTION public.get_vendor_aging_report(uuid, date) TO authenti
 CREATE OR REPLACE FUNCTION public.get_inventory_report(
   p_org_id uuid
 )
-RETURNS TABLE (
-  item_id uuid,
-  item_code text,
-  item_name_ar text,
-  item_name_en text,
-  unit text,
-  current_quantity numeric,
-  average_cost numeric,
-  total_valuation numeric,
-  inventory_account_id uuid,
-  inventory_account_name text,
-  cogs_account_id uuid,
-  cogs_account_name text
-)
+RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+    v_report jsonb;
 BEGIN
     -- Auth check
     IF auth.uid() IS NULL THEN
         RAISE EXCEPTION 'غير مصرح: يجب تسجيل الدخول أولاً.';
     END IF;
 
-    IF NOT public.can_view_financial_reports(p_org_id) THEN
-        RAISE EXCEPTION 'غير مصرح: هذه التقارير المالية متاحة للمالك والمدير والمحاسب والمستعرض فقط.';
+    IF NOT (public.is_org_member(p_org_id) OR public.can_view_financial_reports(p_org_id)) THEN
+        RAISE EXCEPTION 'غير مصرح: هذه البيانات متاحة لأعضاء المنشأة فقط.';
     END IF;
 
-    RETURN QUERY
-    SELECT 
-        i.id AS item_id,
-        i.code AS item_code,
-        i.name_ar AS item_name_ar,
-        i.name_en AS item_name_en,
-        i.unit,
-        i.current_stock AS current_quantity,
-        i.average_cost,
-        (i.current_stock * i.average_cost) AS total_valuation,
-        i.inventory_account_id,
-        ia.name_ar AS inventory_account_name,
-        i.cogs_account_id,
-        ca.name_ar AS cogs_account_name
+    -- Retrieve active inventory valuation details from items and balances
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+        'item_id', i.id,
+        'item_code', i.code,
+        'item_name_ar', i.name,
+        'item_name_en', NULL,
+        'quantity_on_hand', COALESCE(b.quantity_on_hand, 0.00),
+        'average_cost', CASE WHEN public.can_view_financial_reports(p_org_id) THEN COALESCE(b.average_cost, 0.00) ELSE 0.00 END,
+        'inventory_value', CASE WHEN public.can_view_financial_reports(p_org_id) THEN COALESCE(b.inventory_value, 0.00) ELSE 0.00 END,
+        'inventory_account_code', acc_inv.code,
+        'inventory_account_name', acc_inv.name_ar,
+        'cogs_account_code', acc_cogs.code,
+        'cogs_account_name', acc_cogs.name_ar,
+        'last_movement_at', COALESCE(b.last_movement_at, i.created_at)
+    ) ORDER BY i.code ASC), '[]'::jsonb)
+    INTO v_report
     FROM public.items i
-    LEFT JOIN public.accounts ia ON i.inventory_account_id = ia.id
-    LEFT JOIN public.accounts ca ON i.cogs_account_id = ca.id
+    LEFT JOIN public.inventory_balances b ON b.item_id = i.id AND b.organization_id = i.organization_id
+    LEFT JOIN public.accounts acc_inv ON i.inventory_account_id = acc_inv.id AND i.organization_id = acc_inv.organization_id
+    LEFT JOIN public.accounts acc_cogs ON i.cogs_account_id = acc_cogs.id AND i.organization_id = acc_cogs.organization_id
     WHERE i.organization_id = p_org_id
-      AND i.type = 'product'
-      AND i.deleted_at IS NULL
-    ORDER BY i.code ASC;
+      AND (i.item_type = 'product' OR i.is_stockable = true)
+      AND i.is_active = true;
+
+    RETURN v_report;
 END;
 $$;
 

@@ -214,11 +214,25 @@ describe('Financial Reports RPC Contract & Error Handling Tests', () => {
       });
     });
 
-    it('get_inventory_report passes p_org_id', async () => {
+    it('get_inventory_report passes p_org_id and returns rows matching InventoryReportRow interface', async () => {
       const mockRpc = vi.mocked(supabase.rpc);
-      mockRpc.mockResolvedValueOnce({ data: [], error: null } as any);
+      const mockRow = {
+        item_id: 'item-1',
+        item_code: 'ITM-001',
+        item_name_ar: 'منتج تجريبي',
+        item_name_en: null,
+        quantity_on_hand: 50,
+        average_cost: 100.5,
+        inventory_value: 5025,
+        inventory_account_code: '110501',
+        inventory_account_name: 'مخزون بضاعة',
+        cogs_account_code: '510101',
+        cogs_account_name: 'تكلفة مبيعات بضاعة',
+        last_movement_at: '2026-08-17T12:00:00Z'
+      };
+      mockRpc.mockResolvedValueOnce({ data: [mockRow], error: null } as any);
 
-      await reportsService.getInventoryReport(mockOrgId);
+      const rows = await reportsService.getInventoryReport(mockOrgId);
 
       expect(mockRpc).toHaveBeenCalledTimes(1);
       const [rpcName, payload] = mockRpc.mock.calls[0];
@@ -227,6 +241,10 @@ describe('Financial Reports RPC Contract & Error Handling Tests', () => {
       expect(payload).toEqual({
         p_org_id: mockOrgId
       });
+      expect(rows).toEqual([mockRow]);
+      expect(rows[0].quantity_on_hand).toBe(50);
+      expect(rows[0].inventory_value).toBe(5025);
+      expect(rows[0].inventory_account_code).toBe('110501');
     });
   });
 
