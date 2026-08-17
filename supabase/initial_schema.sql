@@ -30,11 +30,16 @@ CREATE TABLE IF NOT EXISTS public.organizations (
     city text,
     phone text,
     email text,
+    website text,
+    address_line text,
+    country text DEFAULT 'المملكة العربية السعودية',
+    postal_code text,
     logo_url text,
     legal_type text,
     cr_number text,
     vat_number text,
     is_vat_registered boolean DEFAULT false NOT NULL,
+    default_tax_rate numeric DEFAULT 15.0 NOT NULL,
     fiscal_year_start date,
     currency_code text DEFAULT 'SAR' NOT NULL,
     primary_language text DEFAULT 'ar' NOT NULL,
@@ -45,20 +50,33 @@ CREATE TABLE IF NOT EXISTS public.organizations (
     system_start_date date,
     accounting_mode text DEFAULT 'pro',
     starting_balances_later boolean DEFAULT true,
+    print_primary_color text DEFAULT '#111827',
+    print_footer_text text,
+    default_invoice_note text,
+    default_receipt_note text,
+    default_payment_note text,
+    show_logo_on_print boolean DEFAULT true NOT NULL,
+    show_tax_number_on_print boolean DEFAULT true NOT NULL,
+    show_commercial_registration_on_print boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
 
     -- Checks Constraints
-    CONSTRAINT onboarding_step_check CHECK (onboarding_step BETWEEN 1 AND 3),
+    CONSTRAINT onboarding_step_check CHECK (onboarding_step BETWEEN 1 AND 4),
     CONSTRAINT accounting_mode_check CHECK (accounting_mode IN ('simple', 'pro')),
-    CONSTRAINT cr_check CHECK (cr_number IS NULL OR cr_number ~ '^[0-9]{10}$'),
+    CONSTRAINT cr_check CHECK (
+        cr_number IS NULL OR 
+        country_code != 'SA' OR 
+        cr_number ~ '^[0-9]{10}$'
+    ),
     CONSTRAINT vat_check CHECK (
         is_vat_registered = false OR 
+        country_code != 'SA' OR 
         (is_vat_registered = true AND vat_number IS NOT NULL AND vat_number ~ '^3[0-9]{13}3$')
     ),
     CONSTRAINT legal_type_check CHECK (legal_type IS NULL OR legal_type IN ('individual', 'llc', 'joint', 'branch')),
-    CONSTRAINT country_code_check CHECK (country_code = 'SA'),
-    CONSTRAINT currency_code_check CHECK (currency_code = 'SAR'),
+    CONSTRAINT country_code_check CHECK (country_code IN ('SA', 'YE')),
+    CONSTRAINT currency_code_check CHECK (currency_code IN ('SAR', 'YER', 'USD')),
     CONSTRAINT primary_language_check CHECK (primary_language IN ('ar', 'en'))
 );
 
@@ -68,6 +86,7 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     organization_id uuid REFERENCES public.organizations(id) ON DELETE CASCADE NOT NULL,
     profile_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
     role text NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
 
     -- Constraints
@@ -303,7 +322,9 @@ CREATE OR REPLACE FUNCTION public.create_organization_with_owner(
     p_accounting_mode text,
     p_starting_balances_later boolean,
     p_onboarding_completed boolean,
-    p_onboarding_step integer
+    p_onboarding_step integer,
+    p_country_code text DEFAULT 'SA',
+    p_currency_code text DEFAULT NULL
 )
 RETURNS uuid
 LANGUAGE plpgsql
@@ -313,11 +334,38 @@ AS $$
 DECLARE
     v_user_id uuid;
     v_org_id uuid;
+    v_country_code text;
+    v_currency_code text;
+    v_default_tax_rate numeric;
 BEGIN
     -- Match auth.uid()
     v_user_id := auth.uid();
     IF v_user_id IS NULL THEN
         RAISE EXCEPTION 'المستخدم مجهول الهوية أو غير قادر على إتمام العملية.';
+    END IF;
+
+    -- Determine country and currency safely
+    v_country_code := COALESCE(p_country_code, 'SA');
+    
+    IF v_country_code = 'SA' THEN
+        IF p_currency_code IS NOT NULL AND p_currency_code != 'SAR' THEN
+            RAISE EXCEPTION 'العملة غير متوافقة مع الدولة السعودية في هذه المرحلة.';
+        END IF;
+        v_currency_code := 'SAR';
+        v_default_tax_rate := 15.0;
+    ELSIF v_country_code = 'YE' THEN
+        IF p_currency_code IS NOT NULL AND p_currency_code != 'YER' THEN
+            RAISE EXCEPTION 'العملة غير متوافقة مع الدولة اليمنية في هذه المرحلة. سيتم دعم العملات المتعددة لاحقًا.';
+        END IF;
+        v_currency_code := 'YER';
+        v_default_tax_rate := 0.0;
+    ELSE
+        RAISE EXCEPTION 'الدولة المحددة غير مدعومة حالياً: %', v_country_code;
+    END IF;
+
+    -- Check if requested currency is within supported options (database checks)
+    IF v_currency_code NOT IN ('SAR', 'YER', 'USD') THEN
+        RAISE EXCEPTION 'العملة المحددة غير مدعومة: %', v_currency_code;
     END IF;
 
     -- Create Organization
@@ -333,6 +381,7 @@ BEGIN
         cr_number,
         vat_number,
         is_vat_registered,
+        default_tax_rate,
         fiscal_year_start,
         currency_code,
         primary_language,
@@ -347,7 +396,7 @@ BEGIN
         p_name_ar,
         COALESCE(p_name_en, ''),
         p_activity_type,
-        'SA',
+        v_country_code,
         p_city,
         p_phone,
         p_email,
@@ -355,8 +404,9 @@ BEGIN
         NULLIF(p_cr_number, ''),
         NULLIF(p_vat_number, ''),
         p_is_vat_registered,
+        v_default_tax_rate,
         p_fiscal_year_start,
-        'SAR',
+        v_currency_code,
         'ar',
         p_onboarding_completed,
         CASE WHEN p_onboarding_completed = true THEN now() ELSE NULL END,
@@ -372,11 +422,13 @@ BEGIN
     INSERT INTO public.organization_members (
         organization_id,
         profile_id,
-        role
+        role,
+        is_active
     ) VALUES (
         v_org_id,
         v_user_id,
-        'owner'
+        'owner',
+        true
     );
 
     -- Create settings row
@@ -422,9 +474,9 @@ END;
 $$;
 
 -- Secure grants for create org
-REVOKE ALL ON FUNCTION public.create_organization_with_owner(text, text, text, text, text, text, text, text, boolean, date, text, date, text, boolean, boolean, integer) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.create_organization_with_owner(text, text, text, text, text, text, text, text, boolean, date, text, date, text, boolean, boolean, integer) FROM anon;
-GRANT EXECUTE ON FUNCTION public.create_organization_with_owner(text, text, text, text, text, text, text, text, boolean, date, text, date, text, boolean, boolean, integer) TO authenticated;
+REVOKE ALL ON FUNCTION public.create_organization_with_owner(text, text, text, text, text, text, text, text, boolean, date, text, date, text, boolean, boolean, integer, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.create_organization_with_owner(text, text, text, text, text, text, text, text, boolean, date, text, date, text, boolean, boolean, integer, text, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.create_organization_with_owner(text, text, text, text, text, text, text, text, boolean, date, text, date, text, boolean, boolean, integer, text, text) TO authenticated;
 
 
 -- 4.2 RPC: Secure Member retrieval (Bypasses Profiles table leaking, enforces admin/owner check)
@@ -489,7 +541,7 @@ BEGIN
     VALUES (
         new.id,
         COALESCE(new.raw_user_meta_data->>'full_name', 'مستخدم لِدجرا'),
-        COALESCE(new.raw_user_meta_data->>'phone', ''),
+        NULLIF(trim(new.raw_user_meta_data->>'phone'), ''),
         NULL
     )
     ON CONFLICT (id) DO NOTHING;
@@ -612,6 +664,7 @@ AS $$
         WHERE organization_id = p_organization_id
           AND profile_id = auth.uid()
           AND role IN ('owner', 'admin', 'accountant')
+          AND COALESCE(is_active, true) = true
     );
 $$;
 
@@ -630,10 +683,15 @@ CREATE TABLE IF NOT EXISTS public.fiscal_years (
     name text NOT NULL,
     start_date date NOT NULL,
     end_date date NOT NULL,
-    status text NOT NULL CHECK (status IN ('draft', 'open', 'closed')) DEFAULT 'draft',
+    status text NOT NULL CHECK (status IN ('draft', 'open', 'closed', 'locked')) DEFAULT 'draft',
     is_current boolean NOT NULL DEFAULT false,
+    closed_at timestamp with time zone,
+    closed_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+    closing_entry_id uuid,
+    close_notes text,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     created_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
     CONSTRAINT fiscal_years_dates_check CHECK (start_date < end_date),
     CONSTRAINT fiscal_years_id_org_unique UNIQUE (id, organization_id),
     CONSTRAINT fiscal_years_start_date_month_start CHECK (start_date = date_trunc('month', start_date)::date),
@@ -663,8 +721,12 @@ CREATE TABLE IF NOT EXISTS public.fiscal_periods (
     name text NOT NULL,
     start_date date NOT NULL,
     end_date date NOT NULL,
-    status text NOT NULL CHECK (status IN ('open', 'closed')) DEFAULT 'open',
+    status text NOT NULL CHECK (status IN ('open', 'closed', 'locked')) DEFAULT 'open',
+    closed_at timestamp with time zone,
+    closed_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+    locked_reason text,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
     CONSTRAINT fiscal_periods_dates_check CHECK (start_date <= end_date),
     CONSTRAINT fiscal_periods_num_check CHECK (period_num >= 1 AND period_num <= 12),
     CONSTRAINT fiscal_periods_year_org_fk FOREIGN KEY (fiscal_year_id, organization_id) REFERENCES public.fiscal_years (id, organization_id) ON DELETE CASCADE,
@@ -716,6 +778,7 @@ CREATE TABLE IF NOT EXISTS public.accounts (
     allow_direct_posting boolean NOT NULL DEFAULT true,
     is_active boolean NOT NULL DEFAULT true,
     is_system boolean NOT NULL DEFAULT false,
+    balance_sheet_section text,
     description text,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -723,6 +786,10 @@ CREATE TABLE IF NOT EXISTS public.accounts (
     CONSTRAINT accounts_nature_classification_check CHECK (
         (classification IN ('assets', 'expenses') AND nature = 'debit') OR
         (classification IN ('liabilities', 'equity', 'revenue') AND nature = 'credit')
+    ),
+    CONSTRAINT accounts_balance_sheet_section_check CHECK (
+        balance_sheet_section IS NULL OR 
+        balance_sheet_section IN ('current_assets', 'non_current_assets', 'current_liabilities', 'non_current_liabilities', 'equity')
     )
 );
 
