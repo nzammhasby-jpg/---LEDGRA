@@ -319,9 +319,9 @@ export const accountingService = {
     return data || [];
   },
 
-  async seedIndustryChartOfAccounts(orgId: string, industryType: string): Promise<{ status: string; inserted_accounts?: number; industry_type?: string }> {
+  async seedIndustryChartOfAccounts(orgId: string, industryType: string = 'general_trading'): Promise<{ status: string; inserted_accounts?: number; industry_type?: string }> {
     const { data, error } = await supabase.rpc('seed_industry_chart_of_accounts', {
-      p_org_id: orgId,
+      p_organization_id: orgId,
       p_industry_type: industryType
     });
 
