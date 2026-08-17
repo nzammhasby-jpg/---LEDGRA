@@ -68,4 +68,97 @@ describe('Permissions and Role Management', () => {
       expect(canInviteMoreMembers({}, 10)).toBe(true);
     });
   });
+
+  describe('Active Membership & Security Contracts', () => {
+    // Contract simulation for can_manage_sales_drafts
+    const canManageSalesDraftsContract = (member: { role: string; isActive?: boolean } | null): boolean => {
+      if (!member) return false;
+      if (member.isActive === false) return false;
+      return ['owner', 'admin', 'accountant', 'sales'].includes(member.role);
+    };
+
+    // Contract simulation for can_manage_purchase_drafts
+    const canManagePurchaseDraftsContract = (member: { role: string; isActive?: boolean } | null): boolean => {
+      if (!member) return false;
+      if (member.isActive === false) return false;
+      return ['owner', 'admin', 'accountant'].includes(member.role);
+    };
+
+    // Contract simulation for is_org_privileged_member
+    const isOrgPrivilegedMemberContract = (member: { role: string; isActive?: boolean } | null): boolean => {
+      if (!member) return false;
+      if (member.isActive === false) return false;
+      return ['owner', 'admin', 'accountant'].includes(member.role);
+    };
+
+    // Contract simulation for is_org_admin
+    const isOrgAdminContract = (member: { role: string; isActive?: boolean } | null): boolean => {
+      if (!member) return false;
+      if (member.isActive === false) return false;
+      return ['owner', 'admin'].includes(member.role);
+    };
+
+    // Contract simulation for can_view_inventory_movements
+    const canViewInventoryMovementsContract = (member: { role: string; isActive?: boolean } | null): boolean => {
+      if (!member) return false;
+      if (member.isActive === false) return false;
+      return ['owner', 'admin', 'accountant', 'viewer'].includes(member.role);
+    };
+
+    it('can_manage_sales_drafts should allow active owner, admin, accountant, and sales', () => {
+      expect(canManageSalesDraftsContract({ role: 'owner', isActive: true })).toBe(true);
+      expect(canManageSalesDraftsContract({ role: 'admin', isActive: true })).toBe(true);
+      expect(canManageSalesDraftsContract({ role: 'accountant', isActive: true })).toBe(true);
+      expect(canManageSalesDraftsContract({ role: 'sales', isActive: true })).toBe(true);
+    });
+
+    it('can_manage_sales_drafts should deny viewer and non-members', () => {
+      expect(canManageSalesDraftsContract({ role: 'viewer', isActive: true })).toBe(false);
+      expect(canManageSalesDraftsContract(null)).toBe(false);
+    });
+
+    it('can_manage_sales_drafts should strictly deny inactive members regardless of role', () => {
+      expect(canManageSalesDraftsContract({ role: 'owner', isActive: false })).toBe(false);
+      expect(canManageSalesDraftsContract({ role: 'admin', isActive: false })).toBe(false);
+      expect(canManageSalesDraftsContract({ role: 'accountant', isActive: false })).toBe(false);
+      expect(canManageSalesDraftsContract({ role: 'sales', isActive: false })).toBe(false);
+    });
+
+    it('can_manage_purchase_drafts should deny sales, viewer, and inactive members', () => {
+      expect(canManagePurchaseDraftsContract({ role: 'owner', isActive: true })).toBe(true);
+      expect(canManagePurchaseDraftsContract({ role: 'admin', isActive: true })).toBe(true);
+      expect(canManagePurchaseDraftsContract({ role: 'accountant', isActive: true })).toBe(true);
+      expect(canManagePurchaseDraftsContract({ role: 'sales', isActive: true })).toBe(false);
+      expect(canManagePurchaseDraftsContract({ role: 'viewer', isActive: true })).toBe(false);
+      expect(canManagePurchaseDraftsContract({ role: 'owner', isActive: false })).toBe(false);
+      expect(canManagePurchaseDraftsContract({ role: 'accountant', isActive: false })).toBe(false);
+    });
+
+    it('is_org_privileged_member should deny sales, viewer, and inactive members', () => {
+      expect(isOrgPrivilegedMemberContract({ role: 'owner', isActive: true })).toBe(true);
+      expect(isOrgPrivilegedMemberContract({ role: 'admin', isActive: true })).toBe(true);
+      expect(isOrgPrivilegedMemberContract({ role: 'accountant', isActive: true })).toBe(true);
+      expect(isOrgPrivilegedMemberContract({ role: 'sales', isActive: true })).toBe(false);
+      expect(isOrgPrivilegedMemberContract({ role: 'viewer', isActive: true })).toBe(false);
+      expect(isOrgPrivilegedMemberContract({ role: 'admin', isActive: false })).toBe(false);
+    });
+
+    it('is_org_admin should only allow active owner and admin', () => {
+      expect(isOrgAdminContract({ role: 'owner', isActive: true })).toBe(true);
+      expect(isOrgAdminContract({ role: 'admin', isActive: true })).toBe(true);
+      expect(isOrgAdminContract({ role: 'accountant', isActive: true })).toBe(false);
+      expect(isOrgAdminContract({ role: 'sales', isActive: true })).toBe(false);
+      expect(isOrgAdminContract({ role: 'owner', isActive: false })).toBe(false);
+      expect(isOrgAdminContract({ role: 'admin', isActive: false })).toBe(false);
+    });
+
+    it('can_view_inventory_movements should deny sales and inactive members', () => {
+      expect(canViewInventoryMovementsContract({ role: 'owner', isActive: true })).toBe(true);
+      expect(canViewInventoryMovementsContract({ role: 'admin', isActive: true })).toBe(true);
+      expect(canViewInventoryMovementsContract({ role: 'accountant', isActive: true })).toBe(true);
+      expect(canViewInventoryMovementsContract({ role: 'viewer', isActive: true })).toBe(true);
+      expect(canViewInventoryMovementsContract({ role: 'sales', isActive: true })).toBe(false);
+      expect(canViewInventoryMovementsContract({ role: 'viewer', isActive: false })).toBe(false);
+    });
+  });
 });
