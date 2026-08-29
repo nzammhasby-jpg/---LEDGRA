@@ -38,6 +38,8 @@ import { AdminDashboard } from './features/platform/AdminDashboard';
 import { platformService } from './lib/platformService';
 import { PlatformAdminLayout } from './layouts/PlatformAdminLayout';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { MaintenancePage } from './features/maintenance/MaintenancePage';
+import { SYSTEM_STATUS_CONFIG } from './config/systemStatus';
 
 // Official Print Feature Component Pages
 import { SalesInvoicePrint } from './features/print/SalesInvoicePrint';
@@ -376,6 +378,10 @@ const PlatformAdminRoute: React.FC = () => {
 };
 
 export default function App() {
+  const [bypassed, setBypassed] = React.useState<boolean>(() => {
+    return sessionStorage.getItem('ledgra_maintenance_bypass') === 'true';
+  });
+
   if (!isSupabaseConfigured) {
     return <SupabaseConfigAlert />;
   }
@@ -387,6 +393,15 @@ export default function App() {
         <AuthProvider>
           <AuthCallback />
         </AuthProvider>
+      </AppErrorBoundary>
+    );
+  }
+
+  // Intercept all routes if Maintenance Mode is active and not bypassed
+  if (SYSTEM_STATUS_CONFIG.isMaintenanceMode && !bypassed) {
+    return (
+      <AppErrorBoundary>
+        <MaintenancePage onBypass={() => setBypassed(true)} />
       </AppErrorBoundary>
     );
   }
