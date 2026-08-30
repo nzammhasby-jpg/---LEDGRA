@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { SYSTEM_STATUS_CONFIG } from '../../config/systemStatus';
 
 describe('System Maintenance Configuration & Logic Tests', () => {
-  it('has maintenance mode enabled and locks standard user access', () => {
-    expect(SYSTEM_STATUS_CONFIG.isMaintenanceMode).toBe(true);
+  it('has maintenance mode disabled for active operation', () => {
+    expect(SYSTEM_STATUS_CONFIG.isMaintenanceMode).toBe(false);
     expect(SYSTEM_STATUS_CONFIG.title).toBe('جاري التحديث والتطوير الدوري لنظام لِدجرا');
     expect(SYSTEM_STATUS_CONFIG.showLiveStatus).toBe(true);
   });

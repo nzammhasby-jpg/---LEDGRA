@@ -18,8 +18,8 @@ export interface SystemStatusConfig {
 }
 
 export const SYSTEM_STATUS_CONFIG: SystemStatusConfig = {
-  // Activated: Locking access and showing update/maintenance notice
-  isMaintenanceMode: true,
+  // Maintenance mode turned off - system is fully operational
+  isMaintenanceMode: false,
   title: 'جاري التحديث والتطوير الدوري لنظام لِدجرا',
   subtitle: 'نعمل حالياً على إجراء تحسينات وترقيات برمجية شاملة لتقديم أعلى مستويات الأداء والأمان.',
   message: 'تم تعليق الوصول إلى النظام مؤقتاً لجميع المستخدمين لحماية سلامة السجلات والبيانات المحاسبية أثناء تطبيق التحديثات السحابية. سنعود للعمل بكامل الميزات والخدمات في أقرب وقت.',
