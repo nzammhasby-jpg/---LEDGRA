@@ -114,6 +114,34 @@ export const accountingService = {
     return data;
   },
 
+  async ensureFiscalYearForDate(orgId: string, targetDate?: string): Promise<string> {
+    const { data, error } = await supabase.rpc('ensure_fiscal_year_for_date', {
+      p_org_id: orgId,
+      p_target_date: targetDate || new Date().toISOString().split('T')[0]
+    });
+    if (error) throw error;
+    return data as string;
+  },
+
+  async ensureDefaultFiscalYear(orgId: string): Promise<FiscalYear | null> {
+    try {
+      const years = await this.getFiscalYears(orgId);
+      if (years.length > 0) {
+        return years.find(y => y.is_current) || years[0];
+      }
+      const yearId = await this.ensureFiscalYearForDate(orgId);
+      if (!yearId) return null;
+      const { data } = await supabase
+        .from('fiscal_years')
+        .select('*')
+        .eq('id', yearId)
+        .single();
+      return data;
+    } catch {
+      return null;
+    }
+  },
+
 
 
 

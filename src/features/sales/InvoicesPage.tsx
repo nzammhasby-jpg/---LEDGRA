@@ -54,7 +54,9 @@ import {
   RefreshCw,
   Check,
   Edit,
-  Terminal
+  Terminal,
+  Barcode,
+  ScanLine
 } from 'lucide-react';
 
 export const InvoicesPage: React.FC = () => {
@@ -145,6 +147,10 @@ export const InvoicesPage: React.FC = () => {
   const [cashBankAccounts, setCashBankAccounts] = useState<CashBankAccount[]>([]);
 
   // Invoice Lines Form State
+  const [barcodeInput, setBarcodeInput] = useState<string>('');
+  const [barcodeFeedback, setBarcodeFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const barcodeInputRef = React.useRef<HTMLInputElement>(null);
+
   const [lines, setLines] = useState<Array<{
     uuid: string; // client-side key
     item_id: string;
@@ -436,6 +442,109 @@ export const InvoicesPage: React.FC = () => {
     const updated = lines.filter((_, i) => i !== index);
     setLines(updated);
   };
+
+  // Barcode scanning & quick lookup handler
+  const handleBarcodeScan = (scannedCode: string) => {
+    const rawCode = scannedCode.trim();
+    if (!rawCode) return;
+    const cleanCode = toEnglishDigits(rawCode).toLowerCase();
+
+    // 1. Exact match on barcode, SKU, or item code
+    let found = items.find(
+      i => (i.barcode && toEnglishDigits(i.barcode.trim()).toLowerCase() === cleanCode) ||
+           (i.sku && toEnglishDigits(i.sku.trim()).toLowerCase() === cleanCode) ||
+           (i.code && toEnglishDigits(i.code.trim()).toLowerCase() === cleanCode)
+    );
+
+    // 2. Fallback: partial match on code, barcode, or name
+    if (!found) {
+      found = items.find(
+        i => (i.barcode && toEnglishDigits(i.barcode).toLowerCase().includes(cleanCode)) ||
+             (i.code && toEnglishDigits(i.code).toLowerCase().includes(cleanCode)) ||
+             (i.name && i.name.toLowerCase().includes(cleanCode))
+      );
+    }
+
+    if (!found) {
+      setBarcodeFeedback({ 
+        type: 'error', 
+        message: `لم يتم العثور على أي صنف بالباركود / الكود: "${rawCode}"` 
+      });
+      return;
+    }
+
+    // Determine line tax and revenue account
+    const parsedTaxRate = found.tax_rate !== undefined && found.tax_rate !== null ? Number(found.tax_rate) : NaN;
+    const itemTaxRate = (Number.isFinite(parsedTaxRate) && parsedTaxRate > 0) ? parsedTaxRate : orgDefaultTaxRate;
+    let revId = '';
+    if (found.item_type === 'product') {
+      revId = found.sales_account_id || settings?.default_sales_account_id || '';
+    } else {
+      revId = found.service_revenue_account_id || settings?.default_service_sales_account_id || '';
+    }
+
+    // Check if item is already in one of the existing invoice lines
+    const existingIndex = lines.findIndex(l => l.item_id === found!.id);
+    if (existingIndex >= 0) {
+      const updated = [...lines];
+      const currentQty = parseFloat(toEnglishDigits(String(updated[existingIndex].quantity || 0))) || 0;
+      const newQty = currentQty + 1;
+      updated[existingIndex].quantity = String(newQty);
+      setLines(updated);
+      setBarcodeFeedback({ 
+        type: 'success', 
+        message: `تم زيادة كمية الصنف (${found.name}) إلى ${newQty}` 
+      });
+    } else {
+      // Find first empty line, or create a new line
+      const emptyIndex = lines.findIndex(l => !l.item_id || l.item_id === '');
+      if (emptyIndex >= 0) {
+        const updated = [...lines];
+        updated[emptyIndex] = {
+          ...updated[emptyIndex],
+          item_id: found.id,
+          description: found.description || found.name || '',
+          quantity: '1',
+          unit_price: String(found.selling_price || 0),
+          discount_amount: '0',
+          tax_rate: itemTaxRate,
+          revenue_account_id: revId
+        };
+        setLines(updated);
+      } else {
+        setLines([
+          ...lines,
+          {
+            uuid: Math.random().toString(),
+            item_id: found.id,
+            description: found.description || found.name || '',
+            quantity: '1',
+            unit_price: String(found.selling_price || 0),
+            discount_amount: '0',
+            tax_rate: itemTaxRate,
+            revenue_account_id: revId
+          }
+        ]);
+      }
+      setBarcodeFeedback({ 
+        type: 'success', 
+        message: `تم إضافة الصنف بنجاح: ${found.name}` 
+      });
+    }
+
+    setBarcodeInput('');
+    if (barcodeInputRef.current) {
+      barcodeInputRef.current.focus();
+    }
+  };
+
+  // Auto clear barcode feedback after 4 seconds
+  useEffect(() => {
+    if (barcodeFeedback) {
+      const timer = setTimeout(() => setBarcodeFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [barcodeFeedback]);
 
   // Submit invoice code
   const handleSubmitInvoice = async (e: React.FormEvent) => {
@@ -1368,6 +1477,63 @@ export const InvoicesPage: React.FC = () => {
                   </button>
                 </div>
 
+                {/* Quick Barcode Scanner Bar */}
+                <div className="bg-gradient-to-r from-blue-50/70 to-indigo-50/70 border border-blue-100 p-3.5 rounded-xl space-y-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    <div className="flex items-center gap-2 text-brand-blue shrink-0">
+                      <div className="p-1.5 bg-brand-blue text-white rounded-lg shadow-sm">
+                        <ScanLine className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-extrabold text-slate-800">قارئ الباركود السريع:</span>
+                    </div>
+
+                    <div className="relative flex-1">
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                        <Barcode className="w-4 h-4 text-brand-blue" />
+                      </div>
+                      <input
+                        ref={barcodeInputRef}
+                        type="text"
+                        value={barcodeInput}
+                        onChange={(e) => setBarcodeInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleBarcodeScan(barcodeInput);
+                          }
+                        }}
+                        placeholder="امسح الباركود بجهاز القارئ أو اكتب الباركود / الكود ثم اضغط Enter..."
+                        className="w-full pr-9 pl-20 py-2 bg-white border border-blue-200 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue rounded-xl text-xs font-bold text-slate-800 placeholder:text-slate-400 shadow-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleBarcodeScan(barcodeInput)}
+                        disabled={!barcodeInput.trim()}
+                        className="absolute inset-y-1 left-1 px-3 bg-brand-blue hover:bg-brand-blue/90 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>إضافة</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Visual Barcode Feedback alert */}
+                  {barcodeFeedback && (
+                    <div className={`p-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition animate-fade-in ${
+                      barcodeFeedback.type === 'success' 
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                        : 'bg-red-50 text-red-800 border border-red-200'
+                    }`}>
+                      {barcodeFeedback.type === 'success' ? (
+                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                      )}
+                      <span>{barcodeFeedback.message}</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Warning notice if organization is NOT VAT registered */}
                 {currentOrg?.is_vat_registered === false && (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 font-semibold flex items-center gap-2">
@@ -1405,7 +1571,7 @@ export const InvoicesPage: React.FC = () => {
                               <option value="">-- اختر الصنف --</option>
                               {items.map(it => (
                                 <option key={it.id} value={it.id}>
-                                  [{it.item_type === 'product' ? 'منتج' : 'خدمة'}] {it.code} - {it.name}
+                                  [{it.item_type === 'product' ? 'منتج' : 'خدمة'}] {it.code} - {it.name} {it.barcode ? ` [باركود: ${it.barcode}]` : ''}
                                 </option>
                               ))}
                             </select>

@@ -317,6 +317,24 @@ export const FiscalYears: React.FC = () => {
   };
 
   // Submit and create new year + auto-periods
+  const handleAutoInitDefaultYear = async () => {
+    if (!currentOrg || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const defaultYear = await accountingService.ensureDefaultFiscalYear(currentOrg.id);
+      if (defaultYear) {
+        setSuccess(`تم بنجاح تهيئة وإشهار السنة المالية "${defaultYear.name}" وتوليد الـ 12 فترة محاسبية تلقائياً.`);
+        await loadYearsData();
+      }
+    } catch (err) {
+      console.error(err);
+      setError(getErrorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentOrg || submitting) return;
@@ -401,15 +419,24 @@ export const FiscalYears: React.FC = () => {
           <Calendar className="w-12 h-12 text-slate-300 mx-auto" />
           <div className="space-y-1">
             <h4 className="text-sm font-bold text-slate-800">لا توجد سنوات مالية مسجلة</h4>
-            <p className="text-xs text-slate-400">لم تقم بتسجيل أي دورات مالية معتمدة لمنشأتك حتى الآن. يرجى إنشاء السنة الحالية لتتبع الأرصدة.</p>
+            <p className="text-xs text-slate-400">لم تقم بتسجيل أي دورات مالية معتمدة لمنشأتك حتى الآن. يمكنك تفعيل السنة المالية الافتراضية بنقرة واحدة.</p>
           </div>
           {canManageFiscalYears && (
-            <button 
-              onClick={handleOpenAddModal}
-              className="text-xs bg-brand-blue hover:bg-brand-blue-deep text-white font-extrabold px-5 py-3 rounded-xl transition cursor-pointer"
-            >
-              فتح أول سنة مالية للمنشأة
-            </button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <button 
+                onClick={handleAutoInitDefaultYear}
+                disabled={submitting}
+                className="w-full sm:w-auto text-xs bg-brand-blue hover:bg-brand-blue-deep text-white font-extrabold px-5 py-3 rounded-xl transition cursor-pointer shadow-md shadow-brand-blue/20"
+              >
+                تهيئة وتفعيل السنة المالية الحالية تلقائياً (موصى به)
+              </button>
+              <button 
+                onClick={handleOpenAddModal}
+                className="w-full sm:w-auto text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold px-4 py-3 rounded-xl transition cursor-pointer"
+              >
+                تخصيص يدوي
+              </button>
+            </div>
           )}
         </div>
       ) : (
